@@ -239,6 +239,42 @@ function renderKpis(s0,periods){
    <div class="card"><div class="t">เทียบปีก่อนเดือนเดียวกัน (YoY)</div><div class="v" style="font-size:17px">${dd(cur?.bs,py?.bs)}</div><div class="d note">${tLab(yoy)} ปีงบ ${Math.floor(yoy/100)}</div></div>
    <div class="card"><div class="t">เคลื่อนไหว 12 เดือนล่าสุด</div><div class="v" style="font-size:17px"><span class="pos">+${fmtM(nets)}</span> / <span class="neg">−${fmtM(Math.abs(netd))}</span></div><div class="d note">เพิ่ม / ลด สะสม</div></div>`;
 }
+function fySummary(s0,periods){
+  // สรุปต่อปีงบ: mv = Σ เคลื่อนไหวสุทธิทั้งปี | bs = Δ ยอดคงเหลือจากงวดสุดท้ายของปีก่อน
+  const byFy=new Map();
+  for(const t of periods){const fy=Math.floor(t/100);
+    if(!byFy.has(fy))byFy.set(fy,{net:0,lastBs:null,lastT:0});
+    const o=s0.m.get(t);if(!o)continue;const e=byFy.get(fy);
+    e.net+=o.inc+o.dec;if(t>e.lastT){e.lastT=t;e.lastBs=o.bs}}
+  const fys=[...byFy.keys()].sort();const out=new Map();
+  fys.forEach((fy,i)=>{const e=byFy.get(fy);
+    if(state.view==='mv')out.set(fy,e.net);
+    else{const pv=i>0?byFy.get(fys[i-1]).lastBs:null;out.set(fy,pv!=null&&e.lastBs!=null?e.lastBs-pv:null)}});
+  return out;
+}
+function fyPlugin(periods,sums){
+  return {id:'fyMark',afterDraw(c){
+    const xs=c.scales.x,ys=c.scales.y;if(!xs||!ys)return;const ctx=c.ctx;ctx.save();
+    // เส้นประกั้นปีงบ (รอยต่อ ก.ย.|ต.ค.)
+    const bounds=[0];
+    for(let i=1;i<periods.length;i++)if(Math.floor(periods[i]/100)!==Math.floor(periods[i-1]/100)){
+      const x=(xs.getPixelForValue(i-1)+xs.getPixelForValue(i))/2;bounds.push(i);
+      ctx.strokeStyle='#cbd5e1';ctx.setLineDash([4,4]);ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x,ys.top);ctx.lineTo(x,ys.bottom);ctx.stroke()}
+    bounds.push(periods.length);
+    // ป้ายสรุปรายปี (เฉพาะเมื่อแสดงชุดข้อมูลเดียว)
+    if(sums){ctx.setLineDash([]);ctx.font='600 11px Sarabun';ctx.textAlign='center';
+      for(let b=0;b<bounds.length-1;b++){
+        const i0=bounds[b],i1=bounds[b+1]-1;if(i1<i0)continue;
+        const fy=Math.floor(periods[i0]/100),v=sums.get(fy);
+        const x0=xs.getPixelForValue(i0),x1=xs.getPixelForValue(i1);
+        if(x1-x0<46)continue;const cx=(x0+x1)/2;
+        ctx.fillStyle='#64748b';ctx.fillText('ปีงบ '+fy,cx,ys.top-20);
+        if(v==null){continue}
+        ctx.fillStyle=v>0?'#dc2626':v<0?'#16a34a':'#64748b';
+        ctx.fillText((v>0?'▲ +':v<0?'▼ −':'')+fmtM(Math.abs(v)),cx,ys.top-7)}}
+    ctx.restore()}};
+}
 function renderChart(series,periods){
   const labels=periods.map(tLab);
   const flag=new Set(META.flagged);
@@ -259,14 +295,20 @@ function renderChart(series,periods){
       data:periods.map(t=>{const o=s.m.get(t);return o?o.inc+o.dec:null}),backgroundColor:PAL[i%PAL.length]+'cc'}));
   }
   if(chart)chart.destroy();
-  chart=new Chart(document.getElementById('mainChart'),{data:{labels,datasets:ds},options:{
+  const sums=series.length===1?fySummary(series[0],periods):null;
+  chart=new Chart(document.getElementById('mainChart'),{data:{labels,datasets:ds},
+   plugins:[fyPlugin(periods,sums)],options:{
     responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    layout:{padding:{top:34}},
     scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:11}},stacked:state.view==='mv'&&series.length===1},
       y:{stacked:state.view==='mv'&&series.length===1,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}}},
     plugins:{legend:{labels:{font:{family:'Sarabun'}}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
       callbacks:{label:c=>`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
         title:items=>{const t=periods[items[0].dataIndex];return tLab(t)+' ปีงบ '+Math.floor(t/100)+(flag.has(t)?'  ⚠ ข้อมูลอาจไม่ครบ':'')}}}}}});
-  document.getElementById('chartNote').textContent=state.view==='mv'?'แท่งแดง = เพิ่มขึ้น (เช่น ก่อหนี้/ได้สินทรัพย์เพิ่ม) · แท่งเขียว = ลดลง (เช่น จ่ายชำระ/ใช้ไป) · เส้นดำ = สุทธิ':'▲ สามเหลี่ยม = งวดที่ข้อมูลต้นทางอาจไม่ครบ';
+  document.getElementById('chartNote').textContent=(state.view==='mv'
+    ?'แท่งแดง = เพิ่มขึ้น (เช่น ก่อหนี้/ได้สินทรัพย์เพิ่ม) · แท่งเขียว = ลดลง (เช่น จ่ายชำระ/ใช้ไป) · เส้นดำ = สุทธิ · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ'
+    :'ป้ายบนกราฟ = เปลี่ยนแปลงจากสิ้นปีงบก่อน (ก.ย. เทียบ ก.ย.) · ▲ สามเหลี่ยม = งวดที่ข้อมูลต้นทางอาจไม่ครบ')
+    +' · เส้นประแนวตั้ง = รอยต่อปีงบประมาณ (ก.ย.|ต.ค.)';
 }
 function renderTop(periods){
   const last=periods[periods.length-1],prev=periods[periods.length-2];
