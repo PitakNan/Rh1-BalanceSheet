@@ -388,7 +388,7 @@ function renderChart(series,periods){
     layout:{padding:{top:48}},
     scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5}},stacked:state.view==='mv'&&series.length===1},
       y:{stacked:state.view==='mv'&&series.length===1,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}}},
-    plugins:{legend:{labels:{font:{family:'Sarabun'}}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
+    plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun'},boxWidth:14,padding:12}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
       callbacks:{label:c=>`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
         title:items=>{const b=bks[items[0].dataIndex];
           return b.label+(state.gran==='y'?'':' ปีงบ '+b.fy)+(bFlag[items[0].dataIndex]?'  ⚠ ข้อมูลอาจไม่ครบ':'')}}}}}});
