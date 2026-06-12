@@ -48,6 +48,9 @@ tr.click{cursor:pointer}tr.click:hover{background:#eff6ff}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.chartbox{height:340px}}
 footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
+.anl ul{padding-left:20px;display:flex;flex-direction:column;gap:7px}
+.anl li{line-height:1.6;font-size:13.5px}
+.anl .tip{margin-top:10px;background:#f0f9ff;border:1px solid #bae6fd;color:#075985;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.6}
 @keyframes s{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -89,6 +92,7 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
   <div class="cards" id="kpis"></div>
   <div class="panel"><h2 id="chartTitle"></h2><div class="chartbox"><canvas id="mainChart"></canvas></div>
     <div class="note" id="chartNote" style="margin-top:6px"></div></div>
+  <div class="panel"><h2>📝 บทวิเคราะห์อัตโนมัติ</h2><div id="analysis" class="anl"></div></div>
   <div class="grid2">
     <div class="panel"><h2 id="topTitle">อันดับ</h2><div style="max-height:420px;overflow:auto"><table id="topTbl"></table></div></div>
     <div class="panel"><h2>Heatmap เดือน × ปีงบ <span class="note" id="hmNote"></span></h2><div class="hm"><table id="hmTbl"></table></div></div>
@@ -125,6 +129,20 @@ function opt(sel,items,cur,allLabel){
 function filteredGroups(d){
   return META.groups.filter(g=>(!d.fin||g.fin===d.fin)&&(!d.accg||g.accg===d.accg)&&(!d.sub||g.sub===d.sub)&&(!d.budget||g.budget===d.budget)&&(!d.gf||g.gf===d.gf));
 }
+// ขั้วของหมวดบัญชี: +1 = เพิ่มแล้วดี (สินทรัพย์/ทุน/รายได้), -1 = เพิ่มแล้วต้องเฝ้าระวัง (หนี้สิน/ค่าใช้จ่าย), 0 = ผสม
+const POLAR={'สินทรัพย์':1,'ทุน':1,'ส่วนทุน':1,'รายได้':1,'หนี้สิน':-1,'ค่าใช้จ่าย':-1};
+function polarity(){
+  const accs=[...new Set(filteredGroups(state.dim).map(g=>g.accg))];
+  const ps=[...new Set(accs.map(a=>POLAR[a]??0))];
+  return ps.length===1?ps[0]:0;
+}
+// สีตามผลดี/เสีย (ลูกศร/เครื่องหมายบอกทิศทางแยกต่างหาก)
+function dirCol(v){const p=polarity();
+  if(v>0)return p>0?'#16a34a':p<0?'#dc2626':'#2563eb';
+  if(v<0)return p>0?'#dc2626':p<0?'#16a34a':'#d97706';
+  return '#64748b'}
+function dirCls(v){const p=polarity();if(!v)return'zero';if(p===0)return'zero';
+  return ((v>0)===(p>0))?'neg':'pos'} /* .neg=เขียว .pos=แดง ตาม CSS เดิม */
 function buildDims(){
   const d=state.dim,uniq=(arr,k)=>[...new Set(arr.map(g=>g[k]))];
   opt('selFin',uniq(META.groups,'fin'),d.fin,'ทุกงบ');
@@ -207,7 +225,7 @@ async function render(){
   const ents=state.area==='region'?[null]:state.ents;
   const series=ents.map(e=>({ent:e,m:seriesFor(e)}));
   renderChips();renderWarn(periods);renderKpis(series[0],periods);
-  renderChart(series,periods);renderTop(periods);renderHeat(series[0]);
+  renderChart(series,periods);renderTop(periods);renderHeat(series[0]);renderAnalysis(series,periods);
 }
 function renderChips(){
   const row=document.getElementById('chipRow');
@@ -229,15 +247,15 @@ function renderKpis(s0,periods){
   const g=t=>s0.m.get(t);
   const cur=g(last),pv=g(prev),py=g(yoy);
   const dd=(v,b)=>{if(v==null||b==null)return'<span class="zero">—</span>';
-    const d=v-b,p=pct(v,b);const c=d>0?'pos':d<0?'neg':'zero';
-    return `<span class="${c}">${d>0?'▲':d<0?'▼':''} ${fmtM(Math.abs(d))}${p!=null?' ('+Math.abs(p).toFixed(1)+'%)':''}</span>`};
+    const d=v-b,p=pct(v,b);
+    return `<span style="color:${dirCol(d)}">${d>0?'▲':d<0?'▼':''} ${fmtM(Math.abs(d))}${p!=null?' ('+Math.abs(p).toFixed(1)+'%)':''}</span>`};
   const nets=periods.slice(-12).map(t=>g(t)?.['inc']??0).reduce((a,b)=>a+b,0);
   const netd=periods.slice(-12).map(t=>g(t)?.['dec']??0).reduce((a,b)=>a+b,0);
   el.innerHTML=`
    <div class="card"><div class="t">ยอดคงเหลือ ${tLab(last)}</div><div class="v">${cur?fmtM(cur.bs):'—'}</div><div class="d note">${dimLabel()}</div></div>
    <div class="card"><div class="t">เทียบเดือนก่อน (MoM)</div><div class="v" style="font-size:17px">${dd(cur?.bs,pv?.bs)}</div><div class="d note">${prev?tLab(prev):''}</div></div>
    <div class="card"><div class="t">เทียบปีก่อนเดือนเดียวกัน (YoY)</div><div class="v" style="font-size:17px">${dd(cur?.bs,py?.bs)}</div><div class="d note">${tLab(yoy)} ปีงบ ${Math.floor(yoy/100)}</div></div>
-   <div class="card"><div class="t">เคลื่อนไหว 12 เดือนล่าสุด</div><div class="v" style="font-size:17px"><span class="pos">+${fmtM(nets)}</span> / <span class="neg">−${fmtM(Math.abs(netd))}</span></div><div class="d note">เพิ่ม / ลด สะสม</div></div>`;
+   <div class="card"><div class="t">เคลื่อนไหว 12 เดือนล่าสุด</div><div class="v" style="font-size:17px"><span style="color:${dirCol(1)}">▲ ${fmtM(nets)}</span> / <span style="color:${dirCol(-1)}">▼ ${fmtM(Math.abs(netd))}</span></div><div class="d note">เพิ่ม / ลด สะสม (สี = ผลดี/เฝ้าระวัง)</div></div>`;
 }
 function fySummary(s0,periods){
   // สรุปต่อปีงบ: mv = Σ เคลื่อนไหวสุทธิทั้งปี | bs = Δ ยอดคงเหลือจากงวดสุดท้ายของปีก่อน
@@ -271,7 +289,7 @@ function fyPlugin(periods,sums){
         if(x1-x0<46)continue;const cx=(x0+x1)/2;
         ctx.fillStyle='#64748b';ctx.fillText('ปีงบ '+fy,cx,ys.top-20);
         if(v==null){continue}
-        ctx.fillStyle=v>0?'#dc2626':v<0?'#16a34a':'#64748b';
+        ctx.fillStyle=dirCol(v);
         ctx.fillText((v>0?'▲ +':v<0?'▼ −':'')+fmtM(Math.abs(v)),cx,ys.top-7)}}
     ctx.restore()}};
 }
@@ -287,8 +305,8 @@ function renderChart(series,periods){
       borderWidth:2,pointRadius:periods.length>40?0:2.5,pointStyle:periods.map(t=>flag.has(t)?'triangle':'circle'),tension:.25,spanGaps:false}));
   }else if(series.length===1){
     const s=series[0];
-    ds=[{type:'bar',label:'เพิ่มขึ้น',data:periods.map(t=>s.m.get(t)?.inc??null),backgroundColor:'#dc262699'},
-        {type:'bar',label:'ลดลง',data:periods.map(t=>s.m.get(t)?.dec??null),backgroundColor:'#16a34a99'},
+    ds=[{type:'bar',label:'เพิ่มขึ้น',data:periods.map(t=>s.m.get(t)?.inc??null),backgroundColor:dirCol(1)+'99'},
+        {type:'bar',label:'ลดลง',data:periods.map(t=>s.m.get(t)?.dec??null),backgroundColor:dirCol(-1)+'99'},
         {type:'line',label:'สุทธิ',data:periods.map(t=>{const o=s.m.get(t);return o?o.inc+o.dec:null}),borderColor:'#0f172a',borderWidth:2,pointRadius:0,tension:.2}];
   }else{
     ds=series.map((s,i)=>({type:'bar',label:s.ent?(state.area==='prov'?s.ent:orgName(s.ent)):'ทั้งเขต',
@@ -305,10 +323,13 @@ function renderChart(series,periods){
     plugins:{legend:{labels:{font:{family:'Sarabun'}}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
       callbacks:{label:c=>`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
         title:items=>{const t=periods[items[0].dataIndex];return tLab(t)+' ปีงบ '+Math.floor(t/100)+(flag.has(t)?'  ⚠ ข้อมูลอาจไม่ครบ':'')}}}}}});
+  const p=polarity();
+  const colorNote=p===0?'มุมมองนี้รวมหลายหมวดที่ทิศทางดี/เสียต่างกัน → ใช้สีกลาง (น้ำเงิน=เพิ่ม, ส้ม=ลด)'
+    :`สี: เขียว = ทิศทางที่ดี, แดง = ควรเฝ้าระวัง (หมวดนี้ "${p>0?'เพิ่มขึ้น = ดี':'ลดลง = ดี'}")`;
   document.getElementById('chartNote').textContent=(state.view==='mv'
-    ?'แท่งแดง = เพิ่มขึ้น (เช่น ก่อหนี้/ได้สินทรัพย์เพิ่ม) · แท่งเขียว = ลดลง (เช่น จ่ายชำระ/ใช้ไป) · เส้นดำ = สุทธิ · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ'
-    :'ป้ายบนกราฟ = เปลี่ยนแปลงจากสิ้นปีงบก่อน (ก.ย. เทียบ ก.ย.) · ▲ สามเหลี่ยม = งวดที่ข้อมูลต้นทางอาจไม่ครบ')
-    +' · เส้นประแนวตั้ง = รอยต่อปีงบประมาณ (ก.ย.|ต.ค.)';
+    ?'แท่งบน = เพิ่มขึ้น · แท่งล่าง = ลดลง · เส้นดำ = สุทธิ · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ'
+    :'ป้ายบนกราฟ = เปลี่ยนแปลงจากสิ้นปีงบก่อน · ▲ สามเหลี่ยม = งวดที่ข้อมูลต้นทางอาจไม่ครบ')
+    +' · เส้นประแนวตั้ง = รอยต่อปีงบ (ก.ย.|ต.ค.) · '+colorNote;
 }
 function renderTop(periods){
   const last=periods[periods.length-1],prev=periods[periods.length-2];
@@ -330,7 +351,7 @@ function renderTop(periods){
       .sort((a,b)=>Math.abs(b.cur)-Math.abs(a.cur)).slice(0,15);
     title.textContent=`อันดับตามยอดคงเหลือ ${tLab(last)}${state.area==='prov'&&state.ents.length?' — '+state.ents[0]:''}`;
     tbl.innerHTML='<tr><th>กลุ่ม</th><th>ยอดคงเหลือ</th><th>Δ เดือนก่อน</th></tr>'+
-      rows.map(r=>`<tr class="click" onclick="drill('${lvl}','${r.name.replace(/'/g,"\\'")}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${r.d>0?'pos':r.d<0?'neg':'zero'}">${r.d>0?'+':''}${fmtM(r.d)}</td></tr>`).join('');
+      rows.map(r=>`<tr class="click" onclick="drill('${lvl}','${r.name.replace(/'/g,"\\'")}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${dirCls(r.d)}">${r.d>0?'▲ +':r.d<0?'▼ −':''}${fmtM(Math.abs(r.d))}</td></tr>`).join('');
   }else{
     const d=state.dim,useB=d.budget||d.gf;
     const src=useB?(gs[0]?HOSPB[gs[0].bId]:{}):HOSPSUB;
@@ -341,7 +362,7 @@ function renderTop(periods){
       .sort((a,b)=>Math.abs(b.cur)-Math.abs(a.cur)).slice(0,20);
     title.textContent=`อันดับโรงพยาบาล ${tLab(last)} — ${dimLabel()}`;
     tbl.innerHTML='<tr><th>โรงพยาบาล</th><th>ยอดคงเหลือ</th><th>Δ เดือนก่อน</th></tr>'+
-      rows.map(r=>`<tr class="click" onclick="hospPick('${r.id}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${r.d>0?'pos':r.d<0?'neg':'zero'}">${r.d>0?'+':''}${fmtM(r.d)}</td></tr>`).join('');
+      rows.map(r=>`<tr class="click" onclick="hospPick('${r.id}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${dirCls(r.d)}">${r.d>0?'▲ +':r.d<0?'▼ −':''}${fmtM(Math.abs(r.d))}</td></tr>`).join('');
   }
 }
 function drill(lvl,val){state.dim[lvl]=val;
@@ -356,14 +377,88 @@ function renderHeat(s0){
   const vals=[];const get=t=>{const o=s0.m.get(t);if(!o)return null;return state.view==='bs'?o.bs:o.inc+o.dec};
   for(const fy of fys)for(let m=1;m<=12;m++){const v=get(fy*100+m);if(v!=null)vals.push(v)}
   const mn=Math.min(...vals),mx=Math.max(...vals);
+  const p=polarity();
+  const upRGB=p>0?'22,163,74':p<0?'220,38,38':'37,99,235';
+  const dnRGB=p>0?'220,38,38':p<0?'22,163,74':'217,119,6';
   const color=v=>{if(v==null)return'#f8fafc';
     if(state.view==='mv'){const a=Math.min(1,Math.abs(v)/(Math.max(Math.abs(mn),Math.abs(mx))||1));
-      return v>=0?`rgba(220,38,38,${.12+.55*a})`:`rgba(22,163,74,${.12+.55*a})`}
+      return v>=0?`rgba(${upRGB},${.12+.55*a})`:`rgba(${dnRGB},${.12+.55*a})`}
     const a=(v-mn)/((mx-mn)||1);return `rgba(59,130,246,${.08+.6*a})`};
   tbl.innerHTML='<tr><th>ปีงบ</th>'+TH_M.map(m=>`<th>${m}</th>`).join('')+'</tr>'+
     fys.map(fy=>'<tr><td style="font-weight:600;text-align:left">'+fy+'</td>'+
       Array.from({length:12},(_,i)=>{const v=get(fy*100+i+1);
         return `<td style="background:${color(v)}" title="${v!=null?fmtB(v):'ไม่มีข้อมูล'}">${v!=null?(v/1e6).toFixed(0):'–'}</td>`}).join('')+'</tr>').join('');
+}
+// ---------- บทวิเคราะห์อัตโนมัติ ----------
+const ACC_TIP={
+ 'หนี้สิน':'หนี้สินที่เพิ่มขึ้นต่อเนื่องสะท้อนภาระเจ้าหนี้ (การค้า/ยา/เวชภัณฑ์) ที่สูงขึ้น ซึ่งกดดันสภาพคล่องและ Cash Ratio — หากลดลงแสดงถึงความสามารถในการชำระหนี้ที่ดีขึ้น ควรดูคู่กับเงินสดคงเหลือว่าการจ่ายหนี้ไม่ได้ทำให้เงินสดตึงตัวเกินไป',
+ 'สินทรัพย์':'สินทรัพย์ (โดยเฉพาะเงินสดและรายการเทียบเท่า) ที่เพิ่มขึ้นช่วยเสริมสภาพคล่อง — หากลดลงต่อเนื่องควรแยกสาเหตุ: จ่ายชำระหนี้ (ดี ถ้าหนี้ลดตาม), ลงทุนในครุภัณฑ์ (ดูงบลงทุนประกอบ) หรือรายได้รับจริงต่ำกว่าค่าใช้จ่าย (สัญญาณเตือน)',
+ 'ทุน':'ส่วนทุนสะท้อนฐานะสุทธิสะสมของหน่วยบริการ การลดลงต่อเนื่องหมายถึงผลการดำเนินงานขาดทุนสะสม ควรเชื่อมโยงกับ NI/EBITDA ในระบบ Risk Score',
+ 'รายได้':'ยอดรายได้เป็นแบบสะสมตั้งแต่ต้นปีงบ (YTD รีเซ็ตทุก ต.ค.) ควรเทียบช่วงเดียวกันปีก่อน (YoY) และเทียบแผน Planfin — รายได้ที่โตช้ากว่าค่าใช้จ่ายคือสัญญาณกดดัน EBITDA',
+ 'ค่าใช้จ่าย':'ยอดค่าใช้จ่ายเป็นแบบสะสม YTD (รีเซ็ตทุก ต.ค.) หมวดที่ควรเฝ้าระวังคือ ค่าแรง (LC) ยา และวัสดุ — หากโตเร็วกว่ารายได้จะกดดัน EBITDA/NI โดยตรง'};
+function renderAnalysis(series,periods){
+  const el=document.getElementById('analysis');
+  const s0=series[0];
+  if(!s0||periods.length<2){el.innerHTML='<span class="note">ข้อมูลไม่พอสำหรับวิเคราะห์</span>';return}
+  const p=polarity();
+  const entName=state.area==='region'?'ภาพรวมทั้งเขต':(state.area==='prov'?'จังหวัด'+(state.ents[0]??''):'รพ.'+(orgName(state.ents[0]??'')));
+  const get=t=>s0.m.get(t);
+  const last=periods[periods.length-1],cur=get(last),prev=get(periods[periods.length-2]),py=get(last-100);
+  const dirW=v=>v>0?'เพิ่มขึ้น':v<0?'ลดลง':'ทรงตัว';
+  const judge=v=>{if(!v||p===0)return'';
+    return ((v>0)===(p>0))?' <b style="color:#16a34a">✓ ทิศทางที่ดี</b>':' <b style="color:#dc2626">⚠ ควรเฝ้าระวัง</b>'};
+  const B=[];
+  // 1) สถานะล่าสุด + MoM
+  if(cur){let s=`<b>${dimLabel()}</b> (${entName}) ณ <b>${tLab(last)} ปีงบ ${Math.floor(last/100)}</b> มียอดคงเหลือ <b>${fmtM(cur.bs)}</b>`;
+    if(prev){const d=cur.bs-prev.bs;s+=` ${dirW(d)}จากเดือนก่อน ${fmtM(Math.abs(d))} (${Math.abs(pct(cur.bs,prev.bs)??0).toFixed(1)}%)${judge(d)}`}
+    B.push(s)}
+  // 2) YoY
+  if(cur&&py){const d=cur.bs-py.bs;
+    B.push(`เทียบช่วงเดียวกันปีก่อน (${tLab(last-100)} ปีงบ ${Math.floor(last/100)-1}) ${dirW(d)} <b>${fmtM(Math.abs(d))}</b> (${Math.abs(pct(cur.bs,py.bs)??0).toFixed(1)}%)${judge(d)}`)}
+  // 3) แนวโน้มต่อเนื่อง (streak ไม่ข้ามปีงบ เพราะหมวด P&L รีเซ็ต YTD)
+  let st=0,dir=0;
+  for(let i=periods.length-1;i>0;i--){
+    if(Math.floor(periods[i]/100)!==Math.floor(periods[i-1]/100))break;
+    const a=get(periods[i]),b=get(periods[i-1]);if(!a||!b)break;
+    const d=Math.sign(a.bs-b.bs);if(!d)break;if(!dir)dir=d;if(d!==dir)break;st++}
+  if(st>=3)B.push(`ยอดคงเหลือ${dirW(dir)}ติดต่อกัน <b>${st} เดือน</b> ในปีงบนี้${judge(dir)}`);
+  // 4) สะสมปีงบปัจจุบัน
+  const fyNow=Math.floor(last/100),inFy=periods.filter(t=>Math.floor(t/100)===fyNow);
+  const sum=k=>inFy.reduce((a,t)=>{const o=get(t);return a+(o?o[k]:0)},0);
+  const inc=sum('inc'),dec=sum('dec'),net=inc+dec;
+  B.push(`ปีงบ ${fyNow} (${inFy.length} เดือนที่มีข้อมูล) เคลื่อนไหวเพิ่มสะสม <b>${fmtM(inc)}</b> ลดสะสม <b>${fmtM(Math.abs(dec))}</b> สุทธิ${dirW(net)} <b>${fmtM(Math.abs(net))}</b>${judge(net)}`);
+  // 5) เดือนเคลื่อนไหวแรงสุดรอบ 12 เดือน
+  let mx=null;
+  for(const t of periods.slice(-12)){const o=get(t);if(!o)continue;const n=o.inc+o.dec;
+    if(!mx||Math.abs(n)>Math.abs(mx.n))mx={t,n}}
+  if(mx&&mx.n)B.push(`รอบ 12 เดือนล่าสุด เดือนที่เคลื่อนไหวสุทธิแรงสุดคือ <b>${tLab(mx.t)}</b> (${dirW(mx.n)} ${fmtM(Math.abs(mx.n))}) — ควรทราบเหตุการณ์เบื้องหลัง เช่น การจัดสรรงบ/จ่ายหนี้ก้อนใหญ่`);
+  // 6) ฤดูกาล
+  const mSum=Array(12).fill(0),mCnt=Array(12).fill(0);
+  for(const t of periods){const o=get(t);if(!o)continue;mSum[t%100-1]+=o.inc+o.dec;mCnt[t%100-1]++}
+  let bi=-1,bv=0;
+  for(let i=0;i<12;i++){if(!mCnt[i])continue;const a=Math.abs(mSum[i]/mCnt[i]);if(a>bv){bv=a;bi=i}}
+  if(bi>=0&&bv)B.push(`เชิงฤดูกาล: เดือนที่มักเคลื่อนไหวแรงสุดในรอบหลายปีคือ <b>${TH_M[bi]}</b> (สุทธิเฉลี่ย ${dirW(mSum[bi])} ${fmtM(Math.abs(mSum[bi]/mCnt[bi]))}/ปี)${bi===11?' สอดคล้องกับการเร่งเบิกจ่าย/ปรับปรุงบัญชีปลายปีงบ':''}`);
+  // 7) เปรียบเทียบหลายพื้นที่
+  if(series.length>1){
+    const rk=series.map(s=>{const a=s.m.get(last),b=s.m.get(last-100);
+      return {n:s.ent?(state.area==='prov'?s.ent:orgName(s.ent)):'ทั้งเขต',bs:a?a.bs:null,g:a&&b?pct(a.bs,b.bs):null}})
+      .filter(r=>r.bs!=null);
+    if(rk.length>1){
+      const hi=[...rk].sort((a,b)=>Math.abs(b.bs)-Math.abs(a.bs))[0];
+      const fast=[...rk].filter(r=>r.g!=null).sort((a,b)=>Math.abs(b.g)-Math.abs(a.g))[0];
+      let s=`ในกลุ่มที่เลือก ยอดสูงสุดคือ <b>${hi.n}</b> (${fmtM(hi.bs)})`;
+      if(fast)s+=` และเปลี่ยนแปลง YoY แรงสุดคือ <b>${fast.n}</b> (${fast.g>0?'+':''}${fast.g.toFixed(1)}%)${judge(fast.g)}`;
+      B.push(s)}}
+  // 8) คุณภาพข้อมูล
+  const fl=META.flagged.filter(t=>t>=state.from&&t<=state.to);
+  if(fl.length){const fys=[...new Set(fl.map(t=>Math.floor(t/100)))].join(', ');
+    B.push(`<span class="note">⚠ ข้อจำกัดข้อมูล: ปีงบ ${fys} มาจากไฟล์ที่ถูกตัดแถว ตัวเลขอาจต่ำกว่าจริง — การเทียบข้ามช่วงนี้ให้ใช้ความระมัดระวัง (ยกเว้น ก.ย. 2568 ซึ่งใช้ข้อมูลสมบูรณ์จากไฟล์ปีถัดไป)</span>`)}
+  // 9) คำแนะนำเชิงหมวดบัญชี
+  const accs=[...new Set(filteredGroups(state.dim).map(g=>g.accg))];
+  const tip=accs.length===1?ACC_TIP[accs[0]]:
+    'มุมมองนี้รวมหลายหมวดบัญชีที่ทิศทางดี/เสียต่างกัน (เช่น สินทรัพย์เพิ่ม = ดี แต่หนี้สินเพิ่ม = ต้องเฝ้าระวัง) แนะนำเลือกเจาะรายหมวดจากช่อง "หมวด" เพื่อให้บทวิเคราะห์และสีแปลผลได้แม่นยำ';
+  el.innerHTML='<ul>'+B.map(b=>`<li>${b}</li>`).join('')+'</ul>'
+    +(tip?`<div class="tip">💡 <b>การแปลผลหมวดนี้:</b> ${tip}</div>`:'');
 }
 function exportCsv(){
   const periods=META.periods.filter(t=>t>=state.from&&t<=state.to);
