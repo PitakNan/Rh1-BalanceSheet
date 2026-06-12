@@ -287,7 +287,7 @@ function renderKpis(s0,periods){
   el.innerHTML=`
    <div class="card"><div class="t">ยอดคงเหลือ ${tLab(last)} ปีงบ ${Math.floor(last/100)}</div><div class="v">${cur?fmtM(cur.bs):'—'}</div><div class="d note">${dimLabel()}</div></div>
    <div class="card"><div class="t">เทียบเดือนก่อน (MoM)</div><div class="v" style="font-size:17px">${dd(cur?.bs,pv?.bs)}</div><div class="d note">${tLab(last)} vs ${prev?tLab(prev):'—'}</div></div>
-   <div class="card"><div class="t">เทียบปีก่อน (YoY)</div><div class="v" style="font-size:17px">${dd(cur?.bs,py?.bs)}</div><div class="d note">${tLab(last)} ปีงบ ${Math.floor(last/100)} vs ${tLab(yoy)} ปีงบ ${Math.floor(yoy/100)}</div></div>
+   <div class="card"><div class="t">เทียบปีก่อน (YoY)</div><div class="v" style="font-size:17px">${dd(cur?.bs,py?.bs)}</div><div class="d note">${tLab(last)} vs ${tLab(yoy)}</div></div>
    <div class="card"><div class="t">เคลื่อนไหว 12 เดือนล่าสุด</div><div class="v" style="font-size:17px"><span style="color:${dirCol(1)}">▲ ${fmtM(nets)}</span> / <span style="color:${dirCol(-1)}">▼ ${fmtM(Math.abs(netd))}</span></div><div class="d note">เพิ่ม / ลด สะสม ช่วง ${tLab(p12[0])}–${tLab(last)} (สี = ผลดี/เฝ้าระวัง)</div></div>`;
 }
 function fySummary(s0,periods){
@@ -299,8 +299,11 @@ function fySummary(s0,periods){
     e.net+=o.inc+o.dec;if(t>e.lastT){e.lastT=t;e.lastBs=o.bs}}
   const fys=[...byFy.keys()].sort();const out=new Map();
   fys.forEach((fy,i)=>{const e=byFy.get(fy);
-    if(state.view==='mv')out.set(fy,e.net);
-    else{const pv=i>0?byFy.get(fys[i-1]).lastBs:null;out.set(fy,pv!=null&&e.lastBs!=null?e.lastBs-pv:null)}});
+    if(state.view==='mv')out.set(fy,{v:e.net,vs:'รวมทั้งปี'});
+    else{const pe=i>0?byFy.get(fys[i-1]):null;
+      out.set(fy,(pe&&pe.lastBs!=null&&e.lastBs!=null)
+        ?{v:e.lastBs-pe.lastBs,vs:`${tLab(e.lastT)} vs ${tLab(pe.lastT)}`}
+        :{v:null,vs:''})}});
   return out;
 }
 function fyPlugin(bks,sums){
@@ -315,22 +318,22 @@ function fyPlugin(bks,sums){
         ctx.strokeStyle='#cbd5e1';ctx.setLineDash([4,4]);ctx.lineWidth=1;
         ctx.beginPath();ctx.moveTo(x,ys.top);ctx.lineTo(x,ys.bottom);ctx.stroke()}}
     bounds.push(bks.length);
-    // ป้ายสรุปรายปี + ระบุคู่เทียบ (เฉพาะชุดข้อมูลเดียว)
+    // ป้ายสรุปรายปี 3 บรรทัด: ปีงบ / คู่เทียบ (ก.ย.66 vs ก.ย.65) / ค่า
     if(sums){ctx.setLineDash([]);ctx.textAlign='center';
       for(let b=0;b<bounds.length-1;b++){
         const i0=bounds[b],i1=bounds[b+1]-1;if(i1<i0)continue;
-        const fy=bks[i0].fy,v=sums.get(fy);
+        const fy=bks[i0].fy,o=sums.get(fy);
         const x0=xs.getPixelForValue(i0),x1=xs.getPixelForValue(i1);
         if(x1-x0<46&&state.gran==='m')continue;
         if(x1-x0<30)continue;
         const cx=(x0+x1)/2;
-        const head=state.gran==='y'?String(fy):'ปีงบ '+fy;
-        const vs=state.view==='bs'?` (vs ปี ${String((fy-1)%100).padStart(2,'0')})`:' (รวมทั้งปี)';
-        ctx.font='600 11px Sarabun';ctx.fillStyle='#64748b';
-        ctx.fillText(head+(x1-x0>90?vs:''),cx,ys.top-20);
-        if(v==null)continue;
-        ctx.fillStyle=dirCol(v);
-        ctx.fillText((v>0?'▲ +':v<0?'▼ −':'')+fmtM(Math.abs(v)),cx,ys.top-7)}}
+        ctx.font='600 11px Sarabun';ctx.fillStyle='#475569';
+        ctx.fillText(state.gran==='y'?String(fy):'ปีงบ '+fy,cx,ys.top-34);
+        if(o&&o.vs&&x1-x0>=78){ctx.font='10px Sarabun';ctx.fillStyle='#94a3b8';
+          ctx.fillText(o.vs,cx,ys.top-22)}
+        if(!o||o.v==null)continue;
+        ctx.font='600 11px Sarabun';ctx.fillStyle=dirCol(o.v);
+        ctx.fillText((o.v>0?'▲ +':o.v<0?'▼ −':'')+fmtM(Math.abs(o.v)),cx,ys.top-8)}}
     ctx.restore()}};
 }
 // แถบสรุปสั้นภาษาคน เหนือกราฟ
@@ -345,8 +348,8 @@ function renderHeadline(s0,periods){
   const w=v=>v>0?'เพิ่มขึ้น':v<0?'ลดลง':'ทรงตัว';
   const entName=state.area==='region'?'ทั้งเขต':(state.area==='prov'?'จ.'+(state.ents[0]??''):orgName(state.ents[0]??''));
   let txt=`${dimLabel()} (${entName}) ล่าสุด ${tLab(last)} = ${fmtM(cur.bs)}`;
-  if(dM!=null)txt+=` · ${w(dM)} ${fmtM(Math.abs(dM))} เทียบ ${tLab(prev)}`;
-  if(dY!=null)txt+=` · ${w(dY)} ${fmtM(Math.abs(dY))} เทียบ ${tLab(last-100)} ปีก่อน`;
+  if(dM!=null)txt+=` · ${w(dM)} ${fmtM(Math.abs(dM))} (${tLab(last)} vs ${tLab(prev)})`;
+  if(dY!=null)txt+=` · ${w(dY)} ${fmtM(Math.abs(dY))} (${tLab(last)} vs ${tLab(last-100)})`;
   let cls='mid',ico='ℹ️';
   const ref=dY??dM;
   if(p!==0&&ref){const good=(ref>0)===(p>0);cls=good?'good':'bad';ico=good?'✅':'⚠️'}
@@ -382,7 +385,7 @@ function renderChart(series,periods){
   chart=new Chart(document.getElementById('mainChart'),{data:{labels,datasets:ds},
    plugins:[fyPlugin(bks,sums)],options:{
     responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    layout:{padding:{top:34}},
+    layout:{padding:{top:48}},
     scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5}},stacked:state.view==='mv'&&series.length===1},
       y:{stacked:state.view==='mv'&&series.length===1,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}}},
     plugins:{legend:{labels:{font:{family:'Sarabun'}}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
@@ -418,7 +421,7 @@ function renderTop(periods){
     rows=[...byG.entries()].map(([k,o])=>({name:k,cur:o.cur,d:o.cur-o.prev}))
       .sort((a,b)=>Math.abs(b.cur)-Math.abs(a.cur)).slice(0,15);
     title.textContent=`อันดับตามยอดคงเหลือ ${tLab(last)}${state.area==='prov'&&state.ents.length?' — '+state.ents[0]:''}`;
-    tbl.innerHTML=`<tr><th>กลุ่ม</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ ${tLab(last)} vs ${tLab(prev)}</th></tr>`+
+    tbl.innerHTML=`<tr><th>กลุ่ม</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ (${tLab(last)} vs ${tLab(prev)})</th></tr>`+
       rows.map(r=>`<tr class="click" onclick="drill('${lvl}','${r.name.replace(/'/g,"\\'")}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${dirCls(r.d)}">${r.d>0?'▲ +':r.d<0?'▼ −':''}${fmtM(Math.abs(r.d))}</td></tr>`).join('');
   }else{
     const d=state.dim,useB=d.budget||d.gf;
@@ -429,7 +432,7 @@ function renderTop(periods){
       return {id:o.id,name:o.name,cur,d:cur-pv}}).filter(r=>r.cur||r.d)
       .sort((a,b)=>Math.abs(b.cur)-Math.abs(a.cur)).slice(0,20);
     title.textContent=`อันดับโรงพยาบาล ${tLab(last)} — ${dimLabel()}`;
-    tbl.innerHTML=`<tr><th>โรงพยาบาล</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ ${tLab(last)} vs ${tLab(prev)}</th></tr>`+
+    tbl.innerHTML=`<tr><th>โรงพยาบาล</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ (${tLab(last)} vs ${tLab(prev)})</th></tr>`+
       rows.map(r=>`<tr class="click" onclick="hospPick('${r.id}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${dirCls(r.d)}">${r.d>0?'▲ +':r.d<0?'▼ −':''}${fmtM(Math.abs(r.d))}</td></tr>`).join('');
   }
 }
@@ -478,11 +481,11 @@ function renderAnalysis(series,periods){
   const B=[];
   // 1) สถานะล่าสุด + MoM
   if(cur){let s=`<b>${dimLabel()}</b> (${entName}) ณ <b>${tLab(last)} ปีงบ ${Math.floor(last/100)}</b> มียอดคงเหลือ <b>${fmtM(cur.bs)}</b>`;
-    if(prev){const d=cur.bs-prev.bs;s+=` ${dirW(d)} ${fmtM(Math.abs(d))} (${Math.abs(pct(cur.bs,prev.bs)??0).toFixed(1)}%) เทียบ ${tLab(periods[periods.length-2])}${judge(d)}`}
+    if(prev){const d=cur.bs-prev.bs;s+=` ${dirW(d)} ${fmtM(Math.abs(d))} หรือ ${Math.abs(pct(cur.bs,prev.bs)??0).toFixed(1)}% (${tLab(last)} vs ${tLab(periods[periods.length-2])})${judge(d)}`}
     B.push(s)}
   // 2) YoY
   if(cur&&py){const d=cur.bs-py.bs;
-    B.push(`เทียบช่วงเดียวกันปีก่อน (${tLab(last-100)} ปีงบ ${Math.floor(last/100)-1}) ${dirW(d)} <b>${fmtM(Math.abs(d))}</b> (${Math.abs(pct(cur.bs,py.bs)??0).toFixed(1)}%)${judge(d)}`)}
+    B.push(`เทียบช่วงเดียวกันปีก่อน ${dirW(d)} <b>${fmtM(Math.abs(d))}</b> หรือ ${Math.abs(pct(cur.bs,py.bs)??0).toFixed(1)}% (${tLab(last)} vs ${tLab(last-100)})${judge(d)}`)}
   // 3) แนวโน้มต่อเนื่อง (streak ไม่ข้ามปีงบ เพราะหมวด P&L รีเซ็ต YTD)
   let st=0,dir=0;
   for(let i=periods.length-1;i>0;i--){
