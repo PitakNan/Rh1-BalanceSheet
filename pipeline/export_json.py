@@ -15,7 +15,7 @@ import pandas as pd
 sys.stdout.reconfigure(encoding="utf-8")
 
 BASE = r"D:\OneDrive\Share Rh1-New\0 Claude Cowork\Dashboard AI\Balance Sheet"
-REPO = r"D:\Github\Rh1-Finance-Trend"
+REPO = r"D:\Github\Rh1-BalanceSheet"
 DATA = os.path.join(REPO, "docs", "data")
 os.makedirs(os.path.join(DATA, "hosp"), exist_ok=True)
 

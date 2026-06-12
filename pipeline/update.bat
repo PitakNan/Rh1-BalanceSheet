@@ -5,7 +5,7 @@ REM  อัพเดทข้อมูลรายเดือน — Financial 
 REM  1) วางไฟล์เดือนใหม่ใน  Balance Sheet\incoming\
 REM  2) ดับเบิลคลิกไฟล์นี้
 REM ============================================================
-cd /d D:\Github\Rh1-Finance-Trend
+cd /d D:\Github\Rh1-BalanceSheet
 
 echo [1/3] นำเข้าไฟล์เดือนใหม่ + ตรวจสุขภาพข้อมูล...
 python pipeline\update_month.py

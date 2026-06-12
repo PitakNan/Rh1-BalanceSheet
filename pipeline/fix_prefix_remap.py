@@ -5,7 +5,7 @@ import pandas as pd
 
 sys.stdout.reconfigure(encoding="utf-8")
 BASE = r"D:\OneDrive\Share Rh1-New\0 Claude Cowork\Dashboard AI\Balance Sheet"
-MASTER = r"D:\Github\Rh1-Finance-Trend\master.parquet"
+MASTER = r"D:\Github\Rh1-BalanceSheet\master.parquet"
 LV = ["GF_Name", "Budget_Name", "SubGroup_Name", "AccGroup_Name", "FinStatement_Name"]
 
 m = pd.read_parquet(MASTER)

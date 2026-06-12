@@ -5,7 +5,7 @@ import sys
 import pandas as pd
 
 sys.stdout.reconfigure(encoding="utf-8")
-REPO = r"D:\Github\Rh1-Finance-Trend"
+REPO = r"D:\Github\Rh1-BalanceSheet"
 m = pd.read_parquet(REPO + r"\master.parquet")
 meta = json.load(open(REPO + r"\docs\data\meta.json", encoding="utf-8"))
 region = json.load(open(REPO + r"\docs\data\region_gf.json", encoding="utf-8"))

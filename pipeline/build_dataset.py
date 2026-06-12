@@ -17,7 +17,7 @@ import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
 
 BASE = r"D:\OneDrive\Share Rh1-New\0 Claude Cowork\Dashboard AI\Balance Sheet"
-OUT = r"D:\Github\Rh1-Finance-Trend\master.parquet"
+OUT = r"D:\Github\Rh1-BalanceSheet\master.parquet"
 
 FILES = {
     2563: "DataIn - 2563.xlsx",
