@@ -48,6 +48,12 @@ tr.click{cursor:pointer}tr.click:hover{background:#eff6ff}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.chartbox{height:340px}}
 footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
+.pb{font-family:inherit;font-size:12.5px;font-weight:600;padding:5px 12px;border:1px solid var(--line);border-radius:99px;background:#fff;cursor:pointer;color:var(--ink)}
+.pb:hover{border-color:var(--blue);color:var(--blue)}
+.pb.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.card.click{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.card.click:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(59,130,246,.15)}
+.card.actv{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
 #headline{margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:14.5px;font-weight:600;line-height:1.5}
 #headline.good{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
 #headline.bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
@@ -65,6 +71,9 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 </header>
 
 <div class="bar">
+  <div id="presetRow" style="flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <span class="note" style="font-weight:600">มุมมองด่วน:</span>
+  </div>
   <div><label>มุมมอง</label>
     <div class="seg">
       <button id="vBs" class="on" onclick="setView('bs')">ยอดคงเหลือสิ้นเดือน</button>
@@ -86,20 +95,24 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
   <div id="entPick" style="display:none"><label id="entLab">เลือก</label><select id="selEnt" onchange="entAdd()"></select></div>
   <div><label>ความละเอียด</label>
     <div class="seg">
-      <button id="gM" class="on" onclick="setGran('m')">เดือน</button>
-      <button id="gQ" onclick="setGran('q')">ไตรมาส</button>
+      <button id="gM" onclick="setGran('m')">เดือน</button>
+      <button id="gQ" class="on" onclick="setGran('q')">ไตรมาส</button>
       <button id="gY" onclick="setGran('y')">ปี</button>
     </div>
   </div>
   <div><label>ช่วงเวลา</label>
     <select id="selFrom" onchange="render()"></select> – <select id="selTo" onchange="render()"></select>
   </div>
-  <div style="margin-left:auto"><label>&nbsp;</label><button class="btn" onclick="exportCsv()">⬇ CSV</button></div>
+  <div style="margin-left:auto;display:flex;gap:6px"><label style="display:none">&nbsp;</label><button class="btn" onclick="copyLink(this)">🔗 คัดลอกลิงก์</button><button class="btn" onclick="exportCsv()">⬇ CSV</button></div>
   <div id="chipRow" class="chips" style="display:none;flex-basis:100%"></div>
 </div>
 
 <div class="wrap">
   <div class="warn" id="warnBox" style="display:none"></div>
+  <div class="panel" style="padding:12px 16px">
+    <h2>ภาพรวมทั้งเขต ทุกหมวดสำคัญ <span class="note" id="execNote"></span></h2>
+    <div class="cards" id="execCards" style="grid-template-columns:repeat(auto-fit,minmax(175px,1fr))"></div>
+  </div>
   <div class="cards" id="kpis"></div>
   <div class="panel"><h2 id="chartTitle"></h2>
     <div id="headline" style="display:none"></div>
@@ -118,7 +131,7 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 const TH_M=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
 const PAL=['#3b82f6','#d97706','#16a34a','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d'];
 let META=null,REGION=null,PROV=null,HOSPSUB=null;const HOSPB={};
-let state={view:'bs',dim:{fin:'',accg:'หนี้สิน',sub:'',budget:'',gf:''},area:'region',ents:[],from:null,to:null,gran:'m'};
+let state={view:'bs',dim:{fin:'',accg:'หนี้สิน',sub:'',budget:'',gf:''},area:'region',ents:[],from:null,to:null,gran:'q'};
 let chart=null;
 
 const fmtM=v=>{const m=v/1e6;return (Math.abs(m)>=100?m.toLocaleString('th-TH',{maximumFractionDigits:0}):m.toLocaleString('th-TH',{maximumFractionDigits:1}))+' ลบ.'};
@@ -126,6 +139,95 @@ const fmtB=v=>v.toLocaleString('th-TH')+' บาท';
 const tLab=t=>{const fy=Math.floor(t/100),fm=t%100;const by=fm<=3?fy-1:fy;return TH_M[fm-1]+String(by%100).padStart(2,'0')};
 const pct=(a,b)=>b?((a-b)/Math.abs(b)*100):null;
 
+// ---------- มุมมองด่วน (Preset) ----------
+const PRESETS=[
+  {ic:'💵',lb:'เงินสด',f:{budget:'1.1.1'}},
+  {ic:'📥',lb:'ลูกหนี้',f:{budget:'1.1.2'}},
+  {ic:'📤',lb:'เจ้าหนี้',f:{budget:'2.1.1'}},
+  {ic:'🏦',lb:'หนี้สินรวม',f:{accg:'หนี้สิน'}},
+  {ic:'📈',lb:'รายได้ YTD',f:{accg:'รายได้'}},
+  {ic:'📉',lb:'ค่าใช้จ่าย YTD',f:{accg:'ค่าใช้จ่าย'}},
+];
+function presetDim(p){
+  if(p.f.accg){const g=META.groups.find(g=>g.accg===p.f.accg);
+    return {fin:g?g.fin:'',accg:p.f.accg,sub:'',budget:'',gf:''}}
+  const g=META.groups.find(g=>g.budget.startsWith(p.f.budget));
+  return g?{fin:g.fin,accg:g.accg,sub:g.sub,budget:g.budget,gf:''}:null;
+}
+const dimEq=(a,b)=>a&&b&&['fin','accg','sub','budget','gf'].every(k=>(a[k]||'')===(b[k]||''));
+function applyPreset(i){const d=presetDim(PRESETS[i]);if(!d)return;state.dim=d;buildDims();render()}
+function presetUI(){
+  const row=document.getElementById('presetRow');
+  if(!row.dataset.built){
+    row.insertAdjacentHTML('beforeend',PRESETS.map((p,i)=>
+      `<button class="pb" id="pb${i}" onclick="applyPreset(${i})">${p.ic} ${p.lb}</button>`).join(''));
+    row.dataset.built='1'}
+  PRESETS.forEach((p,i)=>document.getElementById('pb'+i).classList.toggle('on',dimEq(state.dim,presetDim(p))));
+}
+// ---------- การ์ดสรุปผู้บริหาร (ทั้งเขต ทุกงวด) ----------
+function spark(vals,color){
+  if(vals.length<2)return'';
+  const w=110,h=26,mn=Math.min(...vals),mx=Math.max(...vals);
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-2-(v-mn)/((mx-mn)||1)*(h-4)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8"/></svg>`;
+}
+function renderExecCards(){
+  const el=document.getElementById('execCards');
+  const html=PRESETS.map((p,i)=>{
+    const d=presetDim(p);if(!d)return'';
+    const gfSet=new Set(META.groups.filter(g=>(!d.fin||g.fin===d.fin)&&(!d.accg||g.accg===d.accg)&&(!d.sub||g.sub===d.sub)&&(!d.budget||g.budget===d.budget)).map(g=>g.gfId));
+    const m=new Map();
+    for(const r of REGION){if(!gfSet.has(r[0]))continue;m.set(r[1],(m.get(r[1])||0)+r[2])}
+    const ts=[...m.keys()].sort((a,b)=>a-b);if(!ts.length)return'';
+    const last=ts[ts.length-1],cur=m.get(last),py=m.get(last-100);
+    const pol=POLAR[d.accg]??0;
+    let badge='<span class="zero">—</span>';
+    if(py!=null){const dv=cur-py,good=(dv>0)===(pol>0);
+      const col=pol===0?'#64748b':good?'#16a34a':'#dc2626';
+      badge=`<span style="color:${col};font-size:12px;font-weight:600">${dv>0?'▲':dv<0?'▼':''} ${Math.abs(pct(cur,py)??0).toFixed(1)}% YoY</span>`}
+    const sp=spark(ts.slice(-12).map(t=>m.get(t)),'#64748b');
+    const actv=dimEq(state.dim,d)?' actv':'';
+    return `<div class="card click${actv}" onclick="applyPreset(${i})">
+      <div class="t">${p.ic} ${p.lb}</div>
+      <div class="v" style="font-size:18px">${fmtM(cur)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:end;gap:6px">${badge}${sp}</div></div>`;
+  }).join('');
+  el.innerHTML=html;
+  const lastAll=META.periods[META.periods.length-1];
+  document.getElementById('execNote').textContent=`— ยอด ณ ${tLab(lastAll)} เทียบปีก่อน · คลิกการ์ดเพื่อเจาะหมวดนั้น`;
+}
+// ---------- URL state (แชร์ลิงก์มุมมองปัจจุบัน) ----------
+function writeHash(){
+  const q=new URLSearchParams();const d=state.dim;
+  q.set('v',state.view);q.set('g',state.gran);q.set('a',state.area);
+  if(state.ents.length)q.set('e',state.ents.join('|'));
+  q.set('p1',state.from);q.set('p2',state.to);
+  for(const k of ['fin','accg','sub','budget','gf'])if(d[k])q.set(k,d[k]);
+  history.replaceState(null,'','#'+q.toString());
+}
+function readHash(){
+  if(!location.hash||location.hash.length<2)return;
+  try{
+    const q=new URLSearchParams(location.hash.slice(1));
+    if(['bs','mv'].includes(q.get('v')))state.view=q.get('v');
+    if(['m','q','y'].includes(q.get('g')))state.gran=q.get('g');
+    if(['region','prov','hosp'].includes(q.get('a')))state.area=q.get('a');
+    if(q.get('e'))state.ents=q.get('e').split('|').filter(Boolean);
+    if(q.get('p1'))state.from=+q.get('p1');
+    if(q.get('p2'))state.to=+q.get('p2');
+    for(const k of ['fin','accg','sub','budget','gf'])if(q.get(k))state.dim[k]=q.get(k);
+  }catch(e){}
+}
+function copyLink(b){
+  navigator.clipboard.writeText(location.href).then(()=>{
+    const t=b.textContent;b.textContent='✓ คัดลอกแล้ว';setTimeout(()=>b.textContent=t,1500)});
+}
+function syncUI(){
+  document.getElementById('vBs').classList.toggle('on',state.view==='bs');
+  document.getElementById('vMv').classList.toggle('on',state.view==='mv');
+  for(const[id,k]of[['gM','m'],['gQ','q'],['gY','y']])document.getElementById(id).classList.toggle('on',state.gran===k);
+  areaUI();
+}
 async function boot(){
   META=await (await fetch('data/meta.json')).json();
   REGION=await (await fetch('data/region_gf.json')).json();
@@ -133,7 +235,8 @@ async function boot(){
   const fys=[...new Set(META.periods.map(t=>Math.floor(t/100)))];
   document.getElementById('hYears').textContent=Math.min(...fys)+'–'+Math.max(...fys);
   state.from=META.periods[0];state.to=META.periods[META.periods.length-1];
-  buildDims();buildRange();render();
+  readHash();
+  buildDims();buildRange();syncUI();renderExecCards();render();
 }
 function opt(sel,items,cur,allLabel){
   const el=document.getElementById(sel);
@@ -196,17 +299,25 @@ function bVal(s,b){
   for(const t of b.ts){const o=s.m.get(t);if(!o)continue;has=true;inc+=o.inc;dec+=o.dec;bs=o.bs}
   return has?{bs,inc,dec}:null;
 }
-function setArea(a){state.area=a;state.ents=[];
+function entList(a){
+  return a==='prov'?[...new Set(META.orgs.map(o=>o.prov))].sort((x,y)=>x.localeCompare(y,'th'))
+    :META.orgs.slice().sort((x,y)=>x.name.localeCompare(y.name,'th')).map(o=>o.id);
+}
+function areaUI(){ // sync ปุ่ม/ตัวเลือกพื้นที่ตาม state (ไม่แตะ state)
+  const a=state.area;
   for(const[id,k]of[['aRegion','region'],['aProv','prov'],['aHosp','hosp']])document.getElementById(id).classList.toggle('on',a===k);
   const pick=document.getElementById('entPick');
-  if(a==='region'){pick.style.display='none';render();return}
+  if(a==='region'){pick.style.display='none';return}
   pick.style.display='';
   document.getElementById('entLab').textContent=a==='prov'?'เพิ่มจังหวัด':'เพิ่มโรงพยาบาล';
-  const ents=a==='prov'?[...new Set(META.orgs.map(o=>o.prov))].sort((x,y)=>x.localeCompare(y,'th'))
-    :META.orgs.slice().sort((x,y)=>x.name.localeCompare(y.name,'th')).map(o=>o.id);
   document.getElementById('selEnt').innerHTML='<option value="">— เลือก —</option>'+
-    ents.map(e=>`<option value="${e}">${a==='prov'?e:orgName(e)}</option>`).join('');
-  state.ents=a==='prov'?[ents[0]]:[ents[0]];render()}
+    entList(a).map(e=>`<option value="${e}">${a==='prov'?e:orgName(e)}</option>`).join('');
+}
+function setArea(a){
+  state.area=a;
+  state.ents=a==='region'?[]:[entList(a)[0]];
+  areaUI();render();
+}
 const orgName=id=>{const o=META.orgs.find(o=>o.id===id);return o?o.name:id};
 function entAdd(){
   const v=document.getElementById('selEnt').value;if(!v)return;
@@ -258,6 +369,7 @@ async function render(){
   renderChips();renderWarn(periods);renderKpis(series[0],periods);
   renderHeadline(series[0],periods);
   renderChart(series,periods);renderTop(periods);renderHeat(series[0]);renderAnalysis(series,periods);
+  presetUI();renderExecCards();writeHash();
 }
 function renderChips(){
   const row=document.getElementById('chipRow');
