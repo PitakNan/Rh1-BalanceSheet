@@ -46,6 +46,24 @@ tr.click{cursor:pointer}tr.click:hover{background:#eff6ff}
 .hm th{text-align:center}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}.chartbox{height:340px}}
+#filtToggle{display:none;margin-left:auto}
+@media(max-width:768px){
+  #filtToggle{display:inline-block}
+  .bar:not(.open)>div:not(#presetRow){display:none}
+  .bar select{max-width:150px}
+  header nav{flex-basis:100%}
+}
+@media print{
+  .bar,footer,.btn,#filtToggle,.seg{display:none!important}
+  body{background:#fff}
+  .wrap{max-width:100%;padding:4px}
+  .panel,.card{box-shadow:none;border:1px solid #ddd;break-inside:avoid}
+  .chartbox{height:340px}
+  #paneTop,#paneHm{display:block!important}
+  .anl .tip{border:1px solid #ddd}
+  header{background:#0f172a!important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
 .pb{font-family:inherit;font-size:12.5px;font-weight:600;padding:5px 12px;border:1px solid var(--line);border-radius:99px;background:#fff;cursor:pointer;color:var(--ink)}
@@ -68,11 +86,16 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 <header>
   <h1>📊 Financial Trend Dashboard</h1>
   <div class="sub">งบการเงินโรงพยาบาล เขตสุขภาพที่ 1 · 103 แห่ง · ปีงบ <span id="hYears"></span> · อัปเดต <span id="hUpd"></span></div>
+  <nav style="margin-left:auto;display:flex;gap:14px;font-size:13px;flex-wrap:wrap">
+    <a href="https://pitaknan.github.io/Risk-Score-Rh1/" target="_blank" style="color:#cbd5e1;text-decoration:none">🎯 Risk Score</a>
+    <a href="https://rh1-tps-v-3-1.vercel.app" target="_blank" style="color:#cbd5e1;text-decoration:none">🏆 TPS</a>
+  </nav>
 </header>
 
 <div class="bar">
   <div id="presetRow" style="flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
     <span class="note" style="font-weight:600">มุมมองด่วน:</span>
+    <button id="filtToggle" class="pb" onclick="document.querySelector('.bar').classList.toggle('open')">⚙ ตัวกรองทั้งหมด</button>
   </div>
   <div><label>มุมมอง</label>
     <div class="seg">
@@ -103,7 +126,7 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
   <div><label>ช่วงเวลา</label>
     <select id="selFrom" onchange="render()"></select> – <select id="selTo" onchange="render()"></select>
   </div>
-  <div style="margin-left:auto;display:flex;gap:6px"><label style="display:none">&nbsp;</label><button class="btn" onclick="copyLink(this)">🔗 คัดลอกลิงก์</button><button class="btn" onclick="exportCsv()">⬇ CSV</button></div>
+  <div style="margin-left:auto;display:flex;gap:6px"><label style="display:none">&nbsp;</label><button class="btn" onclick="copyLink(this)">🔗 คัดลอกลิงก์</button><button class="btn" onclick="window.print()">🖨 พิมพ์/PDF</button><button class="btn" onclick="exportCsv()">⬇ CSV</button></div>
   <div id="chipRow" class="chips" style="display:none;flex-basis:100%"></div>
 </div>
 
@@ -119,9 +142,19 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
     <div class="chartbox"><canvas id="mainChart"></canvas></div>
     <div class="note" id="chartNote" style="margin-top:6px"></div></div>
   <div class="panel"><h2>📝 บทวิเคราะห์อัตโนมัติ</h2><div id="analysis" class="anl"></div></div>
-  <div class="grid2">
-    <div class="panel"><h2 id="topTitle">อันดับ</h2><div style="max-height:420px;overflow:auto"><table id="topTbl"></table></div></div>
-    <div class="panel"><h2>Heatmap เดือน × ปีงบ <span class="note" id="hmNote"></span></h2><div class="hm"><table id="hmTbl"></table></div></div>
+  <div class="panel">
+    <div class="seg" style="display:inline-flex;margin-bottom:12px">
+      <button id="tabTop" class="on" onclick="setTab('top')">🏆 ตารางอันดับ</button>
+      <button id="tabHm" onclick="setTab('hm')">🗓 Heatmap เดือน×ปี</button>
+    </div>
+    <div id="paneTop">
+      <h2 id="topTitle">อันดับ</h2>
+      <div style="max-height:420px;overflow:auto"><table id="topTbl"></table></div>
+    </div>
+    <div id="paneHm" style="display:none">
+      <h2>Heatmap เดือน × ปีงบ <span class="note" id="hmNote"></span></h2>
+      <div class="hm"><table id="hmTbl"></table></div>
+    </div>
   </div>
 </div>
 <footer>สำนักงานเขตสุขภาพที่ 1 · ข้อมูลจากงบทดลอง GL (DataIn) · สร้างด้วย Chart.js บน GitHub Pages</footer>
@@ -159,7 +192,7 @@ function applyPreset(i){const d=presetDim(PRESETS[i]);if(!d)return;state.dim=d;b
 function presetUI(){
   const row=document.getElementById('presetRow');
   if(!row.dataset.built){
-    row.insertAdjacentHTML('beforeend',PRESETS.map((p,i)=>
+    document.getElementById('filtToggle').insertAdjacentHTML('beforebegin',PRESETS.map((p,i)=>
       `<button class="pb" id="pb${i}" onclick="applyPreset(${i})">${p.ic} ${p.lb}</button>`).join(''));
     row.dataset.built='1'}
   PRESETS.forEach((p,i)=>document.getElementById('pb'+i).classList.toggle('on',dimEq(state.dim,presetDim(p))));
@@ -281,6 +314,12 @@ function buildRange(){
 function setView(v){state.view=v;
   document.getElementById('vBs').classList.toggle('on',v==='bs');
   document.getElementById('vMv').classList.toggle('on',v==='mv');render()}
+function setTab(t){
+  document.getElementById('tabTop').classList.toggle('on',t==='top');
+  document.getElementById('tabHm').classList.toggle('on',t==='hm');
+  document.getElementById('paneTop').style.display=t==='top'?'':'none';
+  document.getElementById('paneHm').style.display=t==='hm'?'':'none';
+}
 function setGran(g){state.gran=g;
   for(const[id,k]of[['gM','m'],['gQ','q'],['gY','y']])document.getElementById(id).classList.toggle('on',g===k);render()}
 // จัดกลุ่มงวดตามความละเอียด: เดือน/ไตรมาส/ปีงบ
