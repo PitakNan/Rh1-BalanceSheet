@@ -80,6 +80,29 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 .anl li{line-height:1.6;font-size:13.5px}
 .anl .tip{margin-top:10px;background:#f0f9ff;border:1px solid #bae6fd;color:#075985;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.6}
 @keyframes s{to{transform:rotate(360deg)}}
+/* ===== AI Chat ===== */
+#chatBtn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(59,130,246,.45);z-index:900;transition:transform .15s}
+#chatBtn:hover{transform:scale(1.08)}
+#chatPanel{position:fixed;bottom:86px;right:24px;width:380px;max-height:560px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:900;display:none;flex-direction:column;overflow:hidden}
+#chatPanel.open{display:flex}
+#chatHead{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;gap:8px}
+#chatHead .hbtns{display:flex;gap:4px}
+#chatHead button{background:none;border:none;color:#94a3b8;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:6px}
+#chatHead button:hover{background:#ffffff22;color:#fff}
+#chatCtx{background:#f8fafc;padding:7px 12px;font-size:11px;color:var(--mut);border-bottom:1px solid var(--line);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chatMsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:180px;max-height:340px}
+.cmsg-u{align-self:flex-end;background:#3b82f6;color:#fff;border-radius:12px 12px 4px 12px;padding:8px 12px;max-width:82%;font-size:13px;line-height:1.5;word-break:break-word}
+.cmsg-a{align-self:flex-start;background:#f1f5f9;color:var(--ink);border-radius:12px 12px 12px 4px;padding:9px 12px;max-width:92%;font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.cmsg-load{align-self:flex-start;color:var(--mut);font-size:12px;padding:6px 12px}
+.cmsg-load::after{content:'';animation:dots 1.2s infinite}
+@keyframes dots{0%{content:'กำลังคิด.'}33%{content:'กำลังคิด..'}66%{content:'กำลังคิด...'}100%{content:'กำลังคิด.'}}
+#chatBar{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
+#chatQ{flex:1;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:none;height:38px;line-height:1.4;outline:none;transition:border-color .15s}
+#chatQ:focus{border-color:#3b82f6;box-shadow:0 0 0 3px #3b82f620}
+#chatSend{font-family:inherit;font-size:13px;font-weight:600;padding:8px 14px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer}
+#chatSend:hover{background:#2563eb}
+#chatSend:disabled{background:#94a3b8;cursor:not-allowed}
+@media(max-width:480px){#chatPanel{width:calc(100vw - 20px);right:10px;bottom:80px}}
 </style>
 </head>
 <body>
@@ -101,6 +124,15 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
     <div class="seg">
       <button id="vBs" class="on" onclick="setView('bs')">ยอดคงเหลือสิ้นเดือน</button>
       <button id="vMv" onclick="setView('mv')">เคลื่อนไหวรายเดือน</button>
+    </div>
+  </div>
+  <div id="metricDiv"><label>แสดงค่า</label>
+    <div class="seg">
+      <button id="mBs" class="on" onclick="setMetric('bs')">ยอดสุทธิ</button>
+      <button id="mEDr" onclick="setMetric('endDr')">EndDr</button>
+      <button id="mECr" onclick="setMetric('endCr')">EndCr</button>
+      <button id="mInc" onclick="setMetric('inc')">Dr เพิ่ม</button>
+      <button id="mDec" onclick="setMetric('dec')">Cr ลด</button>
     </div>
   </div>
   <div><label>งบ</label><select id="selFin" onchange="dimChange('fin')"></select></div>
@@ -140,7 +172,8 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
   <div class="panel"><h2 id="chartTitle"></h2>
     <div id="headline" style="display:none"></div>
     <div class="chartbox"><canvas id="mainChart"></canvas></div>
-    <div class="note" id="chartNote" style="margin-top:6px"></div></div>
+    <div class="note" id="chartNote" style="margin-top:6px"></div>
+    <div id="chartTableWrap" style="margin-top:16px"></div></div>
   <div class="panel"><h2>📝 บทวิเคราะห์อัตโนมัติ</h2><div id="analysis" class="anl"></div></div>
   <div class="panel">
     <div class="seg" style="display:inline-flex;margin-bottom:12px">
@@ -164,7 +197,7 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 const TH_M=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
 const PAL=['#3b82f6','#d97706','#16a34a','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d'];
 let META=null,REGION=null,PROV=null,HOSPSUB=null;const HOSPB={};
-let state={view:'bs',dim:{fin:'',accg:'หนี้สิน',sub:'',budget:'',gf:''},area:'region',ents:[],from:null,to:null,gran:'q'};
+let state={view:'bs',metric:'bs',dim:{fin:'',accg:'หนี้สิน',sub:'',budget:'',gf:''},area:'region',ents:[],from:null,to:null,gran:'q'};
 let chart=null;
 
 const fmtM=v=>{const m=v/1e6;return (Math.abs(m)>=100?m.toLocaleString('th-TH',{maximumFractionDigits:0}):m.toLocaleString('th-TH',{maximumFractionDigits:1}))+' ลบ.'};
@@ -232,7 +265,7 @@ function renderExecCards(){
 // ---------- URL state (แชร์ลิงก์มุมมองปัจจุบัน) ----------
 function writeHash(){
   const q=new URLSearchParams();const d=state.dim;
-  q.set('v',state.view);q.set('g',state.gran);q.set('a',state.area);
+  q.set('v',state.view);q.set('mt',state.metric);q.set('g',state.gran);q.set('a',state.area);
   if(state.ents.length)q.set('e',state.ents.join('|'));
   q.set('p1',state.from);q.set('p2',state.to);
   for(const k of ['fin','accg','sub','budget','gf'])if(d[k])q.set(k,d[k]);
@@ -243,6 +276,7 @@ function readHash(){
   try{
     const q=new URLSearchParams(location.hash.slice(1));
     if(['bs','mv'].includes(q.get('v')))state.view=q.get('v');
+    if(['bs','endDr','endCr','inc','dec'].includes(q.get('mt')))state.metric=q.get('mt');
     if(['m','q','y'].includes(q.get('g')))state.gran=q.get('g');
     if(['region','prov','hosp'].includes(q.get('a')))state.area=q.get('a');
     if(q.get('e'))state.ents=q.get('e').split('|').filter(Boolean);
@@ -258,7 +292,9 @@ function copyLink(b){
 function syncUI(){
   document.getElementById('vBs').classList.toggle('on',state.view==='bs');
   document.getElementById('vMv').classList.toggle('on',state.view==='mv');
+  document.getElementById('metricDiv').style.display=state.view==='bs'?'':'none';
   for(const[id,k]of[['gM','m'],['gQ','q'],['gY','y']])document.getElementById(id).classList.toggle('on',state.gran===k);
+  for(const[id,k]of[['mBs','bs'],['mEDr','endDr'],['mECr','endCr'],['mInc','inc'],['mDec','dec']])document.getElementById(id).classList.toggle('on',state.metric===k);
   areaUI();
 }
 async function boot(){
@@ -280,6 +316,13 @@ function filteredGroups(d){
 }
 // ขั้วของหมวดบัญชี: +1 = เพิ่มแล้วดี (สินทรัพย์/ทุน/รายได้), -1 = เพิ่มแล้วต้องเฝ้าระวัง (หนี้สิน/ค่าใช้จ่าย), 0 = ผสม
 const POLAR={'สินทรัพย์':1,'ทุน':1,'ส่วนทุน':1,'รายได้':1,'หนี้สิน':-1,'ค่าใช้จ่าย':-1};
+// Normal Balance: +1 = Dr normal (เพิ่มด้าน Dr), -1 = Cr normal (เพิ่มด้าน Cr)
+const NORMAL_SIGN={'สินทรัพย์':1,'ค่าใช้จ่าย':1,'หนี้สิน':-1,'รายได้':-1,'ทุน':-1,'ส่วนทุน':-1};
+function normalSign(){
+  const accs=[...new Set(filteredGroups(state.dim).map(g=>g.accg))];
+  const signs=[...new Set(accs.map(a=>NORMAL_SIGN[a]??1))];
+  return signs.length===1?signs[0]:1;
+}
 function polarity(){
   const accs=[...new Set(filteredGroups(state.dim).map(g=>g.accg))];
   const ps=[...new Set(accs.map(a=>POLAR[a]??0))];
@@ -313,7 +356,13 @@ function buildRange(){
 }
 function setView(v){state.view=v;
   document.getElementById('vBs').classList.toggle('on',v==='bs');
-  document.getElementById('vMv').classList.toggle('on',v==='mv');render()}
+  document.getElementById('vMv').classList.toggle('on',v==='mv');
+  document.getElementById('metricDiv').style.display=v==='bs'?'':'none';
+  render()}
+function setMetric(m){state.metric=m;
+  for(const[id,k]of[['mBs','bs'],['mEDr','endDr'],['mECr','endCr'],['mInc','inc'],['mDec','dec']])
+    document.getElementById(id).classList.toggle('on',k===m);
+  render()}
 function setTab(t){
   document.getElementById('tabTop').classList.toggle('on',t==='top');
   document.getElementById('tabHm').classList.toggle('on',t==='hm');
@@ -332,11 +381,11 @@ function buckets(periods){
     cur.ts.push(t)}
   return out;
 }
-// ค่าใน bucket: bs = ยอดงวดสุดท้ายที่มีข้อมูล, inc/dec = ผลรวม
+// ค่าใน bucket: bs/endDr/endCr = ยอดงวดสุดท้ายที่มีข้อมูล, inc/dec = ผลรวม
 function bVal(s,b){
-  let bs=null,inc=0,dec=0,has=false;
-  for(const t of b.ts){const o=s.m.get(t);if(!o)continue;has=true;inc+=o.inc;dec+=o.dec;bs=o.bs}
-  return has?{bs,inc,dec}:null;
+  let bs=null,inc=0,dec=0,endDr=null,endCr=null,has=false;
+  for(const t of b.ts){const o=s.m.get(t);if(!o)continue;has=true;inc+=o.inc;dec+=o.dec;bs=o.bs;endDr=o.endDr;endCr=o.endCr}
+  return has?{bs,inc,dec,endDr,endCr}:null;
 }
 function entList(a){
   return a==='prov'?[...new Set(META.orgs.map(o=>o.prov))].sort((x,y)=>x.localeCompare(y,'th'))
@@ -374,14 +423,14 @@ async function ensureData(){
     } else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json')).json();
   }
 }
-// รวม records [id,t,bs,inc,dec] ตาม filter → Map t→{bs,inc,dec}
+// รวม records [id,t,bs,inc,dec,endDr,endCr] ตาม filter → Map t→{bs,inc,dec,endDr,endCr}
 function sumSeries(recs,idSet){
   const m=new Map();
   for(const r of recs){
     if(idSet&&!idSet.has(r[0]))continue;
     const t=r[1];if(t<state.from||t>state.to)continue;
-    let o=m.get(t);if(!o){o={bs:0,inc:0,dec:0};m.set(t,o)}
-    o.bs+=r[2];o.inc+=r[3];o.dec+=r[4];
+    let o=m.get(t);if(!o){o={bs:0,inc:0,dec:0,endDr:0,endCr:0};m.set(t,o)}
+    o.bs+=r[2];o.inc+=r[3];o.dec+=r[4];o.endDr+=r[5]||0;o.endCr+=r[6]||0;
   }return m;
 }
 function seriesFor(ent){ // ent=null → ทั้งเขต
@@ -407,7 +456,7 @@ async function render(){
   const series=ents.map(e=>({ent:e,m:seriesFor(e)}));
   renderChips();renderWarn(periods);renderKpis(series[0],periods);
   renderHeadline(series[0],periods);
-  renderChart(series,periods);renderTop(periods);renderHeat(series[0]);renderAnalysis(series,periods);
+  renderChart(series,periods);renderChartTable(series,periods);renderTop(periods);renderHeat(series[0]);renderAnalysis(series,periods);
   presetUI();renderExecCards();writeHash();
 }
 function renderChips(){
@@ -447,7 +496,7 @@ function fySummary(s0,periods){
   for(const t of periods){const fy=Math.floor(t/100);
     if(!byFy.has(fy))byFy.set(fy,{net:0,lastBs:null,lastT:0});
     const o=s0.m.get(t);if(!o)continue;const e=byFy.get(fy);
-    e.net+=o.inc+o.dec;if(t>e.lastT){e.lastT=t;e.lastBs=o.bs}}
+    e.net+=o.inc+o.dec;if(t>e.lastT){e.lastT=t;e.lastBs=o[state.metric]??o.bs}}
   const fys=[...byFy.keys()].sort();const out=new Map();
   fys.forEach((fy,i)=>{const e=byFy.get(fy);
     if(state.view==='mv')out.set(fy,{v:e.net,vs:'รวมทั้งปี'});
@@ -495,10 +544,11 @@ function renderHeadline(s0,periods){
   const cur=s0.m.get(last),pv=s0.m.get(prev),py=s0.m.get(last-100);
   if(!cur){el.style.display='none';return}
   const p=polarity();
-  const dM=pv?cur.bs-pv.bs:null,dY=py?cur.bs-py.bs:null;
+  const mv=state.metric;
+  const dM=pv?cur[mv]-pv[mv]:null,dY=py?cur[mv]-py[mv]:null;
   const w=v=>v>0?'เพิ่มขึ้น':v<0?'ลดลง':'ทรงตัว';
   const entName=state.area==='region'?'ทั้งเขต':(state.area==='prov'?'จ.'+(state.ents[0]??''):orgName(state.ents[0]??''));
-  let txt=`${dimLabel()} (${entName}) ล่าสุด ${tLab(last)} = ${fmtM(cur.bs)}`;
+  let txt=`${dimLabel()} (${entName}) ล่าสุด ${tLab(last)} = ${fmtM(cur[mv])}`;
   if(dM!=null)txt+=` · ${w(dM)} ${fmtM(Math.abs(dM))} (${tLab(last)} vs ${tLab(prev)})`;
   if(dY!=null)txt+=` · ${w(dY)} ${fmtM(Math.abs(dY))} (${tLab(last)} vs ${tLab(last-100)})`;
   let cls='mid',ico='ℹ️';
@@ -513,19 +563,31 @@ function renderChart(series,periods){
   const labels=bks.map(b=>b.label);
   const bFlag=bks.map(b=>b.ts.some(t=>flag.has(t)));
   const granW={m:'รายเดือน',q:'รายไตรมาส',y:'รายปีงบ'}[state.gran];
-  const title=state.view==='bs'?`เทรนยอดคงเหลือ (${granW})`:`การเคลื่อนไหวเพิ่ม/ลด (${granW})`;
+  const metricLab={'bs':'ยอดสุทธิ','endDr':'EndDr (ดุลเดบิต)','endCr':'EndCr (ดุลเครดิต)','inc':'Dr เพิ่ม (รับ)','dec':'Cr ลด (จ่าย)'}[state.metric]||'ยอดสุทธิ';
+  const title=state.view==='bs'?`เทรนยอดคงเหลือ ${metricLab} (${granW})`:`การเคลื่อนไหวเพิ่ม/ลด (${granW})`;
   document.getElementById('chartTitle').textContent=`${title} — ${dimLabel()} (${state.area==='region'?'รวมทั้งเขต':state.area==='prov'?'รายจังหวัด':'รายโรงพยาบาล'})`;
   const vals=series.map(s=>bks.map(b=>bVal(s,b)));
   let ds=[];
   if(state.view==='bs'){
     ds=series.map((s,i)=>({type:'line',label:s.ent?(state.area==='prov'?s.ent:orgName(s.ent)):'ทั้งเขต',
-      data:vals[i].map(v=>v?v.bs:null),borderColor:PAL[i%PAL.length],backgroundColor:PAL[i%PAL.length],
+      data:vals[i].map(v=>v?v[state.metric]:null),borderColor:PAL[i%PAL.length],backgroundColor:PAL[i%PAL.length],
       borderWidth:state.gran==='m'?2:2.5,pointRadius:bks.length>40?0:state.gran==='m'?2.5:4,
       pointStyle:bFlag.map(f=>f?'triangle':'circle'),tension:.25,spanGaps:false}));
   }else if(series.length===1){
-    ds=[{type:'bar',label:'เพิ่มขึ้น',data:vals[0].map(v=>v?v.inc:null),backgroundColor:dirCol(1)+'99'},
-        {type:'bar',label:'ลดลง',data:vals[0].map(v=>v?v.dec:null),backgroundColor:dirCol(-1)+'99'},
-        {type:'line',label:'สุทธิ',data:vals[0].map(v=>v?v.inc+v.dec:null),borderColor:'#0f172a',borderWidth:2,pointRadius:state.gran==='m'?0:3,tension:.2}];
+    const ns=normalSign();
+    const pctData=vals[0].map(v=>{
+      if(!v)return null;
+      const net=v.inc+v.dec,total=v.inc+Math.abs(v.dec);
+      return total?Math.round((net/total)*100*ns*10)/10:null;
+    });
+    ds=[{type:'bar',label:'Dr',data:vals[0].map(v=>v?v.inc:null),backgroundColor:dirCol(ns)+'99',yAxisID:'y'},
+        {type:'bar',label:'Cr',data:vals[0].map(v=>v?v.dec:null),backgroundColor:dirCol(-ns)+'99',yAxisID:'y'},
+        {type:'line',label:'% สุทธิ (แกนขวา)',data:pctData,borderColor:'#64748b',borderWidth:2.5,
+         pointRadius:state.gran==='m'?3:5,pointHoverRadius:state.gran==='m'?5:7,
+         pointBackgroundColor:pctData.map(v=>v===null?'transparent':v>0?'#16a34a':'#dc2626'),
+         pointBorderColor:pctData.map(v=>v===null?'transparent':v>0?'#16a34a':'#dc2626'),
+         tension:.3,yAxisID:'y2',fill:false,
+         segment:{borderColor:ctx=>(ctx.p0.parsed.y+ctx.p1.parsed.y)/2>0?'#16a34a':'#dc2626'}}];
   }else{
     ds=series.map((s,i)=>({type:'bar',label:s.ent?(state.area==='prov'?s.ent:orgName(s.ent)):'ทั้งเขต',
       data:vals[i].map(v=>v?v.inc+v.dec:null),backgroundColor:PAL[i%PAL.length]+'cc'}));
@@ -538,16 +600,19 @@ function renderChart(series,periods){
     responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     layout:{padding:{top:48}},
     scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5}},stacked:state.view==='mv'&&series.length===1},
-      y:{stacked:state.view==='mv'&&series.length===1,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}}},
+      y:{stacked:state.view==='mv'&&series.length===1,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}},
+      y2:{display:state.view==='mv'&&series.length===1,position:'right',grid:{drawOnChartArea:false},ticks:{font:{family:'Sarabun',size:11},callback:v=>v+'%',color:'#7c3aed'},title:{display:true,text:'% สุทธิ',color:'#7c3aed',font:{family:'Sarabun',size:11}}}},
     plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun'},boxWidth:14,padding:12}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
-      callbacks:{label:c=>`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
+      callbacks:{label:c=>c.dataset.yAxisID==='y2'?`${c.dataset.label}: ${c.parsed.y}%`:`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
         title:items=>{const b=bks[items[0].dataIndex];
           return b.label+(state.gran==='y'?'':' ปีงบ '+b.fy)+(bFlag[items[0].dataIndex]?'  ⚠ ข้อมูลอาจไม่ครบ':'')}}}}}});
   const p=polarity();
   const colorNote=p===0?'มุมมองนี้รวมหลายหมวดที่ทิศทางดี/เสียต่างกัน → ใช้สีกลาง (น้ำเงิน=เพิ่ม, ส้ม=ลด)'
     :`สี: เขียว = ทิศทางที่ดี, แดง = ควรเฝ้าระวัง (หมวดนี้ "${p>0?'เพิ่มขึ้น = ดี':'ลดลง = ดี'}")`;
+  const ns2=normalSign(),accs2=[...new Set(filteredGroups(state.dim).map(g=>g.accg))];
+  const accNorm=accs2.length===1?(ns2>0?`Dr เพิ่ม / Cr ลด (${accs2[0]})`:`Cr เพิ่ม / Dr ลด (${accs2[0]})`):'';
   document.getElementById('chartNote').textContent=(state.view==='mv'
-    ?'แท่งบน = เพิ่มขึ้น · แท่งล่าง = ลดลง · เส้นดำ = สุทธิ · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ'
+    ?`Dr = ${ns2>0?'เพิ่ม':'ลด'} · Cr = ${ns2<0?'เพิ่ม':'ลด'}${accNorm?' ('+accNorm+')':''} · เส้น % สุทธิ (แกนขวา): 🟢 เพิ่มขึ้น / 🔴 ลดลง · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ`
     :'ป้ายบนกราฟ = เปลี่ยนแปลงเทียบสิ้นปีงบก่อนหน้า (ก.ย. vs ก.ย.) · ▲ สามเหลี่ยม = งวดที่ข้อมูลต้นทางอาจไม่ครบ')
     +(state.gran!=='m'?' · จุดสุดท้ายของช่วงที่ยังไม่จบ = ยอด ณ เดือนล่าสุดที่มีข้อมูล':'')
     +' · เส้นประแนวตั้ง = รอยต่อปีงบ (ก.ย.|ต.ค.) · '+colorNote
@@ -594,9 +659,10 @@ function drill(lvl,val){state.dim[lvl]=val;
 function hospPick(id){if(!state.ents.includes(id)){state.ents.push(id);if(state.ents.length>6)state.ents.shift()}render()}
 function renderHeat(s0){
   const tbl=document.getElementById('hmTbl');if(!s0){tbl.innerHTML='';return}
-  document.getElementById('hmNote').textContent=state.view==='bs'?'(ยอดคงเหลือ)':'(เคลื่อนไหวสุทธิ)';
+  const metricN={'bs':'ยอดสุทธิ','endDr':'EndDr','endCr':'EndCr','inc':'Dr เพิ่ม','dec':'Cr ลด'}[state.metric]||'ยอดสุทธิ';
+  document.getElementById('hmNote').textContent=state.view==='bs'?`(${metricN})`:'(เคลื่อนไหวสุทธิ)';
   const fys=[...new Set(META.periods.filter(t=>t>=state.from&&t<=state.to).map(t=>Math.floor(t/100)))];
-  const vals=[];const get=t=>{const o=s0.m.get(t);if(!o)return null;return state.view==='bs'?o.bs:o.inc+o.dec};
+  const vals=[];const get=t=>{const o=s0.m.get(t);if(!o)return null;return state.view==='bs'?o[state.metric]:o.inc+o.dec};
   for(const fy of fys)for(let m=1;m<=12;m++){const v=get(fy*100+m);if(v!=null)vals.push(v)}
   const mn=Math.min(...vals),mx=Math.max(...vals);
   const p=polarity();
@@ -682,6 +748,90 @@ function renderAnalysis(series,periods){
   el.innerHTML='<ul>'+B.map(b=>`<li>${b}</li>`).join('')+'</ul>'
     +(tip?`<div class="tip">💡 <b>การแปลผลหมวดนี้:</b> ${tip}</div>`:'');
 }
+function renderChartTable(series,periods){
+  const wrap=document.getElementById('chartTableWrap');
+  if(!wrap)return;
+  const bks=buckets(periods);
+  if(!bks.length){wrap.innerHTML='';return}
+  const vals=series.map(s=>bks.map(b=>bVal(s,b)));
+  const p=polarity();
+  const mLab={'bs':'ยอดสุทธิ','endDr':'EndDr','endCr':'EndCr','inc':'Dr เพิ่ม','dec':'Cr ลด'}[state.metric]||'ยอดสุทธิ';
+  const fmtN=v=>{if(v==null)return'—';const m=v/1e6;return(Math.abs(m)>=100?m.toLocaleString('th-TH',{maximumFractionDigits:0}):m.toLocaleString('th-TH',{maximumFractionDigits:1}))};
+  // heatmap bg สำหรับ row หนึ่ง
+  function rowBg(rowVals,type){
+    const nums=rowVals.filter(v=>v!=null);
+    if(!nums.length)return rowVals.map(()=>'');
+    const mn=Math.min(...nums),mx=Math.max(...nums),rng=mx-mn||1;
+    const a=v=>Math.min(0.72,Math.max(0.06,v));
+    return rowVals.map(v=>{
+      if(v==null)return'#f8fafc';
+      const norm=(v-mn)/rng;
+      if(type==='abs'){
+        if(p>0)return`rgba(22,163,74,${a(0.06+norm*0.52)})`;
+        if(p<0)return`rgba(220,38,38,${a(0.06+norm*0.52)})`;
+        return`rgba(59,130,246,${a(0.06+norm*0.44)})`;
+      }
+      if(type==='delta'){
+        if(v===0)return'#f8fafc';
+        const mag=Math.abs(v)/Math.max(Math.abs(mn),Math.abs(mx),1);
+        const al=a(0.1+mag*0.55);
+        const good=p===0?null:(v>0)===(p>0);
+        if(good===null)return v>0?`rgba(59,130,246,${al})`:`rgba(217,119,6,${al})`;
+        return good?`rgba(22,163,74,${al})`:`rgba(220,38,38,${al})`;
+      }
+      if(type==='inc')return`rgba(22,163,74,${a(0.06+norm*0.46)})`;
+      if(type==='dec')return`rgba(220,38,38,${a(0.06+norm*0.46)})`;
+      return'#fff';
+    });
+  }
+  function makeRow(label,rowVals,type,fmtFn){
+    const bgs=rowBg(rowVals,type);
+    const cells=rowVals.map((v,i)=>{
+      const bLeft=i>0&&bks[i].fy!==bks[i-1].fy?'border-left:2px solid #cbd5e1;':'';
+      return`<td style="text-align:center;background:${bgs[i]};font-size:11.5px;padding:5px 6px;${bLeft}white-space:nowrap">${v!=null?fmtFn(v):'—'}</td>`;
+    }).join('');
+    return`<tr><td style="font-size:12px;font-weight:600;white-space:nowrap;padding:5px 10px;background:#f8fafc;border-right:1px solid var(--line)">${label}</td>${cells}</tr>`;
+  }
+  // header row — labels เป็น columns
+  const flag=new Set(META.flagged);
+  const hdr='<tr><th style="background:#f1f5f9;text-align:left;padding:6px 10px;font-size:11px;white-space:nowrap;min-width:120px">รายการ / งวด</th>'+
+    bks.map((b,i)=>{
+      const bLeft=i>0&&bks[i].fy!==bks[i-1].fy?'border-left:2px solid #cbd5e1;':'';
+      const warn=b.ts.some(t=>flag.has(t))?'⚠':'';
+      return`<th style="text-align:center;font-size:11px;min-width:62px;padding:5px 4px;background:#f1f5f9;${bLeft}">${b.label}${warn}</th>`;
+    }).join('')+'</tr>';
+  let dataRows='';
+  if(state.view==='bs'){
+    if(series.length===1){
+      const absV=bks.map((_,i)=>{const v=vals[0][i];return v?v[state.metric]:null});
+      const delV=absV.map((v,i)=>{if(i===0||v==null)return null;const vp=absV[i-1];return vp!=null?v-vp:null});
+      dataRows =makeRow(mLab+' (ลบ.)',absV,'abs',fmtN);
+      dataRows+=makeRow('Δ งวดก่อน (ลบ.)',delV,'delta',v=>(v>0?'▲ +':v<0?'▼ ':'')+fmtN(Math.abs(v)));
+    }else{
+      const names=series.map(s=>s.ent?(state.area==='prov'?s.ent:orgName(s.ent)):'ทั้งเขต');
+      series.forEach((s,j)=>{
+        const rv=bks.map((_,i)=>{const v=vals[j][i];return v?v[state.metric]:null});
+        dataRows+=makeRow(names[j]+' (ลบ.)',rv,'abs',fmtN);
+      });
+    }
+  }else{
+    if(series.length===1){
+      const incV=bks.map((_,i)=>{const v=vals[0][i];return v?v.inc:null});
+      const decV=bks.map((_,i)=>{const v=vals[0][i];return v?Math.abs(v.dec):null});
+      const netV=bks.map((_,i)=>{const v=vals[0][i];return v?v.inc+v.dec:null});
+      dataRows =makeRow('เพิ่ม (ลบ.)',incV,'inc',fmtN);
+      dataRows+=makeRow('ลด (ลบ.)',decV,'dec',fmtN);
+      dataRows+=makeRow('สุทธิ (ลบ.)',netV,'delta',v=>(v>0?'▲ +':v<0?'▼ ':'')+fmtN(Math.abs(v)));
+    }else{
+      const names=series.map(s=>s.ent?(state.area==='prov'?s.ent:orgName(s.ent)):'ทั้งเขต');
+      series.forEach((s,j)=>{
+        const rv=bks.map((_,i)=>{const v=vals[j][i];return v?v.inc+v.dec:null});
+        dataRows+=makeRow(names[j]+' สุทธิ (ลบ.)',rv,'delta',v=>(v>0?'▲ +':v<0?'▼ ':'')+fmtN(Math.abs(v)));
+      });
+    }
+  }
+  wrap.innerHTML=`<div style="font-size:12px;font-weight:600;color:var(--mut);margin-bottom:6px">📋 ตารางข้อมูลกราฟ <span style="font-weight:400;font-size:11px">· สีแดง = เฝ้าระวัง · สีเขียว = ทิศทางดี · เส้นประ = รอยต่อปีงบ</span></div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${hdr}${dataRows}</table></div>`;
+}
 function exportCsv(){
   const periods=META.periods.filter(t=>t>=state.from&&t<=state.to);
   const ents=state.area==='region'?[null]:state.ents;
@@ -695,6 +845,121 @@ function exportCsv(){
   a.download=`fin-trend_${dimLabel()}_${state.from}-${state.to}.csv`;a.click();
 }
 boot();
+
+/* ===== AI Chat ===== */
+const WORKER_URL='https://rh1-bs-ai.pitaknan.workers.dev';
+let chatHist=[];
+
+function toggleChat(){
+  const p=document.getElementById('chatPanel');
+  p.classList.toggle('open');
+  if(p.classList.contains('open')){updateChatCtx();document.getElementById('chatQ').focus();}
+}
+function clearChat(){
+  chatHist=[];
+  const m=document.getElementById('chatMsgs');
+  m.innerHTML=`<div class="cmsg-a">สวัสดีครับ 🙏 ฉันคือผู้ช่วย AI สำหรับวิเคราะห์ข้อมูลการเงินเขตสุขภาพที่ 1\nถามได้เลยครับ เช่น:\n• "สรุปสถานการณ์หนี้สินให้หน่อย"\n• "ทำไมงวดนี้ถึงพุ่งขึ้น"\n• "เทรนด์ 6 เดือนล่าสุดเป็นอย่างไร"</div>`;
+}
+function updateChatCtx(){
+  const el=document.getElementById('chatCtx');
+  if(!el)return;
+  try{
+    const dimInfo=dimLabel?dimLabel():'';
+    const viewN=state.view==='bs'?'ยอดคงเหลือ':'เคลื่อนไหว';
+    const granN={m:'รายเดือน',q:'รายไตรมาส',y:'รายปี'}[state.gran]||'';
+    el.textContent=`📊 ${dimInfo} · ${viewN} · ${granN} · ${state.from}–${state.to}`;
+  }catch(e){el.textContent='📊 เปิดกราฟแล้วกดถาม...';}
+}
+function getChatContext(){
+  let ctx='';
+  try{
+    const dimInfo=dimLabel?dimLabel():'';
+    const viewN=state.view==='bs'?'ยอดคงเหลือ (Balance Sheet)':'เคลื่อนไหว (Movement)';
+    const granN={m:'รายเดือน',q:'รายไตรมาส',y:'รายปี'}[state.gran]||'';
+    ctx+=`รายการ: ${dimInfo}\nมุมมอง: ${viewN} | ความละเอียด: ${granN} | ช่วง: ${state.from}–${state.to}\n\n`;
+    const cards=document.querySelectorAll('.card');
+    if(cards.length){
+      ctx+='=== ข้อมูลสรุป ===\n';
+      cards.forEach(c=>{
+        const t=c.querySelector('.t')?.textContent?.trim()||'';
+        const v=c.querySelector('.v')?.textContent?.trim()||'';
+        const d=c.querySelector('.d')?.textContent?.trim()||'';
+        if(t)ctx+=`${t}: ${v}${d?' ('+d+')':''}\n`;
+      });
+      ctx+='\n';
+    }
+    if(chart){
+      const labs=chart.data.labels||[];
+      const dsets=chart.data.datasets||[];
+      if(labs.length&&dsets.length){
+        ctx+='=== ข้อมูลกราฟ (ล้านบาท) ===\n';
+        ctx+='งวด | '+dsets.map(d=>d.label).join(' | ')+'\n';
+        labs.forEach((l,i)=>{
+          ctx+=l+' | '+dsets.map(d=>{
+            const v=d.data[i];
+            return(v!==null&&v!==undefined)?Math.round(v*100)/100:'-';
+          }).join(' | ')+'\n';
+        });
+      }
+    }
+  }catch(e){}
+  return ctx;
+}
+async function sendChat(){
+  const inp=document.getElementById('chatQ');
+  const q=inp.value.trim();
+  if(!q)return;
+  inp.value='';inp.style.height='38px';
+  const msgs=document.getElementById('chatMsgs');
+  msgs.innerHTML+=`<div class="cmsg-u">${q.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`;
+  msgs.innerHTML+=`<div class="cmsg-load" id="cLoad"> </div>`;
+  msgs.scrollTop=msgs.scrollHeight;
+  document.getElementById('chatSend').disabled=true;
+  chatHist.push({role:'user',content:q});
+  const sys=`คุณคือผู้ช่วยวิเคราะห์การเงินสำหรับ CFO เขตสุขภาพที่ 1 ประเทศไทย\nตอบเป็นภาษาไทย กระชับ ชัดเจน ใช้ภาษาที่นักบัญชีและผู้บริหารเข้าใจง่าย\nอ้างอิงตัวเลขจาก context เสมอ ถ้าไม่มีข้อมูลให้บอกตรงๆ\n\n=== ข้อมูล Dashboard ปัจจุบัน ===\n${getChatContext()}`;
+  try{
+    const r=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({system:sys,messages:chatHist})});
+    const data=await r.json();
+    const reply=data?.content?.[0]?.text||'(ไม่ได้รับคำตอบ)';
+    chatHist.push({role:'assistant',content:reply});
+    document.getElementById('cLoad')?.remove();
+    msgs.innerHTML+=`<div class="cmsg-a">${reply.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`;
+  }catch(e){
+    document.getElementById('cLoad')?.remove();
+    msgs.innerHTML+=`<div class="cmsg-a" style="color:#dc2626">❌ เชื่อมต่อไม่ได้: ${e.message}</div>`;
+    chatHist.pop();
+  }
+  msgs.scrollTop=msgs.scrollHeight;
+  document.getElementById('chatSend').disabled=false;
+  inp.focus();
+}
+document.addEventListener('keydown',e=>{
+  if(e.target.id==='chatQ'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}
+});
 </script>
+
+<div id="chatBtn" title="AI Assistant" onclick="toggleChat()">💬</div>
+<div id="chatPanel">
+  <div id="chatHead">
+    <span>🤖 CFO AI Assistant</span>
+    <div class="hbtns">
+      <button onclick="clearChat()" title="ล้างการสนทนา">🗑</button>
+      <button onclick="toggleChat()" title="ปิด">✕</button>
+    </div>
+  </div>
+  <div id="chatCtx">📊 เปิดกราฟแล้วกดถาม...</div>
+  <div id="chatMsgs">
+    <div class="cmsg-a">สวัสดีครับ 🙏 ฉันคือผู้ช่วย AI สำหรับวิเคราะห์ข้อมูลการเงินเขตสุขภาพที่ 1
+ถามได้เลยครับ เช่น:
+• "สรุปสถานการณ์หนี้สินให้หน่อย"
+• "ทำไมงวดนี้ถึงพุ่งขึ้น"
+• "เทรนด์ 6 เดือนล่าสุดเป็นอย่างไร"</div>
+  </div>
+  <div id="chatBar">
+    <textarea id="chatQ" placeholder="ถามเกี่ยวกับกราฟที่กำลังดู... (Enter = ส่ง, Shift+Enter = ขึ้นบรรทัด)"></textarea>
+    <button id="chatSend" onclick="sendChat()">ส่ง ▶</button>
+  </div>
+</div>
 </body>
 </html>
