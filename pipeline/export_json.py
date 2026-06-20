@@ -5,7 +5,7 @@ Phase 1.3 — master.parquet → docs/data/*.json สำหรับ Dashboard
 - region_gf.json : ระดับเขต × งวด × GF (ละเอียดสุดที่โหลดทันที — client รวมขึ้นชั้นบนเอง)
 - prov_gf.json   : ระดับจังหวัด × งวด × GF
 - hosp/b<id>.json: รายโรงพยาบาล × งวด × GF แยกไฟล์ตาม Budget Group (lazy load)
-ทุก record: [gfId, t, bs, inc, dec]  (array ประหยัดพื้นที่, ปัดเป็นจำนวนเต็มบาท)
+ทุก record: [gfId, t, bs, inc, dec, endDr, endCr]  (array ประหยัดพื้นที่, ปัดเป็นจำนวนเต็มบาท)
 """
 import sys
 import json
@@ -52,8 +52,8 @@ flagged = sorted(m[m["fy"].isin(FLAGGED_FY)]["t"].unique().tolist())
 
 
 def agg(df, dims):
-    g = df.groupby(dims + ["gfId", "t"], as_index=False)[["bs", "inc", "dec"]].sum()
-    for c in ["bs", "inc", "dec"]:
+    g = df.groupby(dims + ["gfId", "t"], as_index=False)[["bs", "inc", "dec", "EndDr", "EndCr"]].sum()
+    for c in ["bs", "inc", "dec", "EndDr", "EndCr"]:
         g[c] = g[c].round(0).astype("int64")
     return g
 
@@ -85,22 +85,22 @@ dump(os.path.join(DATA, "meta.json"), meta)
 # ---------- region (ทั้งเขต) ----------
 r = agg(m, [])
 dump(os.path.join(DATA, "region_gf.json"),
-     [[int(x.gfId), int(x.t), int(x.bs), int(x.inc), int(x.dec)] for x in r.itertuples()])
+     [[int(x.gfId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)] for x in r.itertuples()])
 
 # ---------- province ----------
 p = agg(m, ["prov"])
 provs = sorted(p["prov"].dropna().unique().tolist())
 dump(os.path.join(DATA, "prov_gf.json"),
-     {pr: [[int(x.gfId), int(x.t), int(x.bs), int(x.inc), int(x.dec)]
+     {pr: [[int(x.gfId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)]
            for x in p[p["prov"] == pr].itertuples()] for pr in provs})
 
 # ---------- hospital ระดับ SubGroup (โหลดทันทีเมื่อเข้าโหมด รพ.) ----------
 ms = m.merge(gdef[["gfId", "sId"]], on="gfId")
-hs = ms.groupby(["org5", "sId", "t"], as_index=False)[["bs", "inc", "dec"]].sum()
-for c in ["bs", "inc", "dec"]:
+hs = ms.groupby(["org5", "sId", "t"], as_index=False)[["bs", "inc", "dec", "EndDr", "EndCr"]].sum()
+for c in ["bs", "inc", "dec", "EndDr", "EndCr"]:
     hs[c] = hs[c].round(0).astype("int64")
 dump(os.path.join(DATA, "hosp_sub.json"),
-     {o: [[int(x.sId), int(x.t), int(x.bs), int(x.inc), int(x.dec)]
+     {o: [[int(x.sId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)]
           for x in hs[hs["org5"] == o].itertuples()] for o in sorted(hs["org5"].unique())})
 
 # ---------- hospital แยกไฟล์ตาม Budget Group ----------
@@ -108,7 +108,7 @@ h = agg(m, ["org5"])
 h = h.merge(gdef[["gfId", "bId"]], on="gfId")
 for bid, sub in h.groupby("bId"):
     dump(os.path.join(DATA, "hosp", f"b{bid}.json"),
-         {o: [[int(x.gfId), int(x.t), int(x.bs), int(x.inc), int(x.dec)]
+         {o: [[int(x.gfId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)]
               for x in sub[sub["org5"] == o].itertuples()] for o in sorted(sub["org5"].unique())})
 
 total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(DATA) for f in fs)

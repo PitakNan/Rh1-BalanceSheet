@@ -129,7 +129,7 @@ for year, fname in FILES.items():
         dmn = (df.loc[m & mn0.notna(), "inc"] + df.loc[m & mn0.notna(), "dec"] - mn0[m & mn0.notna()]).abs().max()
         msg = f"| validate: ΔBSNet={dbs:,.2f} ΔMonthNet={dmn:,.2f}"
 
-    keep = df[["org5", "acc", "fullkey", "prefix", "cls", "t", "bs", "inc", "dec"]].copy()
+    keep = df[["org5", "acc", "fullkey", "prefix", "cls", "t", "bs", "inc", "dec", "EndDr", "EndCr"]].copy()
     keep["fy"] = year
     parts.append(keep)
     print(
@@ -141,7 +141,7 @@ master = pd.concat(parts, ignore_index=True)
 
 # รวมแถวซ้ำ (org+acc+งวด เดียวกัน)
 keycols = ["fy", "t", "org5", "acc", "fullkey", "prefix", "cls"]
-master = master.groupby(keycols, as_index=False, dropna=False)[["bs", "inc", "dec"]].sum()
+master = master.groupby(keycols, as_index=False, dropna=False)[["bs", "inc", "dec", "EndDr", "EndCr"]].sum()
 
 # ---------- 3.5) รวมงวด 13 (ปรับปรุงสิ้นปี) เข้า ก.ย. (งวด 12) ----------
 # ตามหลักบัญชี: ยอดสิ้นปีจริง = ยอดหลังปรับปรุง → bs ใช้ของงวด 13, inc/dec บวกสะสมเข้างวด 12
@@ -153,6 +153,8 @@ if is13.any():
     add = p13.set_index(keycols)
     inter = base.index.intersection(add.index)
     base.loc[inter, "bs"] = add.loc[inter, "bs"]
+    base.loc[inter, "EndDr"] = add.loc[inter, "EndDr"]
+    base.loc[inter, "EndCr"] = add.loc[inter, "EndCr"]
     base.loc[inter, "inc"] = base.loc[inter, "inc"] + add.loc[inter, "inc"]
     base.loc[inter, "dec"] = base.loc[inter, "dec"] + add.loc[inter, "dec"]
     only13 = add.loc[add.index.difference(base.index)]

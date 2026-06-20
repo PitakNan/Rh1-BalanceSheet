@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Financial Explorer — เขตสุขภาพที่ 1</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+:root{--ink:#1a202c;--sub:#374151;--mut:#6b7280;--line:#e5e7eb;--bg:#f3f4f6;--card:#fff;--accent:#2563eb;--green:#16a34a;--red:#dc2626}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.hd{background:var(--ink);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+.hd h1{font-size:15px;font-weight:700;flex:1}
+.hd a{color:#9ca3af;font-size:12px;text-decoration:none}.hd a:hover{color:#fff}
+.bar{background:var(--card);border-bottom:1px solid var(--line);padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
+.bar label{font-size:12px;color:var(--mut)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font-family:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:none;background:#fff;color:var(--mut);cursor:pointer;transition:all .1s}
+.seg button.on{background:var(--ink);color:#fff}
+select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.main{display:flex;flex:1;overflow:hidden}
+/* LEFT */
+.left{width:400px;min-width:280px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--card);overflow-y:auto;flex-shrink:0}
+.bc{padding:8px 14px;font-size:12px;color:var(--mut);background:#f9fafb;border-bottom:1px solid var(--line);min-height:34px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.bc span{cursor:pointer}.bc span:hover{color:var(--accent);text-decoration:underline}
+.bc .sep{color:#d1d5db}
+#sunburst{width:100%;height:310px}
+.sec{padding:10px 14px;border-top:1px solid var(--line)}
+.sec h3{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.gf-list{display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto}
+.gf-item{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;cursor:default}
+.gf-item:hover{background:#f3f4f6}
+.gf-item .nm{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gf-item .vl{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}
+.abtn{font-family:inherit;font-size:11px;padding:2px 8px;border:1px solid var(--accent);border-radius:6px;background:#fff;color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0}
+.abtn:hover{background:var(--accent);color:#fff}
+.abtn.on{background:#dcfce7;border-color:var(--green);color:var(--green)}
+.acc-sec{padding:10px 14px;border-top:1px solid var(--line)}
+.acc-sec h3{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.acc-sec input{width:100%;font-family:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:6px}
+.acc-sec input:focus{outline:none;border-color:var(--accent)}
+.acc-res{max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.acc-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
+.acc-item:hover{background:#f3f4f6}
+.acc-code{font-size:11px;font-family:monospace;color:var(--sub);flex-shrink:0}
+.acc-gfn{font-size:11px;color:var(--mut);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hint{font-size:12px;color:var(--mut);padding:4px 0}
+/* RIGHT */
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.sbar{padding:8px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--card);min-height:44px;flex-shrink:0}
+.chip{display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;color:#fff}
+.chip .rm{cursor:pointer;opacity:.7;font-size:15px;line-height:1;margin-left:2px}.chip .rm:hover{opacity:1}
+.no-s{font-size:12px;color:var(--mut)}
+.cwrap{flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.ctop{display:flex;align-items:center;gap:8px}
+.ctop h3{font-size:13px;font-weight:700;flex:1}
+#mainChart{flex:1;min-height:0}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>Financial Explorer — เขตสุขภาพที่ 1</h1>
+  <a href="index.html">← Balance Sheet</a>
+</div>
+
+<div class="bar">
+  <label>ปีงบ (Sunburst)</label>
+  <select id="fySelect"></select>
+  <label>แสดงค่า</label>
+  <div class="seg">
+    <button id="mBs" class="on" onclick="setMetric('bs')">ยอดสุทธิ</button>
+    <button id="mEDr" onclick="setMetric('endDr')">EndDr</button>
+    <button id="mECr" onclick="setMetric('endCr')">EndCr</button>
+    <button id="mInc" onclick="setMetric('inc')">Dr เพิ่ม</button>
+    <button id="mDec" onclick="setMetric('dec')">Cr ลด</button>
+  </div>
+  <label>เทรน</label>
+  <div class="seg">
+    <button id="gM" onclick="setGran('m')">รายเดือน</button>
+    <button id="gQ" onclick="setGran('q')">รายไตรมาส</button>
+    <button id="gY" class="on" onclick="setGran('y')">รายปีงบ</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- LEFT -->
+  <div class="left">
+    <div class="bc" id="bc"><span onclick="drillTo(0)">ทั้งหมด</span></div>
+    <div id="sunburst"></div>
+    <div class="sec">
+      <h3>
+        <span id="gfLabel">กลุ่มบัญชี (GF)</span>
+        <button class="abtn" id="addAllBtn" onclick="addAllGf()" style="display:none">+ ทั้งหมด</button>
+      </h3>
+      <div class="gf-list" id="gfList"><div class="hint">คลิก Sunburst เพื่อดู GF items</div></div>
+    </div>
+    <div class="acc-sec">
+      <h3>ค้นหารหัสบัญชี GL (ชั้น 6)</h3>
+      <input id="accIn" type="text" placeholder="พิมพ์รหัส 4+ หลัก เช่น 1101..." oninput="searchAcc(this.value)">
+      <div class="acc-res" id="accRes"><div class="hint">พิมพ์รหัส 4 หลักขึ้นไป</div></div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <div class="sbar" id="sbar"><span class="no-s">กด [+ เพิ่ม] จากซ้ายเพื่อเพิ่มเส้นในกราฟ</span></div>
+    <div class="cwrap">
+      <div class="ctop">
+        <h3 id="chartTitle">เทรนยอดสุทธิ (ระดับเขต)</h3>
+        <div class="seg">
+          <button id="aNone" class="on" onclick="setAvg('none')">ไม่มีเฉลี่ย</button>
+          <button id="aProv" onclick="setAvg('prov')">+เฉลี่ยจังหวัด</button>
+          <button id="aReg" onclick="setAvg('region')">+เฉลี่ยเขต</button>
+        </div>
+      </div>
+      <div id="mainChart"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────
+const SUPA_URL = 'https://ukvjnuuxrafzwqxlwygp.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrdmpudXV4cmFmendxeGx3eWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDM5NjksImV4cCI6MjA5NzI3OTk2OX0.kbUwOoLMge589OjvT9zBT1MAIvsKLdtj8fVvxPoCpYA';
+const D = 'data/';
+const PAL = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#be123c','#065f46','#92400e','#1e40af'];
+const MI  = {bs:2,inc:3,dec:4,endDr:5,endCr:6};
+const MC  = {bs:'bs',inc:'inc',dec:'dec',endDr:'EndDr',endCr:'EndCr'};
+const ML  = {bs:'ยอดสุทธิ',endDr:'EndDr',endCr:'EndCr',inc:'Dr เพิ่ม',dec:'Cr ลด'};
+
+// ── State ────────────────────────────────────────────────
+let META, REGION, PROV_DATA, ACC_LIST;
+let sbChart, trendChart;
+const ST = {
+  metric:'bs', gran:'y', fy:null, avg:'none',
+  fin:null, accg:null, sub:null, budget:null,
+  series:[],  // {id,label,color,type,gfIds,accPrefix,allM}
+};
+
+// ── Init ─────────────────────────────────────────────────
+async function init(){
+  try {
+    [META, REGION] = await Promise.all([
+      fetch(D+'meta.json').then(r=>r.json()),
+      fetch(D+'region_gf.json').then(r=>r.json()),
+    ]);
+  } catch(e) {
+    document.body.innerHTML='<div style="padding:40px;color:#dc2626">โหลดข้อมูลไม่ได้ — ตรวจสอบว่ารัน HTTP server แล้ว</div>';
+    return;
+  }
+
+  // gfMap: gfId → group object
+  META.gfMap = {};
+  for (const g of META.groups) META.gfMap[g.gfId] = g;
+
+  // FY dropdown
+  const fys = [...new Set(META.periods.map(t=>Math.floor(t/100)))].sort((a,b)=>b-a);
+  const fyEl = document.getElementById('fySelect');
+  for (const fy of fys){const o=document.createElement('option');o.value=fy;o.textContent=`ปีงบ ${fy}`;fyEl.appendChild(o)}
+  ST.fy = fys[0]; fyEl.value=ST.fy;
+  fyEl.onchange = ()=>{ST.fy=+fyEl.value;renderSB()};
+
+  // Load acc_list if available
+  try { ACC_LIST = await fetch(D+'acc_list.json').then(r=>r.json()); } catch(e){ ACC_LIST=null; }
+
+  // Load province data
+  try { PROV_DATA = await fetch(D+'prov_gf.json').then(r=>r.json()); } catch(e){ PROV_DATA=null; }
+
+  // Charts
+  sbChart    = echarts.init(document.getElementById('sunburst'));
+  trendChart = echarts.init(document.getElementById('mainChart'));
+  window.addEventListener('resize',()=>{sbChart.resize();trendChart.resize()});
+
+  renderSB();
+  renderChart();
+}
+
+// ── Helpers ──────────────────────────────────────────────
+function fmtM(v){
+  if(v==null)return '-';
+  const a=Math.abs(v);
+  if(a>=1e9) return (v/1e9).toFixed(2)+'B';
+  if(a>=1e6) return (v/1e6).toFixed(1)+'M';
+  if(a>=1e3) return (v/1e3).toFixed(0)+'K';
+  return v.toLocaleString();
+}
+
+function tLab(t){
+  const fy=Math.floor(t/100),m=t%100;
+  const MN=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
+  return MN[m-1]+' '+(fy+(m<=3?1:0));
+}
+
+function filteredGroups(){
+  return META.groups.filter(g=>
+    (!ST.fin    || g.fin   ===ST.fin)   &&
+    (!ST.accg   || g.accg  ===ST.accg)  &&
+    (!ST.sub    || g.sub   ===ST.sub)   &&
+    (!ST.budget || g.budget===ST.budget)
+  );
+}
+
+function latestPeriod(fy){
+  return META.periods.filter(t=>Math.floor(t/100)===fy).sort((a,b)=>b-a)[0];
+}
+
+// sum REGION records for a gfId Set → Map<t,val>
+function regionSeries(gfIds){
+  const map=new Map(), mi=MI[ST.metric];
+  for(const r of REGION){
+    if(!gfIds.has(r[0]))continue;
+    map.set(r[1],(map.get(r[1])||0)+r[mi]);
+  }
+  return map;
+}
+
+// build allMetrics map for a gfId Set
+function regionAllMetrics(gfIds){
+  const m={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
+  for(const r of REGION){
+    if(!gfIds.has(r[0]))continue;
+    const t=r[1];
+    m.bs.set(t,(m.bs.get(t)||0)+r[2]);
+    m.inc.set(t,(m.inc.get(t)||0)+r[3]);
+    m.dec.set(t,(m.dec.get(t)||0)+r[4]);
+    m.endDr.set(t,(m.endDr.get(t)||0)+r[5]);
+    m.endCr.set(t,(m.endCr.get(t)||0)+r[6]);
+  }
+  return m;
+}
+
+// ── Sunburst ─────────────────────────────────────────────
+const SB_COL_FIN=['#3b82f6','#10b981'];
+const SB_COL_AG =['#60a5fa','#34d399','#f87171','#fbbf24','#a78bfa'];
+
+function buildSBData(){
+  const mi=MI[ST.metric], lp=latestPeriod(ST.fy);
+  const gfV=new Map();
+  for(const r of REGION) if(r[1]===lp) gfV.set(r[0],Math.abs(r[mi]));
+
+  const finMap=new Map();
+  for(const g of filteredGroups()){
+    if(!finMap.has(g.fin)) finMap.set(g.fin,new Map());
+    const agM=finMap.get(g.fin);
+    if(!agM.has(g.accg)) agM.set(g.accg,new Map());
+    const sgM=agM.get(g.accg);
+    if(!sgM.has(g.sub)) sgM.set(g.sub,new Map());
+    const bgM=sgM.get(g.sub);
+    if(!bgM.has(g.budget)) bgM.set(g.budget,[]);
+    bgM.get(g.budget).push(g.gfId);
+  }
+
+  const data=[];let fi=0;
+  for(const[fin,agM]of finMap){
+    const fc=SB_COL_FIN[fi%2],fCh=[];let ai=0;
+    for(const[accg,sgM]of agM){
+      const ac=SB_COL_AG[ai%5],aCh=[];
+      for(const[sub,bgM]of sgM){
+        const sCh=[];
+        for(const[budget,gfIds]of bgM){
+          const val=gfIds.reduce((s,id)=>s+(gfV.get(id)||0),0);
+          if(val<=0)continue;
+          sCh.push({name:budget,value:val,gfIds,level:'budget',itemStyle:{color:ac+'88'}});
+        }
+        const sv=sCh.reduce((s,c)=>s+c.value,0);
+        if(sv<=0)continue;
+        aCh.push({name:sub,value:sv,level:'sub',itemStyle:{color:ac+'aa'},children:sCh});
+      }
+      const av=aCh.reduce((s,c)=>s+c.value,0);
+      if(av<=0)continue;
+      fCh.push({name:accg,value:av,level:'accg',itemStyle:{color:ac},children:aCh});
+      ai++;
+    }
+    const fv=fCh.reduce((s,c)=>s+c.value,0);
+    if(fv<=0)continue;
+    data.push({name:fin,value:fv,level:'fin',itemStyle:{color:fc},children:fCh});
+    fi++;
+  }
+  return data;
+}
+
+function renderSB(){
+  sbChart.setOption({
+    tooltip:{formatter:p=>`<b>${p.name}</b><br/>${ML[ST.metric]}: ${fmtM(p.value)}`},
+    series:[{
+      type:'sunburst',
+      data:buildSBData(),
+      radius:['12%','92%'],
+      sort:null,
+      emphasis:{focus:'ancestor'},
+      levels:[
+        {},
+        {r0:'12%',r:'32%',label:{rotate:'tangential',fontSize:10,color:'#fff'},itemStyle:{borderWidth:2}},
+        {r0:'32%',r:'55%',label:{rotate:'tangential',fontSize:9,color:'#fff'}},
+        {r0:'55%',r:'73%',label:{rotate:'tangential',fontSize:8,color:'#fff'}},
+        {r0:'73%',r:'92%',label:{show:false}},
+      ],
+    }],
+  },true);
+
+  sbChart.off('click');
+  sbChart.on('click',p=>{
+    if(!p.data)return;
+    const d=p.data;
+    if(d.level==='fin')   {ST.fin=d.name;ST.accg=null;ST.sub=null;ST.budget=null;}
+    if(d.level==='accg')  {ST.accg=d.name;ST.sub=null;ST.budget=null;}
+    if(d.level==='sub')   {ST.sub=d.name;ST.budget=null;}
+    if(d.level==='budget'){ST.budget=d.name;}
+    updateBC();renderGF();
+  });
+}
+
+// ── Breadcrumb ───────────────────────────────────────────
+function updateBC(){
+  const parts=[
+    {t:'ทั้งหมด',fn:'drillTo(0)'},
+    ST.fin    && {t:ST.fin,   fn:'drillTo(1)'},
+    ST.accg   && {t:ST.accg,  fn:'drillTo(2)'},
+    ST.sub    && {t:ST.sub,   fn:'drillTo(3)'},
+    ST.budget && {t:ST.budget,fn:'drillTo(4)'},
+  ].filter(Boolean);
+  document.getElementById('bc').innerHTML=parts.map((p,i)=>
+    `<span onclick="${p.fn}">${p.t}</span>${i<parts.length-1?'<span class="sep">›</span>':''}`
+  ).join('');
+}
+
+function drillTo(lv){
+  if(lv<=0){ST.fin=null;ST.accg=null;ST.sub=null;ST.budget=null;}
+  else if(lv<=1){ST.accg=null;ST.sub=null;ST.budget=null;}
+  else if(lv<=2){ST.sub=null;ST.budget=null;}
+  else if(lv<=3){ST.budget=null;}
+  updateBC();renderSB();renderGF();
+}
+
+// ── GF Panel ─────────────────────────────────────────────
+function renderGF(){
+  const gs=filteredGroups();
+  const el=document.getElementById('gfList');
+  const lb=document.getElementById('gfLabel');
+  const aab=document.getElementById('addAllBtn');
+
+  lb.textContent=`กลุ่มบัญชี (GF) — ${gs.length} รายการ`;
+
+  if(!gs.length){el.innerHTML='<div class="hint">ไม่มีข้อมูล</div>';aab.style.display='none';return;}
+  if(!ST.budget && gs.length>20){
+    el.innerHTML='<div class="hint">เลือก Budget จาก Sunburst เพื่อดู GF items</div>';
+    aab.style.display='none';return;
+  }
+
+  const lp=latestPeriod(ST.fy), mi=MI[ST.metric];
+  const gfV=new Map();
+  for(const r of REGION) if(r[1]===lp) gfV.set(r[0],r[mi]);
+
+  const addedIds=new Set(ST.series.flatMap(s=>s.gfIds||[]));
+  aab.style.display=ST.budget?'':'none';
+
+  el.innerHTML=gs.map(g=>{
+    const val=gfV.get(g.gfId)||0;
+    const on=addedIds.has(g.gfId);
+    return `<div class="gf-item">
+      <span class="nm" title="${g.gf}">${g.gf}</span>
+      <span class="vl">${fmtM(val)}</span>
+      <button class="abtn${on?' on':''}" onclick="addGfSeries(${g.gfId},'${g.gf.replace(/'/g,"\\'")}')">
+        ${on?'✓':'+ เพิ่ม'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function addAllGf(){
+  const gs=filteredGroups();
+  let changed=false;
+  for(const g of gs) if(!ST.series.find(s=>s.type==='gf'&&s.gfIds[0]===g.gfId)){
+    const gfIds=new Set([g.gfId]);
+    ST.series.push({id:`gf-${g.gfId}`,label:g.gf,color:PAL[ST.series.length%PAL.length],type:'gf',gfIds:[g.gfId],allM:regionAllMetrics(gfIds)});
+    changed=true;
+  }
+  if(changed){renderChart();renderSbar();renderGF();}
+}
+
+// ── Acc Search ───────────────────────────────────────────
+function searchAcc(q){
+  const el=document.getElementById('accRes');
+  if(!q||q.length<4){el.innerHTML='<div class="hint">พิมพ์รหัส 4 หลักขึ้นไป</div>';return;}
+  if(!ACC_LIST){el.innerHTML='<div class="hint">กำลังโหลดรายการบัญชี...</div>';return;}
+  const res=ACC_LIST.filter(([c])=>c.startsWith(q)||c.includes(q)).slice(0,25);
+  if(!res.length){el.innerHTML='<div class="hint">ไม่พบรหัสนี้</div>';return;}
+  const addedCodes=new Set(ST.series.filter(s=>s.type==='acc').map(s=>s.accPrefix));
+  el.innerHTML=res.map(([code,gfId])=>{
+    const g=META.gfMap[gfId];
+    const on=addedCodes.has(code);
+    return `<div class="acc-item">
+      <span class="acc-code">${code}</span>
+      <span class="acc-gfn">${g?g.gf:''}</span>
+      <button class="abtn${on?' on':''}" onclick="addAccSeries('${code}',${gfId})">
+        ${on?'✓':'+ เพิ่ม'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// ── Series ───────────────────────────────────────────────
+function addGfSeries(gfId, label){
+  if(ST.series.find(s=>s.type==='gf'&&s.gfIds.length===1&&s.gfIds[0]===gfId))return;
+  const gfIds=new Set([gfId]);
+  ST.series.push({id:`gf-${gfId}`,label,color:PAL[ST.series.length%PAL.length],type:'gf',gfIds:[gfId],allM:regionAllMetrics(gfIds)});
+  renderChart();renderSbar();renderGF();
+}
+
+async function addAccSeries(prefix, gfId){
+  if(ST.series.find(s=>s.accPrefix===prefix))return;
+  const g=META.gfMap[gfId];
+  const label=`${prefix}${g?` (${g.gf})`:''}`;
+  const color=PAL[ST.series.length%PAL.length];
+  const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
+
+  try{
+    // acc column = "1101010101.101" format, prefix = first 10 chars
+    const url=`${SUPA_URL}/rest/v1/gl_master?select=t,bs,inc,dec,EndDr,EndCr&acc=like.${encodeURIComponent(prefix+'%')}&limit=10000`;
+    const rows=await fetch(url,{headers:{'apikey':SUPA_KEY,'Authorization':`Bearer ${SUPA_KEY}`,'Prefer':'count=none'}}).then(r=>r.json());
+    if(!Array.isArray(rows)){console.warn('Supabase response:',rows);throw new Error('ข้อมูลไม่ถูกต้อง');}
+    for(const r of rows){
+      const t=r.t;
+      allM.bs.set(t,(allM.bs.get(t)||0)+(r.bs||0));
+      allM.inc.set(t,(allM.inc.get(t)||0)+(r.inc||0));
+      allM.dec.set(t,(allM.dec.get(t)||0)+(r.dec||0));
+      allM.endDr.set(t,(allM.endDr.get(t)||0)+(r.EndDr||0));
+      allM.endCr.set(t,(allM.endCr.get(t)||0)+(r.EndCr||0));
+    }
+  } catch(e){
+    alert('ยังโหลดข้อมูล GL จาก Supabase ไม่ได้ (import อาจยังไม่เสร็จ)');
+    return;
+  }
+
+  ST.series.push({id:`acc-${prefix}`,label,color,type:'acc',gfIds:[gfId],accPrefix:prefix,allM});
+  renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
+}
+
+function removeSeries(id){
+  ST.series=ST.series.filter(s=>s.id!==id);
+  renderChart();renderSbar();renderGF();
+  searchAcc(document.getElementById('accIn').value);
+}
+
+// ── Sbar ─────────────────────────────────────────────────
+function renderSbar(){
+  const el=document.getElementById('sbar');
+  if(!ST.series.length){el.innerHTML='<span class="no-s">กด [+ เพิ่ม] จากซ้ายเพื่อเพิ่มเส้นในกราฟ</span>';return;}
+  el.innerHTML=ST.series.map(s=>
+    `<div class="chip" style="background:${s.color}">
+      ${s.label.length>22?s.label.slice(0,22)+'…':s.label}
+      <span class="rm" onclick="removeSeries('${s.id}')">×</span>
+    </div>`
+  ).join('');
+}
+
+// ── Chart ────────────────────────────────────────────────
+function getBuckets(){
+  const ps=META.periods;
+  if(ST.gran==='m') return ps.map(t=>({label:tLab(t),ts:[t]}));
+  if(ST.gran==='q'){
+    const map=new Map();
+    for(const t of ps){const fy=Math.floor(t/100),m=t%100,q=m<=3?1:m<=6?2:m<=9?3:4,k=`${fy}Q${q}`;
+      if(!map.has(k))map.set(k,{label:`${fy} Q${q}`,ts:[]});map.get(k).ts.push(t);}
+    return[...map.values()];
+  }
+  const map=new Map();
+  for(const t of ps){const fy=Math.floor(t/100);if(!map.has(fy))map.set(fy,{label:`ปีงบ ${fy}`,ts:[]});map.get(fy).ts.push(t);}
+  return[...map.values()];
+}
+
+function bVal(dataMap, bk){
+  if(['bs','endDr','endCr'].includes(ST.metric)){
+    for(const t of [...bk.ts].sort((a,b)=>b-a)){const v=dataMap.get(t);if(v!=null)return v;}
+    return null;
+  }
+  const s=bk.ts.reduce((acc,t)=>acc+(dataMap.get(t)||0),0);
+  return s||null;
+}
+
+function renderChart(){
+  const bks=getBuckets();
+  if(!ST.series.length){
+    trendChart.setOption({graphic:[{type:'text',left:'center',top:'center',style:{text:'เพิ่มเส้นกราฟจากแผงซ้าย',font:'14px Sarabun',fill:'#9ca3af'}}],series:[]},true);
+    return;
+  }
+
+  const series=ST.series.map(s=>({
+    name:s.label,type:'line',
+    data:bks.map(b=>bVal(s.allM[ST.metric],b)),
+    lineStyle:{color:s.color,width:2},
+    itemStyle:{color:s.color},
+    symbol:bks.length>40?'none':'circle',symbolSize:4,
+    connectNulls:false,
+  }));
+
+  // Province/Region averages for GF-type series (first series only)
+  if(ST.avg!=='none' && ST.series.length>0){
+    const s0=ST.series[0];
+    if(s0.type==='gf'&&PROV_DATA){
+      const gfSet=new Set(s0.gfIds);
+      if(ST.avg==='prov'){
+        const provs=Object.keys(PROV_DATA);
+        const provCount=provs.length||1;
+        // Build avg = sum of all provinces / count
+        const avgMap=new Map();
+        for(const pr of provs){
+          const mi=MI[ST.metric];
+          for(const r of PROV_DATA[pr]) if(gfSet.has(r[0])) avgMap.set(r[1],(avgMap.get(r[1])||0)+r[mi]);
+        }
+        for(const[t,v]of avgMap) avgMap.set(t,v/provCount);
+        series.push({name:'เฉลี่ยจังหวัด',type:'line',data:bks.map(b=>bVal(avgMap,b)),
+          lineStyle:{color:'#94a3b8',width:1.5,type:'dashed'},itemStyle:{color:'#94a3b8'},symbol:'none',connectNulls:false});
+      }
+      if(ST.avg==='region'){
+        const regionMap=new Map();
+        const mi=MI[ST.metric];
+        for(const r of REGION) if(gfSet.has(r[0])) regionMap.set(r[1],(regionMap.get(r[1])||0)+r[mi]);
+        const orgCount=META.orgs?META.orgs.length:1;
+        for(const[t,v]of regionMap) regionMap.set(t,v/orgCount);
+        series.push({name:'เฉลี่ยเขต',type:'line',data:bks.map(b=>bVal(regionMap,b)),
+          lineStyle:{color:'#f59e0b',width:1.5,type:'dashed'},itemStyle:{color:'#f59e0b'},symbol:'none',connectNulls:false});
+      }
+    }
+  }
+
+  document.getElementById('chartTitle').textContent=`เทรน${ML[ST.metric]} (ระดับเขต)`;
+
+  trendChart.setOption({
+    graphic:[],
+    tooltip:{trigger:'axis',formatter:p=>{
+      const lbl=p[0].axisValueLabel;
+      return lbl+p.map(x=>`<br/><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${x.color};margin-right:4px"></span>${x.seriesName}: <b>${fmtM(x.value)}</b>`).join('');
+    }},
+    legend:{data:series.map(s=>s.name),bottom:0,type:'scroll',textStyle:{fontSize:11,fontFamily:'Sarabun'}},
+    grid:{left:70,right:20,top:16,bottom:60},
+    xAxis:{type:'category',data:bks.map(b=>b.label),axisLabel:{rotate:bks.length>12?45:0,fontSize:11,fontFamily:'Sarabun'}},
+    yAxis:{type:'value',axisLabel:{formatter:fmtM,fontSize:11}},
+    series,
+  },true);
+}
+
+// ── Controls ─────────────────────────────────────────────
+function setMetric(m){
+  ST.metric=m;
+  for(const[id,k]of[['mBs','bs'],['mEDr','endDr'],['mECr','endCr'],['mInc','inc'],['mDec','dec']])
+    document.getElementById(id).classList.toggle('on',k===m);
+  renderSB();renderGF();renderChart();
+}
+
+function setGran(g){
+  ST.gran=g;
+  for(const[id,k]of[['gM','m'],['gQ','q'],['gY','y']])
+    document.getElementById(id).classList.toggle('on',k===g);
+  renderChart();
+}
+
+function setAvg(a){
+  ST.avg=a;
+  for(const[id,k]of[['aNone','none'],['aProv','prov'],['aReg','region']])
+    document.getElementById(id).classList.toggle('on',k===a);
+  renderChart();
+}
+
+// ── Start ─────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+name = "rh1-bs-ai"
+main = "src/index.js"
+compatibility_date = "2024-01-01"

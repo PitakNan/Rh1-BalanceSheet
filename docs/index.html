@@ -536,6 +536,34 @@ function fyPlugin(bks,sums){
         ctx.fillText((o.v>0?'▲ +':o.v<0?'▼ −':'')+fmtM(Math.abs(o.v)),cx,ys.top-8)}}
     ctx.restore()}};
 }
+// highlight เดือน/ไตรมาสเดียวกันในปีอื่นเมื่อ hover กราฟ
+function sameMonthPlugin(bks){
+  return{id:'sameMonth',
+    beforeDatasetsDraw(c){
+      const xs=c.scales.x,ys=c.scales.y;if(!xs||!ys)return;
+      const active=c._active;if(!active||!active.length)return;
+      const hovIdx=active[0].index;
+      if(state.gran==='y')return;
+      const hov=bks[hovIdx];if(!hov)return;
+      const matchFn=state.gran==='m'
+        ?(bk)=>bk.ts[0]%100===hov.ts[0]%100
+        :(bk)=>bk.key.replace(/^\d+/,'')===hov.key.replace(/^\d+/,'');
+      const n=bks.length;
+      const step=n>1?Math.abs(xs.getPixelForValue(1)-xs.getPixelForValue(0)):20;
+      const hw=step*0.46;
+      const ctx=c.ctx;ctx.save();
+      for(let i=0;i<n;i++){
+        if(i===hovIdx||!matchFn(bks[i]))continue;
+        const x=xs.getPixelForValue(i);
+        ctx.fillStyle='rgba(99,147,240,0.13)';
+        ctx.fillRect(x-hw,ys.top,hw*2,ys.bottom-ys.top);
+        ctx.strokeStyle='rgba(99,147,240,0.35)';ctx.setLineDash([]);ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(x,ys.top);ctx.lineTo(x,ys.bottom);ctx.stroke();
+      }
+      ctx.restore();
+    }
+  };
+}
 // แถบสรุปสั้นภาษาคน เหนือกราฟ
 function renderHeadline(s0,periods){
   const el=document.getElementById('headline');
@@ -596,7 +624,7 @@ function renderChart(series,periods){
   // ป้ายรายปี: bs = Δ เทียบสิ้นปีก่อน, mv = สุทธิรวมปี (คำนวณจากข้อมูลรายเดือนเสมอ)
   const sums=series.length===1?fySummary(series[0],periods):null;
   chart=new Chart(document.getElementById('mainChart'),{data:{labels,datasets:ds},
-   plugins:[fyPlugin(bks,sums)],options:{
+   plugins:[fyPlugin(bks,sums),sameMonthPlugin(bks)],options:{
     responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     layout:{padding:{top:48}},
     scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5}},stacked:state.view==='mv'&&series.length===1},
