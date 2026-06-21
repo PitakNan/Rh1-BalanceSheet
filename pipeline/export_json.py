@@ -46,8 +46,8 @@ m["prov"] = m["org5"].map({k: v["prov"] for k, v in org_map.items()})
 
 periods = sorted(m["t"].unique().tolist())
 
-# งวดที่ข้อมูลอาจไม่ครบ (ไฟล์ต้นทาง truncate ที่ Excel limit)
-FLAGGED_FY = [2564, 2568]
+# ข้อมูลครบทุกปีแล้ว (2564/2568 ใช้ Access .mdb แทน Excel ที่ truncated)
+FLAGGED_FY = []
 flagged = sorted(m[m["fy"].isin(FLAGGED_FY)]["t"].unique().tolist())
 
 
