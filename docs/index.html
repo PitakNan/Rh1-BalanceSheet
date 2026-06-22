@@ -595,7 +595,7 @@ function renderChart(series,periods){
   const title=state.view==='bs'?`เทรนยอดคงเหลือ ${metricLab} (${granW})`:`การเคลื่อนไหวเพิ่ม/ลด (${granW})`;
   document.getElementById('chartTitle').textContent=`${title} — ${dimLabel()} (${state.area==='region'?'รวมทั้งเขต':state.area==='prov'?'รายจังหวัด':'รายโรงพยาบาล'})`;
   const vals=series.map(s=>bks.map(b=>bVal(s,b)));
-  let ds=[];
+  let ds=[],mvY={},mvY2={};
   if(state.view==='bs'){
     ds=series.map((s,i)=>({type:'line',label:s.ent?(state.area==='prov'?s.ent:orgName(s.ent)):'ทั้งเขต',
       data:vals[i].map(v=>v?v[state.metric]:null),borderColor:PAL[i%PAL.length],backgroundColor:PAL[i%PAL.length],
@@ -608,6 +608,16 @@ function renderChart(series,periods){
       const net=v.inc+v.dec,total=v.inc+Math.abs(v.dec);
       return total?Math.round((net/total)*100*ns*10)/10:null;
     });
+    // align dual-axis zeros — ให้ 0 แกนซ้าย (บาท) และแกนขวา (%) อยู่ระนาบเดียวกัน
+    const _yV=vals[0].flatMap(v=>v?[v.inc,v.dec]:[]);
+    const _y2V=pctData.filter(v=>v!=null);
+    if(_yV.length&&_y2V.length){
+      const yHi=(Math.max(0,..._yV)||1)*1.1,yLo=(Math.min(0,..._yV)||(-1))*1.1;
+      const y2Hi=(Math.max(0,..._y2V)||1)*1.1,y2Lo=(Math.min(0,..._y2V)||(-1))*1.1;
+      const rY=Math.abs(yLo)/yHi,rY2=Math.abs(y2Lo)/y2Hi;
+      mvY={min:rY>=rY2?yLo:-(rY2*yHi),max:yHi};
+      mvY2={min:rY2>=rY?y2Lo:-(rY*y2Hi),max:y2Hi};
+    }
     ds=[{type:'bar',label:'Dr',data:vals[0].map(v=>v?v.inc:null),backgroundColor:dirCol(ns)+'99',yAxisID:'y'},
         {type:'bar',label:'Cr',data:vals[0].map(v=>v?v.dec:null),backgroundColor:dirCol(-ns)+'99',yAxisID:'y'},
         {type:'line',label:'% สุทธิ (แกนขวา)',data:pctData,borderColor:'#64748b',borderWidth:2.5,
@@ -628,8 +638,8 @@ function renderChart(series,periods){
     responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     layout:{padding:{top:48}},
     scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5}},stacked:state.view==='mv'&&series.length===1},
-      y:{stacked:state.view==='mv'&&series.length===1,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}},
-      y2:{display:state.view==='mv'&&series.length===1,position:'right',grid:{drawOnChartArea:false},ticks:{font:{family:'Sarabun',size:11},callback:v=>v+'%',color:'#7c3aed'},title:{display:true,text:'% สุทธิ',color:'#7c3aed',font:{family:'Sarabun',size:11}}}},
+      y:{stacked:state.view==='mv'&&series.length===1,...mvY,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}},
+      y2:{display:state.view==='mv'&&series.length===1,position:'right',...mvY2,grid:{drawOnChartArea:false},ticks:{font:{family:'Sarabun',size:11},callback:v=>v+'%',color:'#7c3aed'},title:{display:true,text:'% สุทธิ',color:'#7c3aed',font:{family:'Sarabun',size:11}}}},
     plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun'},boxWidth:14,padding:12}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
       callbacks:{label:c=>c.dataset.yAxisID==='y2'?`${c.dataset.label}: ${c.parsed.y}%`:`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
         title:items=>{const b=bks[items[0].dataIndex];
