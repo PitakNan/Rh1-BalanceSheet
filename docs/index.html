@@ -609,14 +609,22 @@ function renderChart(series,periods){
       return total?Math.round((net/total)*100*ns*10)/10:null;
     });
     // align dual-axis zeros — ให้ 0 แกนซ้าย (บาท) และแกนขวา (%) อยู่ระนาบเดียวกัน
+    // (ใช้เฉพาะเมื่อทั้งสองแกนมีค่าทั้งบวกและลบ — ป้องกัน Infinity เมื่อ % อยู่ด้านเดียว)
     const _yV=vals[0].flatMap(v=>v?[v.inc,v.dec]:[]);
     const _y2V=pctData.filter(v=>v!=null);
     if(_yV.length&&_y2V.length){
-      const yHi=(Math.max(0,..._yV)||1)*1.1,yLo=(Math.min(0,..._yV)||(-1))*1.1;
-      const y2Hi=(Math.max(0,..._y2V)||1)*1.1,y2Lo=(Math.min(0,..._y2V)||(-1))*1.1;
-      const rY=Math.abs(yLo)/yHi,rY2=Math.abs(y2Lo)/y2Hi;
-      mvY={min:rY>=rY2?yLo:-(rY2*yHi),max:yHi};
-      mvY2={min:rY2>=rY?y2Lo:-(rY*y2Hi),max:y2Hi};
+      const yMaxR=Math.max(0,..._yV),yMinR=Math.min(0,..._yV);
+      const y2MaxR=Math.max(0,..._y2V),y2MinR=Math.min(0,..._y2V);
+      const yHi=(yMaxR||1)*1.1,yLo=(yMinR||-1)*1.1;
+      const y2Hi=(y2MaxR||1)*1.1,y2Lo=(y2MinR||-1)*1.1;
+      if(yMaxR>0&&yMinR<0&&y2MaxR>0&&y2MinR<0){
+        const rY=Math.abs(yLo)/yHi,rY2=Math.abs(y2Lo)/y2Hi;
+        mvY={min:rY>=rY2?yLo:-(rY2*yHi),max:yHi};
+        mvY2={min:rY2>=rY?y2Lo:-(rY*y2Hi),max:y2Hi};
+      }else{
+        mvY={min:yLo,max:yHi};
+        mvY2={min:y2Lo,max:y2Hi};
+      }
     }
     ds=[{type:'bar',label:'Dr',data:vals[0].map(v=>v?v.inc:null),backgroundColor:dirCol(ns)+'99',yAxisID:'y'},
         {type:'bar',label:'Cr',data:vals[0].map(v=>v?v.dec:null),backgroundColor:dirCol(-ns)+'99',yAxisID:'y'},
