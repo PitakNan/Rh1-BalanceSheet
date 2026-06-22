@@ -591,7 +591,12 @@ function renderChart(series,periods){
   const labels=bks.map(b=>b.label);
   const bFlag=bks.map(b=>b.ts.some(t=>flag.has(t)));
   const granW={m:'รายเดือน',q:'รายไตรมาส',y:'รายปีงบ'}[state.gran];
-  const metricLab={'bs':'ยอดสุทธิ','endDr':'EndDr (ดุลเดบิต)','endCr':'EndCr (ดุลเครดิต)','inc':'Dr เพิ่ม (รับ)','dec':'Cr ลด (จ่าย)'}[state.metric]||'ยอดสุทธิ';
+  const ns=normalSign();
+  document.getElementById('mInc').textContent=ns>0?'Dr เพิ่ม':'Cr เพิ่ม';
+  document.getElementById('mDec').textContent=ns>0?'Cr ลด':'Dr ลด';
+  const metricLab={'bs':'ยอดสุทธิ','endDr':'EndDr (ดุลเดบิต)','endCr':'EndCr (ดุลเครดิต)',
+    'inc':ns>0?'Dr เพิ่ม (รับ)':'Cr เพิ่ม (รับ)',
+    'dec':ns>0?'Cr ลด (จ่าย)':'Dr ลด (จ่าย)'}[state.metric]||'ยอดสุทธิ';
   const title=state.view==='bs'?`เทรนยอดคงเหลือ ${metricLab} (${granW})`:`การเคลื่อนไหวเพิ่ม/ลด (${granW})`;
   document.getElementById('chartTitle').textContent=`${title} — ${dimLabel()} (${state.area==='region'?'รวมทั้งเขต':state.area==='prov'?'รายจังหวัด':'รายโรงพยาบาล'})`;
   const vals=series.map(s=>bks.map(b=>bVal(s,b)));
@@ -602,7 +607,6 @@ function renderChart(series,periods){
       borderWidth:state.gran==='m'?2:2.5,pointRadius:bks.length>40?0:state.gran==='m'?2.5:4,
       pointStyle:bFlag.map(f=>f?'triangle':'circle'),tension:.25,spanGaps:false}));
   }else if(series.length===1){
-    const ns=normalSign();
     const pctData=vals[0].map(v=>{
       if(!v)return null;
       const net=v.inc+v.dec,total=v.inc+Math.abs(v.dec);
@@ -626,8 +630,8 @@ function renderChart(series,periods){
         mvY2={min:y2Lo,max:y2Hi};
       }
     }
-    ds=[{type:'bar',label:'Dr',data:vals[0].map(v=>v?v.inc:null),backgroundColor:dirCol(ns)+'99',yAxisID:'y'},
-        {type:'bar',label:'Cr',data:vals[0].map(v=>v?v.dec:null),backgroundColor:dirCol(-ns)+'99',yAxisID:'y'},
+    ds=[{type:'bar',label:ns>0?'Dr':'Cr',data:vals[0].map(v=>v?v.inc:null),backgroundColor:dirCol(1)+'99',yAxisID:'y'},
+        {type:'bar',label:ns>0?'Cr':'Dr',data:vals[0].map(v=>v?v.dec:null),backgroundColor:dirCol(-1)+'99',yAxisID:'y'},
         {type:'line',label:'% สุทธิ (แกนขวา)',data:pctData,borderColor:'#64748b',borderWidth:2.5,
          pointRadius:state.gran==='m'?3:5,pointHoverRadius:state.gran==='m'?5:7,
          pointBackgroundColor:pctData.map(v=>v===null?'transparent':v>0?'#16a34a':'#dc2626'),
@@ -658,7 +662,7 @@ function renderChart(series,periods){
   const ns2=normalSign(),accs2=[...new Set(filteredGroups(state.dim).map(g=>g.accg))];
   const accNorm=accs2.length===1?(ns2>0?`Dr เพิ่ม / Cr ลด (${accs2[0]})`:`Cr เพิ่ม / Dr ลด (${accs2[0]})`):'';
   document.getElementById('chartNote').textContent=(state.view==='mv'
-    ?`Dr = ${ns2>0?'เพิ่ม':'ลด'} · Cr = ${ns2<0?'เพิ่ม':'ลด'}${accNorm?' ('+accNorm+')':''} · เส้น % สุทธิ (แกนขวา): 🟢 เพิ่มขึ้น / 🔴 ลดลง · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ`
+    ?`${ns2>0?'Dr':'Cr'} = เพิ่ม · ${ns2>0?'Cr':'Dr'} = ลด${accNorm?' ('+accNorm+')':''} · เส้น % สุทธิ (แกนขวา): 🟢 เพิ่มขึ้น / 🔴 ลดลง · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ`
     :'ป้ายบนกราฟ = เปลี่ยนแปลงเทียบสิ้นปีงบก่อนหน้า (ก.ย. vs ก.ย.) · ▲ สามเหลี่ยม = งวดที่ข้อมูลต้นทางอาจไม่ครบ')
     +(state.gran!=='m'?' · จุดสุดท้ายของช่วงที่ยังไม่จบ = ยอด ณ เดือนล่าสุดที่มีข้อมูล':'')
     +' · เส้นประแนวตั้ง = รอยต่อปีงบ (ก.ย.|ต.ค.) · '+colorNote
