@@ -81,25 +81,6 @@ df = df.groupby(keycols, as_index=False, dropna=False)[["Dr","Cr","EndDr","EndCr
 if len(df) < before:
     print(f"Deduplicated: {before:,} → {len(df):,} แถว")
 
-# ---------- 5.5) ประมาณการ Dr/Cr สำหรับ ก.ย. ที่ Dr=Cr=0 (Opening Balance จาก MDB ปีถัดไป) ----------
-# MDB ปีใหม่บันทึก EndDr/EndCr ของ ก.ย.ปีก่อนเป็น opening เท่านั้น — ไม่มี movement
-# แก้: ใช้ Δ EndDr/EndCr (งวดนี้ - ส.ค.) เป็น Dr/Cr โดยประมาณ
-_df = df.sort_values(["org5", "acc", "t"]).copy()
-_df["_pDr"] = _df.groupby(["org5", "acc"])["EndDr"].shift(1)
-_df["_pCr"] = _df.groupby(["org5", "acc"])["EndCr"].shift(1)
-_no_mv = (
-    (_df["Dr"] == 0) & (_df["Cr"] == 0) &
-    (_df["EndDr"] > 0) & _df["_pDr"].notna() &
-    (_df["t"] % 100 == 12)                        # เฉพาะ ก.ย. ที่รู้ว่าขาดข้อมูล
-)
-n_est = int(_no_mv.sum())
-if n_est:
-    _df.loc[_no_mv, "Dr"] = (_df.loc[_no_mv, "EndDr"] - _df.loc[_no_mv, "_pDr"]).clip(lower=0)
-    _df.loc[_no_mv, "Cr"] = (_df.loc[_no_mv, "EndCr"] - _df.loc[_no_mv, "_pCr"]).clip(lower=0)
-    months_est = sorted(_df.loc[_no_mv, "t"].unique().tolist())
-    print(f"ประมาณ Dr/Cr จาก Δ EndDr/EndCr: {n_est:,} แถว งวด {months_est}")
-df = _df.drop(columns=["_pDr", "_pCr"])
-
 # ---------- 6) คำนวณ bs/inc/dec ----------
 sign     = np.where(df["cls"].isin(["1", "5"]), 1.0, -1.0)
 df["bs"] = (df["EndDr"] - df["EndCr"]) * sign
