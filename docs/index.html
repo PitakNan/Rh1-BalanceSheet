@@ -619,8 +619,8 @@ function renderChart(series,periods){
     if(_yV.length&&_y2V.length){
       const yMaxR=Math.max(0,..._yV),yMinR=Math.min(0,..._yV);
       const y2MaxR=Math.max(0,..._y2V),y2MinR=Math.min(0,..._y2V);
-      const yHi=(yMaxR||1)*1.1,yLo=(yMinR||-1)*1.1;
-      const y2Hi=(y2MaxR||1)*1.1,y2Lo=(y2MinR||-1)*1.1;
+      const yHi=(yMaxR||1)*1.1,yLo=yMinR<0?Math.min(yMinR*1.1,-(yHi/1.5)):-1.1;
+      const y2Hi=(y2MaxR||1)*1.1,y2Lo=y2MinR<0?Math.min(y2MinR*1.1,-(y2Hi/1.5)):-1.1;
       if(yMaxR>0&&yMinR<0&&y2MaxR>0&&y2MinR<0){
         const rY=Math.abs(yLo)/yHi,rY2=Math.abs(y2Lo)/y2Hi;
         mvY={min:rY>=rY2?yLo:-(rY2*yHi),max:yHi};
