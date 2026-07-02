@@ -72,6 +72,7 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 .card.click{cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .card.click:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(59,130,246,.15)}
 .card.actv{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.anmr:hover td{background:#fffbeb}
 #headline{margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:14.5px;font-weight:600;line-height:1.5}
 #headline.good{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
 #headline.bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
@@ -168,6 +169,12 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
     <h2>ภาพรวมทั้งเขต ทุกหมวดสำคัญ <span class="note" id="execNote"></span></h2>
     <div class="cards" id="execCards" style="grid-template-columns:repeat(auto-fit,minmax(175px,1fr))"></div>
   </div>
+  <div class="panel" id="anmPanel" style="display:none">
+    <h2>🚨 สิ่งผิดปกติเดือนนี้ <span class="note" id="anmNote"></span></h2>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="anmChips"></div>
+    <div style="max-height:380px;overflow:auto"><table id="anmTbl"></table></div>
+    <div class="note" style="margin-top:8px">คลิกแถวเพื่อเจาะบัญชี/รพ. นั้นในกราฟด้านล่าง · เกณฑ์: เคลื่อนไหวเกิน mean+3SD ของตัวเอง 24 งวด (>1 ลบ.) / สินทรัพย์-หนี้สินคงเหลือติดลบ (>1 แสน) / ยอดห่างค่าเฉลี่ย รพ. ประเภทเดียวกัน >3SD (>5 ลบ.)</div>
+  </div>
   <div class="cards" id="kpis"></div>
   <div class="panel"><h2 id="chartTitle"></h2>
     <div id="headline" style="display:none"></div>
@@ -262,6 +269,34 @@ function renderExecCards(){
   const lastAll=META.periods[META.periods.length-1];
   document.getElementById('execNote').textContent=`— ยอด ณ ${tLab(lastAll)} เทียบปีก่อน · คลิกการ์ดเพื่อเจาะหมวดนั้น`;
 }
+// ---------- สิ่งผิดปกติเดือนนี้ (Anomaly Watchlist) ----------
+let ANM=null,anmType='';
+const ANM_T={spike:{lb:'เคลื่อนไหวพุ่ง',ic:'⚡',col:'#d97706'},negative:{lb:'ยอดติดลบผิดธรรมชาติ',ic:'⛔',col:'#dc2626'},outlier:{lb:'โดดจากกลุ่ม รพ.',ic:'🎯',col:'#7c3aed'}};
+function anmSet(t){anmType=anmType===t?'':t;renderAnomaly()}
+function renderAnomaly(){
+  if(!ANM||!ANM.items.length)return;
+  document.getElementById('anmPanel').style.display='';
+  document.getElementById('anmNote').textContent=`— งวด ${tLab(ANM.period)} ปีงบ ${Math.floor(ANM.period/100)} · สแกนอัตโนมัติ ${ANM.items.length} รายการ`;
+  document.getElementById('anmChips').innerHTML=Object.entries(ANM_T).map(([k,v])=>
+    `<button class="pb${anmType===k?' on':''}" onclick="anmSet('${k}')" style="border-color:${anmType===k?v.col:''};${anmType===k?`background:${v.col}`:''}">${v.ic} ${v.lb} (${ANM.counts[k]||0})</button>`).join('');
+  const rows=ANM.items.filter(x=>!anmType||x.type===anmType);
+  document.getElementById('anmTbl').innerHTML=
+    '<tr><th>ประเภท</th><th style="text-align:left">หมวดบัญชี</th><th style="text-align:left">รพ.</th><th style="text-align:left">จังหวัด</th><th>มูลค่า</th><th>ความแรง</th><th style="text-align:left">รายละเอียด</th></tr>'+
+    rows.map(x=>{const t=ANM_T[x.type];
+      return `<tr class="anmr" onclick="anmDrill('${x.type}','${x.grp.replace(/'/g,"\\'")}','${x.org}')" style="cursor:pointer">
+        <td><span style="color:${t.col};font-weight:600;font-size:12px">${t.ic} ${t.lb}</span></td>
+        <td style="text-align:left">${x.grp}</td><td style="text-align:left">${x.orgName}</td><td style="text-align:left">${x.prov}</td>
+        <td>${fmtM(x.val)}</td><td style="color:${t.col};font-weight:600">${x.sev}${x.type==='spike'?'×':x.type==='outlier'?' SD':' ลบ.'}</td>
+        <td style="text-align:left;white-space:normal;min-width:260px;font-size:12px;color:var(--mut)">${x.msg}</td></tr>`}).join('');
+}
+function anmDrill(type,grp,org){
+  const g=type==='negative'?META.groups.find(g=>g.gf===grp):META.groups.find(g=>g.budget===grp);
+  if(!g)return;
+  state.dim=type==='negative'?{fin:g.fin,accg:g.accg,sub:g.sub,budget:g.budget,gf:g.gf}:{fin:g.fin,accg:g.accg,sub:g.sub,budget:g.budget,gf:''};
+  state.area='hosp';state.ents=[org];
+  buildDims();areaUI();render();
+  document.getElementById('chartTitle').scrollIntoView({behavior:'smooth'});
+}
 // ---------- URL state (แชร์ลิงก์มุมมองปัจจุบัน) ----------
 function writeHash(){
   const q=new URLSearchParams();const d=state.dim;
@@ -306,6 +341,7 @@ async function boot(){
   state.from=META.periods[0];state.to=META.periods[META.periods.length-1];
   readHash();
   buildDims();buildRange();syncUI();renderExecCards();render();
+  try{ANM=await (await fetch('data/anomaly.json')).json();renderAnomaly()}catch(e){}
 }
 function opt(sel,items,cur,allLabel){
   const el=document.getElementById(sel);
