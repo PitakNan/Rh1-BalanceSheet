@@ -27,6 +27,7 @@ echo [3/4] สร้างไฟล์ JSON สำหรับ Dashboard (+ anom
 python pipeline\export_json.py
 if errorlevel 1 ( echo *** export ล้มเหลว *** & pause & exit /b 1 )
 if exist pipeline\export_anomaly.py python pipeline\export_anomaly.py
+if exist pipeline\export_ratio_check.py python pipeline\export_ratio_check.py
 
 echo.
 echo [4/4] ส่งขึ้น GitHub (เว็บจะอัพเดทใน ~1 นาที)...
