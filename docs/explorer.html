@@ -122,9 +122,8 @@ select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(-
 
 <script>
 // ── Config ──────────────────────────────────────────────
-const SUPA_URL = 'https://ukvjnuuxrafzwqxlwygp.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrdmpudXV4cmFmendxeGx3eWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDM5NjksImV4cCI6MjA5NzI3OTk2OX0.kbUwOoLMge589OjvT9zBT1MAIvsKLdtj8fVvxPoCpYA';
 const D = 'data/';
+const ACCB = {}; // cache: bId → acc_region/b<bId>.json (ชั้น 6 static, แทน Supabase)
 const PAL = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#be123c','#065f46','#92400e','#1e40af'];
 const MI  = {bs:2,inc:3,dec:4,endDr:5,endCr:6};
 const MC  = {bs:'bs',inc:'inc',dec:'dec',endDr:'EndDr',endCr:'EndCr'};
@@ -385,7 +384,7 @@ function searchAcc(q){
   const el=document.getElementById('accRes');
   if(!q||q.length<4){el.innerHTML='<div class="hint">พิมพ์รหัส 4 หลักขึ้นไป</div>';return;}
   if(!ACC_LIST){el.innerHTML='<div class="hint">กำลังโหลดรายการบัญชี...</div>';return;}
-  const res=ACC_LIST.filter(([c])=>c.startsWith(q)||c.includes(q)).slice(0,25);
+  const res=ACC_LIST.filter(([c])=>String(c).startsWith(q)||String(c).includes(q)).slice(0,25);
   if(!res.length){el.innerHTML='<div class="hint">ไม่พบรหัสนี้</div>';return;}
   const addedCodes=new Set(ST.series.filter(s=>s.type==='acc').map(s=>s.accPrefix));
   el.innerHTML=res.map(([code,gfId])=>{
@@ -417,20 +416,22 @@ async function addAccSeries(prefix, gfId){
   const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
 
   try{
-    // acc column = "1101010101.101" format, prefix = first 10 chars
-    const url=`${SUPA_URL}/rest/v1/gl_master?select=t,bs,inc,dec,EndDr,EndCr&acc=like.${encodeURIComponent(prefix+'%')}&limit=10000`;
-    const rows=await fetch(url,{headers:{'apikey':SUPA_KEY,'Authorization':`Bearer ${SUPA_KEY}`,'Prefer':'count=none'}}).then(r=>r.json());
-    if(!Array.isArray(rows)){console.warn('Supabase response:',rows);throw new Error('ข้อมูลไม่ถูกต้อง');}
+    // ชั้น 6 static: acc_region/b<bId>.json = { "<prefix10>": [[t,bs,inc,dec,endDr,endCr],...] }
+    const bId=g?g.bId:null;
+    if(bId==null)throw new Error('ไม่พบ Budget Group ของรหัสนี้');
+    if(!(bId in ACCB))ACCB[bId]=await fetch(`${D}acc_region/b${bId}.json`).then(r=>r.json());
+    const rows=ACCB[bId][String(prefix)];
+    if(!rows)throw new Error('ไม่พบข้อมูลรหัสนี้');
     for(const r of rows){
-      const t=r.t;
-      allM.bs.set(t,(allM.bs.get(t)||0)+(r.bs||0));
-      allM.inc.set(t,(allM.inc.get(t)||0)+(r.inc||0));
-      allM.dec.set(t,(allM.dec.get(t)||0)+(r.dec||0));
-      allM.endDr.set(t,(allM.endDr.get(t)||0)+(r.EndDr||0));
-      allM.endCr.set(t,(allM.endCr.get(t)||0)+(r.EndCr||0));
+      const t=r[0];
+      allM.bs.set(t,(allM.bs.get(t)||0)+r[1]);
+      allM.inc.set(t,(allM.inc.get(t)||0)+r[2]);
+      allM.dec.set(t,(allM.dec.get(t)||0)+r[3]);
+      allM.endDr.set(t,(allM.endDr.get(t)||0)+r[4]);
+      allM.endCr.set(t,(allM.endCr.get(t)||0)+r[5]);
     }
   } catch(e){
-    alert('ยังโหลดข้อมูล GL จาก Supabase ไม่ได้ (import อาจยังไม่เสร็จ)');
+    alert('โหลดข้อมูลรหัสบัญชีนี้ไม่ได้: '+e.message);
     return;
   }
 
