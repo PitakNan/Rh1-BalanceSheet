@@ -33,6 +33,17 @@ prov_col = "Province2"
 org_map = org.set_index("org5")[[name_col, type_col, prov_col]]
 org_map.columns = ["name", "otype", "prov"]
 
+# ระดับหน่วยบริการ (F-level ตามเกณฑ์ประชากร/เตียง) — ต่อท้ายชื่อ รพ. ให้ตรงกับ dashboard
+grptbl = pd.read_excel(r"D:\Hospital\รวมสูตรและหลักเกณฑ์ต่างๆ\รวมสูตร - พี่ตาล.xlsx", sheet_name="รายชื่อ รพ")
+grptbl = grptbl[grptbl["Ket"] == 1].copy()
+grptbl["org5"] = grptbl["OrgID"].astype(int).astype(str).str.zfill(5)
+grp_map = grptbl.set_index("org5")["GroupName"].to_dict()
+
+
+def full_name(org5, name):
+    g = grp_map.get(org5)
+    return f"{name} ({g})" if g else name
+
 periods = sorted(m["t"].unique())
 T = periods[-1]
 hist_ts = [t for t in periods if t < T][-24:]
@@ -58,7 +69,7 @@ for _, r in spikes.iterrows():
     o = org_map.loc[r["org5"]] if r["org5"] in org_map.index else None
     items.append({
         "type": "spike", "grp": r["Budget_Name"], "org": r["org5"],
-        "orgName": (o["name"] if o is not None else r["org5"]),
+        "orgName": (full_name(r["org5"], o["name"]) if o is not None else r["org5"]),
         "prov": (o["prov"] if o is not None else ""),
         "val": round(r["net"]), "base": round(r["mean"]), "sev": float(r["sev"]),
         "msg": f"เคลื่อนไหวงวดนี้ {r['net']/1e6:,.1f} ลบ. เทียบค่าปกติ {r['mean']/1e6:,.1f} ลบ. (แรงกว่าเกณฑ์ {r['sev']:.1f} เท่า)"})
@@ -74,7 +85,7 @@ for _, r in neg.iterrows():
     o = org_map.loc[r["org5"]] if r["org5"] in org_map.index else None
     items.append({
         "type": "negative", "grp": r["GF_Name"], "org": r["org5"],
-        "orgName": (o["name"] if o is not None else r["org5"]),
+        "orgName": (full_name(r["org5"], o["name"]) if o is not None else r["org5"]),
         "prov": (o["prov"] if o is not None else ""),
         "val": round(r["bs"]), "base": 0, "sev": float(r["sev"]),
         "msg": f"{r['AccGroup_Name']}คงเหลือติดลบ {r['bs']/1e6:,.2f} ลบ. — ผิดธรรมชาติบัญชี ควรตรวจการบันทึก"})
@@ -94,7 +105,7 @@ for (grp, ot), sub in cur_bs.groupby(["Budget_Name", "otype"]):
     for i, r in pick.iterrows():
         outs.append({
             "type": "outlier", "grp": grp, "org": r["org5"],
-            "orgName": r["name"], "prov": r["prov"] or "",
+            "orgName": full_name(r["org5"], r["name"]), "prov": r["prov"] or "",
             "val": round(r["bs"]), "base": round(mu), "sev": round(abs(float(z[i])), 1),
             "msg": f"ยอดคงเหลือ {r['bs']/1e6:,.1f} ลบ. ห่างค่าเฉลี่ยกลุ่ม {ot} ({mu/1e6:,.1f} ลบ.) {abs(z[i]):.1f} SD"})
 outs = sorted(outs, key=lambda x: -x["sev"])[:40]

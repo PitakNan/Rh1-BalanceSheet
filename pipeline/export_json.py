@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 Phase 1.3 — master.parquet → docs/data/*.json สำหรับ Dashboard
-- meta.json      : งวดทั้งหมด, Mapping tree (FinStatement→AccGroup→SubGroup→Budget→GF), รพ.+จังหวัด, ธงงวดข้อมูลไม่ครบ
+- meta.json      : งวดทั้งหมด, Mapping tree (FinStatement→AccGroup→SubGroup→Budget→GF→รหัสบัญชี), รพ.+จังหวัด, ธงงวดข้อมูลไม่ครบ
 - region_gf.json : ระดับเขต × งวด × GF (ละเอียดสุดที่โหลดทันที — client รวมขึ้นชั้นบนเอง)
 - prov_gf.json   : ระดับจังหวัด × งวด × GF
 - hosp/b<id>.json: รายโรงพยาบาล × งวด × GF แยกไฟล์ตาม Budget Group (lazy load)
-ทุก record: [gfId, t, bs, inc, dec, endDr, endCr]  (array ประหยัดพื้นที่, ปัดเป็นจำนวนเต็มบาท)
+- *_code.json    : ระดับรหัสบัญชี 10 หลัก (ลึกกว่า GF อีกชั้น) — lazy load เฉพาะเมื่อผู้ใช้ไล่ลึกถึงระดับนี้
+ทุก record: [gfId/codeId, t, bs, inc, dec, endDr, endCr]  (array ประหยัดพื้นที่, ปัดเป็นจำนวนเต็มบาท)
 """
 import sys
 import json
@@ -36,6 +37,26 @@ gf_key = dict(zip(gdef["GF_Name"] + "|" + gdef["Budget_Name"], gdef["gfId"]))
 m["gkey"] = m["GF_Name"] + "|" + m["Budget_Name"]
 m["gfId"] = m["gkey"].map(gf_key)
 
+# ---------- รหัสบัญชี 10 หลัก (ลึกกว่า GF อีกชั้น — 1 GF อาจรวมหลายรหัสบัญชี) ----------
+map_df = pd.read_excel(BASE + r"\Mapping_Clean.xlsx", sheet_name="Mapping Clean", dtype={"CodeL1": str})
+map_df["prefix"] = map_df["CodeL1"].str.split(".").str[0]
+name_by_prefix = (
+    map_df.groupby("prefix")["GL_Name"]
+    .agg(lambda s: s.mode().iat[0] if not s.mode().empty else s.iloc[0])
+    .to_dict()
+)
+m["prefix"] = m["prefix"].astype(str)
+cdef = (
+    m.groupby(["gfId", "prefix"], as_index=False).size().drop(columns="size")
+    .sort_values(["gfId", "prefix"]).reset_index(drop=True)
+)
+cdef["codeId"] = cdef.index
+cdef["name"] = cdef["prefix"].map(name_by_prefix).fillna(cdef["prefix"])
+cdef["code"] = cdef["prefix"] + " " + cdef["name"]
+code_key = dict(zip(cdef["gfId"].astype(str) + "|" + cdef["prefix"], cdef["codeId"]))
+m["ckey"] = m["gfId"].astype(str) + "|" + m["prefix"]
+m["codeId"] = m["ckey"].map(code_key)
+
 # ---------- org / จังหวัด ----------
 orgtbl = pd.read_excel(BASE + r"\อื่นๆ\OrgTbl - 2567.xlsx")
 orgtbl["org5"] = orgtbl["OrgID"].astype(int).astype(str).str.zfill(5)
@@ -43,6 +64,14 @@ orgtbl = orgtbl[["org5", "Org1", "Org1" if "OrgT" not in orgtbl else "OrgT", "Pr
 orgtbl.columns = ["org5", "name", "type", "prov"]
 org_map = orgtbl.set_index("org5").to_dict("index")
 m["prov"] = m["org5"].map({k: v["prov"] for k, v in org_map.items()})
+
+# ระดับหน่วยบริการ (F-level ตามเกณฑ์ประชากร/เตียง) — ใช้ต่อท้ายชื่อ รพ. ในหน้า dashboard
+grptbl = pd.read_excel(r"D:\Hospital\รวมสูตรและหลักเกณฑ์ต่างๆ\รวมสูตร - พี่ตาล.xlsx", sheet_name="รายชื่อ รพ")
+grptbl = grptbl[grptbl["Ket"] == 1].copy()
+grptbl["org5"] = grptbl["OrgID"].astype(int).astype(str).str.zfill(5)
+grp_map = grptbl.set_index("org5")["GroupName"].to_dict()
+for k, v in org_map.items():
+    v["grp"] = grp_map.get(k)
 
 periods = sorted(m["t"].unique().tolist())
 
@@ -53,6 +82,13 @@ flagged = sorted(m[m["fy"].isin(FLAGGED_FY)]["t"].unique().tolist())
 
 def agg(df, dims):
     g = df.groupby(dims + ["gfId", "t"], as_index=False)[["bs", "inc", "dec", "EndDr", "EndCr"]].sum()
+    for c in ["bs", "inc", "dec", "EndDr", "EndCr"]:
+        g[c] = g[c].round(0).astype("int64")
+    return g
+
+
+def agg_code(df, dims):
+    g = df.groupby(dims + ["codeId", "t"], as_index=False)[["bs", "inc", "dec", "EndDr", "EndCr"]].sum()
     for c in ["bs", "inc", "dec", "EndDr", "EndCr"]:
         g[c] = g[c].round(0).astype("int64")
     return g
@@ -76,8 +112,12 @@ meta = {
         for r in gdef.itertuples()
     ],
     "orgs": [
-        {"id": k, "name": v["name"], "type": str(v["type"]), "prov": v["prov"]}
+        {"id": k, "name": v["name"], "type": str(v["type"]), "prov": v["prov"], "grp": v["grp"]}
         for k, v in org_map.items()
+    ],
+    "codes": [
+        {"codeId": int(r.codeId), "gfId": int(r.gfId), "code": r.code}
+        for r in cdef.itertuples()
     ],
 }
 dump(os.path.join(DATA, "meta.json"), meta)
@@ -111,5 +151,24 @@ for bid, sub in h.groupby("bId"):
          {o: [[int(x.gfId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)]
               for x in sub[sub["org5"] == o].itertuples()] for o in sorted(sub["org5"].unique())})
 
+# ---------- รหัสบัญชี (ทั้งเขต / จังหวัด / รพ. แยกไฟล์ตาม Budget Group เหมือนระดับ GF) ----------
+os.makedirs(os.path.join(DATA, "hosp_code"), exist_ok=True)
+
+rc = agg_code(m, [])
+dump(os.path.join(DATA, "region_code.json"),
+     [[int(x.codeId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)] for x in rc.itertuples()])
+
+pc = agg_code(m, ["prov"])
+dump(os.path.join(DATA, "prov_code.json"),
+     {pr: [[int(x.codeId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)]
+           for x in pc[pc["prov"] == pr].itertuples()] for pr in provs})
+
+hc = agg_code(m, ["org5"])
+hc = hc.merge(cdef[["codeId", "gfId"]], on="codeId").merge(gdef[["gfId", "bId"]], on="gfId")
+for bid, sub in hc.groupby("bId"):
+    dump(os.path.join(DATA, "hosp_code", f"b{bid}.json"),
+         {o: [[int(x.codeId), int(x.t), int(x.bs), int(x.inc), int(x.dec), int(x.EndDr), int(x.EndCr)]
+              for x in sub[sub["org5"] == o].itertuples()] for o in sorted(sub["org5"].unique())})
+
 total = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(DATA) for f in fs)
-print(f"\nรวมขนาด docs/data ทั้งหมด: {total/1024/1024:.1f} MB | GF groups: {len(gdef)} | Budget files: {h['bId'].nunique()}")
+print(f"\nรวมขนาด docs/data ทั้งหมด: {total/1024/1024:.1f} MB | GF groups: {len(gdef)} | รหัสบัญชี: {len(cdef)} | Budget files: {h['bId'].nunique()}")

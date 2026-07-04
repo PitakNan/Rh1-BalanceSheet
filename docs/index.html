@@ -30,6 +30,7 @@ header .sub{font-size:12px;color:#cbd5e1}
 .panel h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .panel h2::before{content:'';width:4px;height:18px;border-radius:99px;background:linear-gradient(180deg,#f59e0b,#d97706)}
 .chartbox{position:relative;height:430px}
+#mainChart{cursor:pointer}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#f8fafc;color:var(--mut);font-weight:600;text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -104,6 +105,31 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 #chatSend:hover{background:#2563eb}
 #chatSend:disabled{background:#94a3b8;cursor:not-allowed}
 @media(max-width:480px){#chatPanel{width:calc(100vw - 20px);right:10px;bottom:80px}}
+/* ===== Rank popup (คลิกจุดบนกราฟ) ===== */
+#rankModal{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+#rankModal.open{display:flex}
+.rmodal-card{background:#fff;border-radius:14px;max-width:540px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.rmodal-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.rmodal-title{font-size:14.5px;font-weight:700;line-height:1.4}
+.rmodal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--mut);padding:4px 8px;border-radius:8px;flex-shrink:0}
+.rmodal-close:hover{background:#f1f5f9}
+.rmodal-body{overflow-y:auto;padding:6px 0}
+.rmodal-foot{padding:9px 18px;border-top:1px solid var(--line)}
+.rmrow{display:flex;align-items:center;gap:10px;padding:8px 18px;cursor:pointer}
+.rmrow:hover{background:#eff6ff}
+.rmrow.static{cursor:default}
+.rmrow.static:hover{background:none}
+.rmrow .rk{width:24px;flex-shrink:0;font-weight:700;color:var(--mut);font-size:12px}
+.rmrow .rmmain{flex:1;min-width:0}
+.rmrow .rmtop{display:flex;justify-content:space-between;gap:8px}
+.rmrow .nm{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmrow .vv{font-weight:700;font-size:13px;white-space:nowrap}
+.rmrow .rmbar{height:5px;border-radius:3px;background:#f1f5f9;overflow:hidden;margin-top:3px}
+.rmrow .rmbar>i{display:block;height:100%;background:#3b82f6;border-radius:3px}
+.rmrow .pc{width:50px;text-align:right;font-size:11.5px;color:var(--mut);flex-shrink:0}
+.rmtabs{display:flex;gap:6px;margin-top:8px}
+.rmtab{font-family:inherit;font-size:12px;font-weight:600;padding:5px 12px;border:1px solid var(--line);border-radius:99px;background:#fff;cursor:pointer;color:var(--mut)}
+.rmtab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 </style>
 </head>
 <body>
@@ -142,6 +168,7 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
   <div><label>กลุ่ม</label><select id="selSub" onchange="dimChange('sub')"></select></div>
   <div><label>หมวดงบประมาณ</label><select id="selBud" onchange="dimChange('budget')"></select></div>
   <div><label>รายการ (GF)</label><select id="selGf" onchange="dimChange('gf')"></select></div>
+  <div><label>รหัสบัญชี</label><select id="selCode" onchange="dimChange('code')"></select></div>
   <div><label>พื้นที่</label>
     <div class="seg">
       <button id="aRegion" class="on" onclick="setArea('region')">ทั้งเขต</button>
@@ -204,9 +231,10 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 'use strict';
 const TH_M=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
 const PAL=['#3b82f6','#d97706','#16a34a','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d'];
-let META=null,REGION=null,PROV=null,HOSPSUB=null;const HOSPB={};
-let state={view:'bs',metric:'bs',dim:{fin:'',accg:'หนี้สิน',sub:'',budget:'',gf:''},area:'region',ents:[],from:null,to:null,gran:'q'};
+let META=null,REGION=null,PROV=null,HOSPSUB=null,REGION_CODE=null,PROV_CODE=null;const HOSPB={},HOSP_CODE={};
+let state={view:'bs',metric:'bs',dim:{fin:'',accg:'หนี้สิน',sub:'',budget:'',gf:'',code:''},area:'region',ents:[],from:null,to:null,gran:'q'};
 let chart=null;
+let RANK_TABS=null,RANK_CTX=null;
 
 const fmtM=v=>{const m=v/1e6;return (Math.abs(m)>=100?m.toLocaleString('th-TH',{maximumFractionDigits:0}):m.toLocaleString('th-TH',{maximumFractionDigits:1}))+' ลบ.'};
 const fmtB=v=>v.toLocaleString('th-TH')+' บาท';
@@ -293,7 +321,7 @@ function renderAnomaly(){
 function anmDrill(type,grp,org){
   const g=type==='negative'?META.groups.find(g=>g.gf===grp):META.groups.find(g=>g.budget===grp);
   if(!g)return;
-  state.dim=type==='negative'?{fin:g.fin,accg:g.accg,sub:g.sub,budget:g.budget,gf:g.gf}:{fin:g.fin,accg:g.accg,sub:g.sub,budget:g.budget,gf:''};
+  state.dim=type==='negative'?{fin:g.fin,accg:g.accg,sub:g.sub,budget:g.budget,gf:g.gf,code:''}:{fin:g.fin,accg:g.accg,sub:g.sub,budget:g.budget,gf:'',code:''};
   state.area='hosp';state.ents=[org];
   buildDims();areaUI();render();
   document.getElementById('chartTitle').scrollIntoView({behavior:'smooth'});
@@ -304,7 +332,7 @@ function writeHash(){
   q.set('v',state.view);q.set('mt',state.metric);q.set('g',state.gran);q.set('a',state.area);
   if(state.ents.length)q.set('e',state.ents.join('|'));
   q.set('p1',state.from);q.set('p2',state.to);
-  for(const k of ['fin','accg','sub','budget','gf'])if(d[k])q.set(k,d[k]);
+  for(const k of ['fin','accg','sub','budget','gf','code'])if(d[k])q.set(k,d[k]);
   history.replaceState(null,'','#'+q.toString());
 }
 function readHash(){
@@ -318,7 +346,7 @@ function readHash(){
     if(q.get('e'))state.ents=q.get('e').split('|').filter(Boolean);
     if(q.get('p1'))state.from=+q.get('p1');
     if(q.get('p2'))state.to=+q.get('p2');
-    for(const k of ['fin','accg','sub','budget','gf'])if(q.get(k))state.dim[k]=q.get(k);
+    for(const k of ['fin','accg','sub','budget','gf','code'])if(q.get(k))state.dim[k]=q.get(k);
   }catch(e){}
 }
 function copyLink(b){
@@ -334,15 +362,15 @@ function syncUI(){
   areaUI();
 }
 async function boot(){
-  META=await (await fetch('data/meta.json')).json();
-  REGION=await (await fetch('data/region_gf.json')).json();
+  META=await (await fetch('data/meta.json',{cache:"no-store"})).json();
+  REGION=await (await fetch('data/region_gf.json',{cache:"no-store"})).json();
   document.getElementById('hUpd').textContent=META.updated;
   const fys=[...new Set(META.periods.map(t=>Math.floor(t/100)))];
   document.getElementById('hYears').textContent=Math.min(...fys)+'–'+Math.max(...fys);
   state.from=META.periods[0];state.to=META.periods[META.periods.length-1];
   readHash();
   buildDims();buildRange();syncUI();renderExecCards();render();
-  try{ANM=await (await fetch('data/anomaly.json')).json();renderAnomaly()}catch(e){}
+  try{ANM=await (await fetch('data/anomaly.json',{cache:"no-store"})).json();renderAnomaly()}catch(e){}
 }
 function opt(sel,items,cur,allLabel){
   const el=document.getElementById(sel);
@@ -350,6 +378,11 @@ function opt(sel,items,cur,allLabel){
 }
 function filteredGroups(d){
   return META.groups.filter(g=>(!d.fin||g.fin===d.fin)&&(!d.accg||g.accg===d.accg)&&(!d.sub||g.sub===d.sub)&&(!d.budget||g.budget===d.budget)&&(!d.gf||g.gf===d.gf));
+}
+// รหัสบัญชี (ลึกกว่า GF อีกชั้น) — กรองต่อจาก gfId ของกลุ่มที่ match แล้ว
+function filteredCodes(d){
+  const gfIds=new Set(filteredGroups(d).map(g=>g.gfId));
+  return (META.codes||[]).filter(c=>gfIds.has(c.gfId)&&(!d.code||c.code===d.code));
 }
 // ขั้วของหมวดบัญชี: +1 = เพิ่มแล้วดี (สินทรัพย์/ทุน/รายได้), -1 = เพิ่มแล้วต้องเฝ้าระวัง (หนี้สิน/ค่าใช้จ่าย), 0 = ผสม
 const POLAR={'สินทรัพย์':1,'ทุน':1,'ส่วนทุน':1,'รายได้':1,'หนี้สิน':-1,'ค่าใช้จ่าย':-1};
@@ -379,10 +412,11 @@ function buildDims(){
   opt('selSub',uniq(filteredGroups({fin:d.fin,accg:d.accg}),'sub'),d.sub,'ทุกกลุ่ม');
   opt('selBud',uniq(filteredGroups({fin:d.fin,accg:d.accg,sub:d.sub}),'budget'),d.budget,'ทุกหมวดงบฯ');
   opt('selGf',uniq(filteredGroups({fin:d.fin,accg:d.accg,sub:d.sub,budget:d.budget}),'gf'),d.gf,'ทุกรายการ');
+  opt('selCode',filteredCodes({...d,code:''}).map(c=>c.code),d.code,'ทุกรหัสย่อย');
 }
 function dimChange(lv){
-  const order=['fin','accg','sub','budget','gf'];
-  state.dim[lv]=document.getElementById({fin:'selFin',accg:'selAccg',sub:'selSub',budget:'selBud',gf:'selGf'}[lv]).value;
+  const order=['fin','accg','sub','budget','gf','code'];
+  state.dim[lv]=document.getElementById({fin:'selFin',accg:'selAccg',sub:'selSub',budget:'selBud',gf:'selGf',code:'selCode'}[lv]).value;
   for(const k of order.slice(order.indexOf(lv)+1))state.dim[k]='';
   buildDims();render();
 }
@@ -443,7 +477,7 @@ function setArea(a){
   state.ents=a==='region'?[]:[entList(a)[0]];
   areaUI();render();
 }
-const orgName=id=>{const o=META.orgs.find(o=>o.id===id);return o?o.name:id};
+const orgName=id=>{const o=META.orgs.find(o=>o.id===id);return o?o.name+(o.grp?` (${o.grp})`:''):id};
 function entAdd(){
   const v=document.getElementById('selEnt').value;if(!v)return;
   const max=state.area==='prov'?8:6;
@@ -452,12 +486,19 @@ function entAdd(){
 function entDel(v){state.ents=state.ents.filter(e=>e!==v);if(!state.ents.length)state.area==='prov'?state.ents=[]:null;render()}
 
 async function ensureData(){
-  if(state.area==='prov'&&!PROV)PROV=await (await fetch('data/prov_gf.json')).json();
+  if(state.area==='prov'&&!PROV)PROV=await (await fetch('data/prov_gf.json',{cache:"no-store"})).json();
   if(state.area==='hosp'){
     const d=state.dim;
     if(d.budget||d.gf){
-      const g=filteredGroups(d)[0];if(g&&!(g.bId in HOSPB))HOSPB[g.bId]=await (await fetch(`data/hosp/b${g.bId}.json`)).json();
-    } else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json')).json();
+      const g=filteredGroups(d)[0];if(g&&!(g.bId in HOSPB))HOSPB[g.bId]=await (await fetch(`data/hosp/b${g.bId}.json`,{cache:"no-store"})).json();
+    } else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json',{cache:"no-store"})).json();
+  }
+  if(state.dim.code){
+    if(state.area==='region'&&!REGION_CODE)REGION_CODE=await (await fetch('data/region_code.json',{cache:"no-store"})).json();
+    if(state.area==='prov'&&!PROV_CODE)PROV_CODE=await (await fetch('data/prov_code.json',{cache:"no-store"})).json();
+    if(state.area==='hosp'){
+      const g=filteredGroups(state.dim)[0];if(g&&!(g.bId in HOSP_CODE))HOSP_CODE[g.bId]=await (await fetch(`data/hosp_code/b${g.bId}.json`,{cache:"no-store"})).json();
+    }
   }
 }
 // รวม records [id,t,bs,inc,dec,endDr,endCr] ตาม filter → Map t→{bs,inc,dec,endDr,endCr}
@@ -470,18 +511,134 @@ function sumSeries(recs,idSet){
     o.bs+=r[2];o.inc+=r[3];o.dec+=r[4];o.endDr+=r[5]||0;o.endCr+=r[6]||0;
   }return m;
 }
-function seriesFor(ent){ // ent=null → ทั้งเขต
-  const gs=filteredGroups(state.dim);
-  const gfSet=new Set(gs.map(g=>g.gfId));
-  if(state.area==='region')return sumSeries(REGION,gfSet);
-  if(state.area==='prov')return sumSeries(PROV[ent]||[],gfSet);
+function seriesFor(ent,area=state.area){ // ent=null → ทั้งเขต · area รับ override ได้ (ใช้ตอน popup อันดับ)
   const d=state.dim;
+  if(d.code){
+    const codeSet=new Set(filteredCodes(d).map(c=>c.codeId));
+    if(area==='region')return sumSeries(REGION_CODE,codeSet);
+    if(area==='prov')return sumSeries(PROV_CODE[ent]||[],codeSet);
+    const g=filteredGroups(d)[0],b=g?HOSP_CODE[g.bId]:null;
+    return sumSeries(b?b[ent]||[]:[],codeSet);
+  }
+  const gs=filteredGroups(d);
+  const gfSet=new Set(gs.map(g=>g.gfId));
+  if(area==='region')return sumSeries(REGION,gfSet);
+  if(area==='prov')return sumSeries(PROV[ent]||[],gfSet);
   if(d.budget||d.gf){const b=gs[0]?HOSPB[gs[0].bId]:null;return sumSeries(b?b[ent]||[]:[],gfSet)}
   const sSet=new Set(gs.map(g=>g.sId));return sumSeries(HOSPSUB[ent]||[],sSet);
 }
 function dimLabel(){
   const d=state.dim;
-  return d.gf||d.budget||d.sub||d.accg||d.fin||'ทุกหมวดบัญชี';
+  return d.code||d.gf||d.budget||d.sub||d.accg||d.fin||'ทุกหมวดบัญชี';
+}
+// ---------- Rank popup: คลิกจุดบนกราฟ → อันดับจังหวัด/รพ./รหัสบัญชี ณ งวดนั้น ----------
+const bucketVal=v=>v?(state.view==='bs'?v[state.metric]:v.inc+v.dec):null;
+async function ensurePopupData(kind){
+  const d=state.dim;
+  if(kind==='prov'){
+    if(d.code){if(!PROV_CODE)PROV_CODE=await (await fetch('data/prov_code.json',{cache:"no-store"})).json();}
+    else{if(!PROV)PROV=await (await fetch('data/prov_gf.json',{cache:"no-store"})).json();}
+  }else if(kind==='hosp'){
+    if(d.code){
+      const g=filteredGroups(d)[0];if(g&&!(g.bId in HOSP_CODE))HOSP_CODE[g.bId]=await (await fetch(`data/hosp_code/b${g.bId}.json`,{cache:"no-store"})).json();
+    }else if(d.budget||d.gf){
+      const g=filteredGroups(d)[0];if(g&&!(g.bId in HOSPB))HOSPB[g.bId]=await (await fetch(`data/hosp/b${g.bId}.json`,{cache:"no-store"})).json();
+    }else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json',{cache:"no-store"})).json();
+  }else if(kind==='code'){
+    const g=filteredGroups(d)[0];if(g&&!(g.bId in HOSP_CODE))HOSP_CODE[g.bId]=await (await fetch(`data/hosp_code/b${g.bId}.json`,{cache:"no-store"})).json();
+  }
+}
+function computeRank(kind,ctx,bucket){
+  let items=[];
+  if(kind==='prov'){
+    const provs=[...new Set(META.orgs.map(o=>o.prov))];
+    items=provs.map(p=>({id:p,name:p,val:bucketVal(bVal({m:seriesFor(p,'prov')},bucket))}));
+  }else if(kind==='hosp'){
+    // ctx.prov ไม่ระบุ → รวมทุกโรงพยาบาลทั้งเขต (ใช้ตอนแท็บ "โรงพยาบาล" ในหน้าจังหวัด)
+    items=META.orgs.filter(o=>!ctx.prov||o.prov===ctx.prov).map(o=>({id:o.id,name:orgName(o.id),val:bucketVal(bVal({m:seriesFor(o.id,'hosp')},bucket))}));
+  }else if(kind==='code'){
+    const codes=filteredCodes({...state.dim,code:''});
+    const g=filteredGroups(state.dim)[0],b=g?HOSP_CODE[g.bId]:null;
+    items=codes.map(c=>({id:c.code,name:c.code,val:bucketVal(bVal({m:sumSeries(b?b[ctx.hospId]||[]:[],new Set([c.codeId]))},bucket))}));
+  }else if(kind==='self'){
+    // อยู่ระดับรหัสบัญชีแล้ว (leaf) — โชว์ตัวเองเสมอแม้ไม่มีข้อมูลงวดนี้ ไม่กรองทิ้ง
+    const v=bucketVal(bVal({m:seriesFor(ctx.hospId,'hosp')},bucket));
+    return [{id:state.dim.code,name:state.dim.code,val:v??0,pct:100}];
+  }
+  items=items.filter(x=>x.val!=null);
+  const total=items.reduce((a,x)=>a+Math.abs(x.val),0);
+  return items.map(x=>({...x,pct:total?Math.abs(x.val)/total*100:0})).sort((a,b)=>Math.abs(b.val)-Math.abs(a.val));
+}
+async function openRankModal(kind,ctx,bucket,title){
+  if(kind==='prov'){
+    // ระดับเขต: มี 2 แท็บ — จังหวัด / โรงพยาบาล(ทั้งเขต) — เตรียมข้อมูลทั้งคู่ไว้ล่วงหน้า
+    await ensurePopupData('prov');await ensurePopupData('hosp');
+    RANK_TABS={prov:computeRank('prov',{},bucket),hospAll:computeRank('hosp',{},bucket)};
+    RANK_CTX={bucket};
+    renderRankTabs('prov');
+    return;
+  }
+  RANK_TABS=null;RANK_CTX=null;
+  await ensurePopupData(kind);
+  const items=computeRank(kind,ctx,bucket);
+  renderRankModal(kind,ctx,bucket,title,items);
+}
+function renderRankTabs(tab){
+  const {bucket}=RANK_CTX;
+  const periodLab=bucket.label+(state.gran==='y'?'':' ปีงบ '+bucket.fy);
+  const titleText=tab==='prov'?'อันดับจังหวัด':'อันดับโรงพยาบาล (ทั้งเขต)';
+  document.getElementById('rmTitle').innerHTML=`${titleText}<div class="note" style="font-weight:400;margin-top:2px">งวด ${periodLab} · ${dimLabel()}</div>
+    <div class="rmtabs">
+      <button class="rmtab${tab==='prov'?' on':''}" onclick="rankSetTab('prov')">📍 จังหวัด</button>
+      <button class="rmtab${tab==='hospAll'?' on':''}" onclick="rankSetTab('hospAll')">🏥 โรงพยาบาล</button>
+    </div>`;
+  renderRankRows(tab==='prov'?'prov':'hosp',{},RANK_TABS[tab]);
+  document.getElementById('rankModal').classList.add('open');
+}
+function rankSetTab(tab){renderRankTabs(tab)}
+function renderRankRows(kind,ctx,items){
+  const maxV=Math.max(1,...items.map(x=>Math.abs(x.val)));
+  const staticRow=kind==='self';
+  document.getElementById('rmBody').innerHTML=items.length?items.map((x,i)=>`
+    <div class="rmrow${staticRow?' static':''}" ${staticRow?'':`onclick="rankRowClick('${kind}','${(ctx.prov||ctx.hospId||'').toString().replace(/'/g,"\\'")}','${x.id.toString().replace(/'/g,"\\'")}')"`}>
+      <div class="rk">#${i+1}</div>
+      <div class="rmmain">
+        <div class="rmtop"><span class="nm">${x.name}</span><span class="vv">${fmtM(x.val)}</span></div>
+        <div class="rmbar"><i style="width:${Math.abs(x.val)/maxV*100}%"></i></div>
+      </div>
+      <div class="pc">${x.pct.toFixed(1)}%</div>
+    </div>`).join(''):'<div class="note" style="padding:12px 18px">ไม่มีข้อมูลในงวดนี้</div>';
+}
+function renderRankModal(kind,ctx,bucket,title,items){
+  const periodLab=bucket.label+(state.gran==='y'?'':' ปีงบ '+bucket.fy);
+  document.getElementById('rmTitle').innerHTML=`${title}<div class="note" style="font-weight:400;margin-top:2px">งวด ${periodLab} · ${dimLabel()}</div>`;
+  renderRankRows(kind,ctx,items);
+  document.getElementById('rankModal').classList.add('open');
+}
+function closeRankModal(){document.getElementById('rankModal').classList.remove('open')}
+function rankRowClick(kind,ctxVal,id){
+  closeRankModal();
+  if(kind==='prov'){state.area='prov';state.ents=[id];areaUI();}
+  else if(kind==='hosp'){state.area='hosp';state.ents=[id];areaUI();}
+  else if(kind==='code'){state.dim.code=id;}
+  else return;
+  buildDims();render();
+  document.getElementById('chartTitle').scrollIntoView({behavior:'smooth'});
+}
+async function handleChartClick(bucketIdx,dsIdx,bks,series){
+  const bucket=bks[bucketIdx];if(!bucket)return;
+  const d=state.dim;
+  const entFor=()=>series.length===1?series[0].ent:(series[dsIdx]?series[dsIdx].ent:series[0]?.ent);
+  if(state.area==='region'){
+    await openRankModal('prov',{},bucket,'อันดับจังหวัด');
+  }else if(state.area==='prov'){
+    const ent=entFor();if(!ent)return;
+    await openRankModal('hosp',{prov:ent},bucket,`อันดับโรงพยาบาล — จ.${ent}`);
+  }else if(state.area==='hosp'){
+    const ent=entFor();if(!ent)return;
+    if(d.code)await openRankModal('self',{hospId:ent},bucket,`${orgName(ent)}`);
+    else await openRankModal('code',{hospId:ent},bucket,`อันดับรหัสบัญชี — ${orgName(ent)}`);
+  }
 }
 async function render(){
   state.from=+document.getElementById('selFrom').value||state.from;
@@ -512,9 +669,17 @@ function renderWarn(periods){
 }
 function renderKpis(s0,periods){
   const el=document.getElementById('kpis');if(!s0){el.innerHTML='';return}
-  const last=periods[periods.length-1],prev=periods[periods.length-2],yoy=last-100;
+  const lastAll=periods[periods.length-1];
+  let li=-1;for(let i=periods.length-1;i>=0;i--)if(s0.m.has(periods[i])){li=i;break}
+  if(li<0){
+    el.innerHTML=`<div class="card" style="grid-column:1/-1"><div class="t">ไม่มีข้อมูล</div>
+      <div class="v" style="font-size:15px;font-weight:600;color:var(--mut)">${dimLabel()} ไม่มีรายการเคลื่อนไหวในช่วงเวลาที่เลือก</div>
+      <div class="d note">พบใน mapping บัญชี แต่ไม่มีการบันทึกจริงสำหรับหน่วยบริการ/ช่วงเวลานี้ — ลองขยายช่วงเวลา หรือเลือกรายการ/หน่วยบริการอื่น</div></div>`;
+    return;
+  }
+  const last=periods[li],prev=li>0?periods[li-1]:null,yoy=last-100,stale=last!==lastAll;
   const g=t=>s0.m.get(t);
-  const cur=g(last),pv=g(prev),py=g(yoy);
+  const cur=g(last),pv=prev!=null?g(prev):null,py=g(yoy);
   const dd=(v,b)=>{if(v==null||b==null)return'<span class="zero">—</span>';
     const d=v-b,p=pct(v,b);
     return `<span style="color:${dirCol(d)}">${d>0?'▲':d<0?'▼':''} ${fmtM(Math.abs(d))}${p!=null?' ('+Math.abs(p).toFixed(1)+'%)':''}</span>`};
@@ -522,7 +687,7 @@ function renderKpis(s0,periods){
   const netd=periods.slice(-12).map(t=>g(t)?.['dec']??0).reduce((a,b)=>a+b,0);
   const p12=periods.slice(-12);
   el.innerHTML=`
-   <div class="card"><div class="t">ยอดคงเหลือ ${tLab(last)} ปีงบ ${Math.floor(last/100)}</div><div class="v">${cur?fmtM(cur.bs):'—'}</div><div class="d note">${dimLabel()}</div></div>
+   <div class="card"><div class="t">ยอดคงเหลือ ${tLab(last)} ปีงบ ${Math.floor(last/100)}</div><div class="v">${cur?fmtM(cur.bs):'—'}</div><div class="d note">${dimLabel()}${stale?` · ⚠ ไม่มีข้อมูลถึง ${tLab(lastAll)} (แสดงงวดล่าสุดที่มี)`:''}</div></div>
    <div class="card"><div class="t">เทียบเดือนก่อน (MoM)</div><div class="v" style="font-size:17px">${dd(cur?.bs,pv?.bs)}</div><div class="d note">${tLab(last)} vs ${prev?tLab(prev):'—'}</div></div>
    <div class="card"><div class="t">เทียบปีก่อน (YoY)</div><div class="v" style="font-size:17px">${dd(cur?.bs,py?.bs)}</div><div class="d note">${tLab(last)} vs ${tLab(yoy)}</div></div>
    <div class="card"><div class="t">เคลื่อนไหว 12 เดือนล่าสุด</div><div class="v" style="font-size:17px"><span style="color:${dirCol(1)}">▲ ${fmtM(nets)}</span> / <span style="color:${dirCol(-1)}">▼ ${fmtM(Math.abs(netd))}</span></div><div class="d note">เพิ่ม / ลด สะสม ช่วง ${tLab(p12[0])}–${tLab(last)} (สี = ผลดี/เฝ้าระวัง)</div></div>`;
@@ -685,25 +850,35 @@ function renderChart(series,periods){
   chart=new Chart(document.getElementById('mainChart'),{data:{labels,datasets:ds},
    plugins:[fyPlugin(bks,sums),sameMonthPlugin(bks)],options:{
     responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    onClick:(evt,elements,c)=>{
+      let hit=c.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+      if(!hit.length)hit=elements;
+      if(!hit.length)return;
+      handleChartClick(hit[0].index,hit[0].datasetIndex,bks,series);
+    },
     layout:{padding:{top:48}},
     scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5}},stacked:state.view==='mv'&&series.length===1},
       y:{stacked:state.view==='mv'&&series.length===1,...mvY,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}},
       y2:{display:state.view==='mv'&&series.length===1,position:'right',...mvY2,grid:{drawOnChartArea:false},ticks:{font:{family:'Sarabun',size:11},callback:v=>v+'%',color:'#7c3aed'},title:{display:true,text:'% สุทธิ',color:'#7c3aed',font:{family:'Sarabun',size:11}}}},
-    plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun'},boxWidth:14,padding:12}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},
+    plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun'},boxWidth:14,padding:12}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},footerFont:{family:'Sarabun',weight:'bold',size:13},footerColor:'#fbbf24',footerMarginTop:8,
       callbacks:{label:c=>c.dataset.yAxisID==='y2'?`${c.dataset.label}: ${c.parsed.y}%`:`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
         title:items=>{const b=bks[items[0].dataIndex];
-          return b.label+(state.gran==='y'?'':' ปีงบ '+b.fy)+(bFlag[items[0].dataIndex]?'  ⚠ ข้อมูลอาจไม่ครบ':'')}}}}}});
+          return b.label+(state.gran==='y'?'':' ปีงบ '+b.fy)+(bFlag[items[0].dataIndex]?'  ⚠ ข้อมูลอาจไม่ครบ':'')},
+        footer:()=>'🖱 คลิกเพื่อดูอันดับ'}}}}});
   const p=polarity();
   const colorNote=p===0?'มุมมองนี้รวมหลายหมวดที่ทิศทางดี/เสียต่างกัน → ใช้สีกลาง (น้ำเงิน=เพิ่ม, ส้ม=ลด)'
     :`สี: เขียว = ทิศทางที่ดี, แดง = ควรเฝ้าระวัง (หมวดนี้ "${p>0?'เพิ่มขึ้น = ดี':'ลดลง = ดี'}")`;
   const ns2=normalSign(),accs2=[...new Set(filteredGroups(state.dim).map(g=>g.accg))];
   const accNorm=accs2.length===1?(ns2>0?`Dr เพิ่ม / Cr ลด (${accs2[0]})`:`Cr เพิ่ม / Dr ลด (${accs2[0]})`):'';
-  document.getElementById('chartNote').textContent=(state.view==='mv'
+  const allEmpty=series.length===1&&vals[0].every(v=>v==null);
+  document.getElementById('chartNote').textContent=(allEmpty?'⚠ ไม่มีข้อมูลรายการนี้ในช่วงเวลาที่เลือก (กราฟจึงว่าง) — ไม่ใช่ข้อผิดพลาด เป็นเพราะไม่มีการบันทึกบัญชีจริงในเงื่อนไขนี้ · ':'')
+    +(state.view==='mv'
     ?`${ns2>0?'Dr':'Cr'} = เพิ่ม · ${ns2>0?'Cr':'Dr'} = ลด${accNorm?' ('+accNorm+')':''} · เส้น % สุทธิ (แกนขวา): 🟢 เพิ่มขึ้น / 🔴 ลดลง · ป้ายบนกราฟ = เคลื่อนไหวสุทธิรวมทั้งปีงบ`
     :'ป้ายบนกราฟ = เปลี่ยนแปลงเทียบสิ้นปีงบก่อนหน้า (ก.ย. vs ก.ย.) · ▲ สามเหลี่ยม = งวดที่ข้อมูลต้นทางอาจไม่ครบ')
     +(state.gran!=='m'?' · จุดสุดท้ายของช่วงที่ยังไม่จบ = ยอด ณ เดือนล่าสุดที่มีข้อมูล':'')
     +' · เส้นประแนวตั้ง = รอยต่อปีงบ (ก.ย.|ต.ค.) · '+colorNote
-    +' · 💡 ดูภาพรวมง่ายสุด: กดความละเอียด "ปี" ก่อน แล้วค่อยซูมลง "ไตรมาส/เดือน"';
+    +' · 💡 ดูภาพรวมง่ายสุด: กดความละเอียด "ปี" ก่อน แล้วค่อยซูมลง "ไตรมาส/เดือน"'
+    +` · 🖱 คลิกจุด/แท่งบนกราฟ เพื่อดูอันดับ${state.area==='region'?'จังหวัด':state.area==='prov'?'โรงพยาบาล':'รหัสบัญชี'}ในงวดนั้น`;
 }
 function renderTop(periods){
   const last=periods[periods.length-1],prev=periods[periods.length-2];
@@ -732,7 +907,7 @@ function renderTop(periods){
     const idSet=useB?gfSet:new Set(gs.map(g=>g.sId));
     rows=META.orgs.map(o=>{let cur=0,pv=0;
       for(const r of (src?.[o.id]||[])){if(!idSet.has(r[0]))continue;if(r[1]===last)cur+=r[2];if(r[1]===prev)pv+=r[2]}
-      return {id:o.id,name:o.name,cur,d:cur-pv}}).filter(r=>r.cur||r.d)
+      return {id:o.id,name:orgName(o.id),cur,d:cur-pv}}).filter(r=>r.cur||r.d)
       .sort((a,b)=>Math.abs(b.cur)-Math.abs(a.cur)).slice(0,20);
     title.textContent=`อันดับโรงพยาบาล ${tLab(last)} — ${dimLabel()}`;
     tbl.innerHTML=`<tr><th>โรงพยาบาล</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ (${tLab(last)} vs ${tLab(prev)})</th></tr>`+
@@ -740,7 +915,7 @@ function renderTop(periods){
   }
 }
 function drill(lvl,val){state.dim[lvl]=val;
-  const order=['fin','accg','sub','budget','gf'];
+  const order=['fin','accg','sub','budget','gf','code'];
   for(const k of order.slice(order.indexOf(lvl)+1))state.dim[k]='';
   buildDims();render()}
 function hospPick(id){if(!state.ents.includes(id)){state.ents.push(id);if(state.ents.length>6)state.ents.shift()}render()}
@@ -1026,6 +1201,13 @@ document.addEventListener('keydown',e=>{
 });
 </script>
 
+<div id="rankModal" onclick="if(event.target.id==='rankModal')closeRankModal()">
+  <div class="rmodal-card">
+    <div class="rmodal-head"><div id="rmTitle" class="rmodal-title"></div><button class="rmodal-close" onclick="closeRankModal()">✕</button></div>
+    <div id="rmBody" class="rmodal-body"></div>
+    <div class="rmodal-foot note">คลิกแถวเพื่อดูรายละเอียดต่อ</div>
+  </div>
+</div>
 <div id="chatBtn" title="AI Assistant" onclick="toggleChat()">💬</div>
 <div id="chatPanel">
   <div id="chatHead">
