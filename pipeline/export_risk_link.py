@@ -162,8 +162,10 @@ with open(os.path.join(OUT_DIR, "summary.json"), "w", encoding="utf-8") as f:
 print(f"WROTE {os.path.join(OUT_DIR, 'summary.json')} ({os.path.getsize(os.path.join(OUT_DIR, 'summary.json'))/1024:.1f} KB)")
 
 # ---------- 7) ราย รพ.: trend + decomposition + waterfall + topAccounts ----------
-CA_CODES = code_sets["1001X"]
-CL_CODES = code_sets["1001Y"]
+CA_CODES  = code_sets["1001X"]
+CL_CODES  = code_sets["1001Y"]
+REV_CODES = code_sets["3006Y"]   # รายได้รวม — ตัวตั้งของ NI (ดู RISK_BS_LINK_DESIGN.md ข้อ 3.2)
+EXP_CODES = code_sets["3010X"]   # ค่าใช้จ่ายรวม — ตัวหักของ NI
 
 name2_map = acc_names["Name2"].to_dict()
 acc1_map = acc_names["Account1"].to_dict()
@@ -185,11 +187,24 @@ def decompose(cur_row, base_row, x_key, y_key):
     return {"total": round(float(x1/y1 - x0/y0), 4), "fromNumerator": round(float(from_x), 4),
             "fromDenominator": round(float(from_y), 4)}
 
-# ---- ตัดข้อมูลให้เหลือเฉพาะบัญชี CA/CL ที่ใช้จริงใน waterfall/topAccounts แล้วแยกตาม รพ. ครั้งเดียว
-# (แทนการ filter ข้อมูลทั้งภูมิภาค 4M แถวซ้ำนับร้อยครั้ง — เดิมช้ามาก ~5 นาที/รพ.ใหญ่)
-m_cacl = m[m["root"].isin(CA_CODES | CL_CODES)].copy()
-m_cacl["bucket"] = np.where(m_cacl["root"].isin(CA_CODES), "CA", "CL")
-m_by_org = {o: sub for o, sub in m_cacl.groupby("org5")}
+def ni_bridge(cur_row, base_row):
+    """ΔNI = Δรายได้(3006Y) − Δค่าใช้จ่าย(3010X) — สะพานกำไร/ขาดทุน (ไม่ใช่ ratio จึงไม่หาร)"""
+    rev1, rev0 = cur_row["3006Y"], base_row["3006Y"]
+    exp1, exp0 = cur_row["3010X"], base_row["3010X"]
+    if pd.isna(rev1) or pd.isna(rev0) or pd.isna(exp1) or pd.isna(exp0):
+        return None
+    d_rev, d_exp = rev1 - rev0, exp1 - exp0
+    return {"total": round(float(d_rev - d_exp), 0), "fromRevenue": round(float(d_rev), 0),
+            "fromExpense": round(float(-d_exp), 0)}
+
+# ---- ตัดข้อมูลให้เหลือเฉพาะบัญชีที่ใช้จริงใน waterfall/topAccounts (CA/CL/รายได้/ค่าใช้จ่าย)
+# แล้วแยกตาม รพ. ครั้งเดียว (แทนการ filter ข้อมูลทั้งภูมิภาค 4M แถวซ้ำนับร้อยครั้ง — เดิมช้ามาก ~5 นาที/รพ.ใหญ่)
+BUCKET_CODES = {"CA": CA_CODES, "CL": CL_CODES, "REV": REV_CODES, "EXP": EXP_CODES}
+ALL_BUCKET_CODES = CA_CODES | CL_CODES | REV_CODES | EXP_CODES
+m_buckets = m[m["root"].isin(ALL_BUCKET_CODES)].copy()
+bucket_of = {c: b for b, codes in BUCKET_CODES.items() for c in codes}
+m_buckets["bucket"] = m_buckets["root"].map(bucket_of)
+m_by_org = {o: sub for o, sub in m_buckets.groupby("org5")}
 
 def waterfall(org_df, t_cur, t_base, bucket):
     """Δมูลค่าตามหมวดย่อย (Name2) ระหว่าง 2 งวด สำหรับ รพ. org5"""
@@ -224,7 +239,7 @@ def top_accounts(org_df, t_cur, t_base, bucket, cls_label):
     return out
 
 periods_all = sorted(j["t"].unique().tolist())
-empty_org_df = m_cacl.iloc[0:0]
+empty_org_df = m_buckets.iloc[0:0]
 
 for idx, org5 in enumerate(sorted(orgs.keys())):
     hj = j[j["org5"] == org5].sort_values("t")
@@ -268,6 +283,7 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
     decomp = {}
     wf = {}
     topacc = {}
+    topaccPL = {}
     for label, base_t in [("mom", tmom), ("yoy", tyoy)]:
         if base_t is None:
             continue
@@ -277,22 +293,31 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             "cr": decompose(cur_row, base_row, "1001X", "1001Y"),
             "qr": decompose(cur_row, base_row, "1002X", "1001Y"),
             "cash": decompose(cur_row, base_row, "1003X", "1001Y"),
+            "ni": ni_bridge(cur_row, base_row),
         }
         wf[label] = {
             "baseT": int(base_t),
             "ca": waterfall(org_df, tcur, base_t, "CA"),
             "cl": waterfall(org_df, tcur, base_t, "CL"),
+            "rev": waterfall(org_df, tcur, base_t, "REV"),
+            "exp": waterfall(org_df, tcur, base_t, "EXP"),
         }
         acc_ca = top_accounts(org_df, tcur, base_t, "CA", "CA")
         acc_cl = top_accounts(org_df, tcur, base_t, "CL", "CL")
         combo = sorted(acc_ca + acc_cl, key=lambda r: -abs(r["delta"]))[:TOPN_ACC]
         topacc[label] = {"baseT": int(base_t), "accounts": combo}
 
+        acc_rev = top_accounts(org_df, tcur, base_t, "REV", "REV")
+        acc_exp = top_accounts(org_df, tcur, base_t, "EXP", "EXP")
+        comboPL = sorted(acc_rev + acc_exp, key=lambda r: -abs(r["delta"]))[:TOPN_ACC]
+        topaccPL[label] = {"baseT": int(base_t), "accounts": comboPL}
+
     out = {
         "hcode": org5, "name": org.get("name"), "prov": org.get("prov"),
         "grp": org.get("grp"), "level": org.get("level"),
         "period": int(tcur), "periodLabel": tlab(int(tcur)),
-        "trend": trend, "peer": peer, "decomp": decomp, "waterfall": wf, "topAccounts": topacc,
+        "trend": trend, "peer": peer, "decomp": decomp, "waterfall": wf,
+        "topAccounts": topacc, "topAccountsPL": topaccPL,
     }
     path = os.path.join(OUT_H, f"{org5}.json")
     with open(path, "w", encoding="utf-8") as f:

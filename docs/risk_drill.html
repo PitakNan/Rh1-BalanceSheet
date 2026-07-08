@@ -108,10 +108,13 @@ table.acctbl th:nth-child(1),table.acctbl th:nth-child(2){text-align:left}
 table.acctbl td{padding:5px 8px;border-bottom:1px solid var(--row-strip);text-align:right;white-space:nowrap}
 table.acctbl td:nth-child(1),table.acctbl td:nth-child(2){text-align:left;white-space:normal}
 .clstag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px}
-.clstag.CA{background:var(--good-bg);color:var(--good-ink)}
-.clstag.CL{background:var(--bad-bg);color:var(--bad-ink)}
+.clstag.CA,.clstag.REV{background:var(--good-bg);color:var(--good-ink)}
+.clstag.CL,.clstag.EXP{background:var(--bad-bg);color:var(--bad-ink)}
 .note{font-size:11.5px;color:var(--mut)}
+.src-note{font-size:11px;color:var(--mut);background:var(--th-bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;line-height:1.5;margin-bottom:10px}
 .acctbl-wrap{max-height:340px;overflow-y:auto}
+.nibridge-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+@media(max-width:640px){.nibridge-row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -289,6 +292,11 @@ function renderDetail(hcode){
 
     <div class="chips" id="chips">${TRIGGERS.map(t=>`<span class="chip${trig.has(t.k)?' on':''}">${trig.has(t.k)?'✗':'✓'} ${t.label}</span>`).join('')}</div>
 
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px">
+      <span class="note">เปรียบเทียบกับงวด:</span>
+      <div class="seg" style="width:160px"><button id="pdMom" class="${periodMode==='mom'?'on':''}" onclick="setPeriodMode('mom')">MoM</button><button id="pdYoy" class="${periodMode==='yoy'?'on':''}" onclick="setPeriodMode('yoy')">YoY</button></div>
+    </div>
+
     <div class="panel">
       <h3>เทรนด์ Ratio เทียบกลุ่มเปรียบเทียบ <span class="sp"></span>
         <div class="metric-tabs">
@@ -306,17 +314,26 @@ function renderDetail(hcode){
       </div>
       <div class="chartbox"><canvas id="ratioChart"></canvas></div>
       <div class="note">เส้นทึบ = รพ.นี้ · เส้นประ = median กลุ่ม · แถบเทา = ช่วง P25–P75 ของกลุ่ม</div>
+      <div class="src-note">📌 ที่มาข้อมูล: ค่า Current/Quick/Cash Ratio ที่ รพ. รายงานจริง (ตาราง <code>risk_scores</code>) — ถ้างวดใดไม่มีรายงาน (ขึ้น "คำนวณจาก GL" ที่หัวหน้าเพจ) จะคำนวณแทนจากงบทดลอง <code>balance_sheet</code> ตามผังบัญชี RatioItemID 1001X/1001Y (CR), 1002X (QR), 1003X (Cash) ของกองเศรษฐกิจสุขภาพ</div>
     </div>
 
     <div class="panel">
-      <h3>ทำไม Ratio เปลี่ยน — แยกจากสินทรัพย์ (ตัวเศษ) หรือหนี้สิน (ตัวส่วน) <span class="sp"></span>
-        <div class="seg" style="width:160px"><button id="pdMom" class="${periodMode==='mom'?'on':''}" onclick="setPeriodMode('mom')">MoM</button><button id="pdYoy" class="${periodMode==='yoy'?'on':''}" onclick="setPeriodMode('yoy')">YoY</button></div>
-      </h3>
+      <h3>รายได้และค่าใช้จ่าย — สาเหตุที่ทำให้กำไร/เงินสดเปลี่ยน</h3>
+      <div class="src-note">📌 ที่มาข้อมูล: งบทดลองหมวด 4 (บัญชีรายได้) และหมวด 5 (บัญชีค่าใช้จ่าย) เป็น<b>ยอดสะสมตั้งแต่ต้นปีงบ</b> (ต่างจากงบดุลด้านบนที่เป็นยอดคงเหลือปลายงวด) จับคู่บัญชีด้วยผัง RatioItemID <b>3006Y</b> (รายได้รวม, 168 บัญชี) และ <b>3010X</b> (ค่าใช้จ่ายรวม, 276 บัญชี) — ตัวเลขชุดเดียวกับที่ใช้คำนวณ <b>NI (Net Income)</b> ที่ป้อนเข้าเกณฑ์ Risk Score ฝั่ง ST (NI ติดลบ) และ SU (ระยะเวลาอยู่รอด) โดยตรง · จัดกลุ่มหมวดย่อยด้วย <code>acc_hierarchy.Name2</code> เช่นเดียวกับฝั่งงบดุล</div>
+      <div id="niBridgeBox"></div>
+      <div class="wf-cols" id="wfPLBox"></div>
+      <div class="wf-title" style="margin-top:14px">บัญชีรายได้/ค่าใช้จ่ายที่ขยับแรงสุด (Top 20)</div>
+      <div class="acctbl-wrap"><table class="acctbl" id="acctblPL"></table></div>
+    </div>
+
+    <div class="panel">
+      <h3>ทำไม Ratio เปลี่ยน — แยกจากสินทรัพย์ (ตัวเศษ) หรือหนี้สิน (ตัวส่วน)</h3>
       <div id="decompBox"></div>
     </div>
 
     <div class="panel">
       <h3>หนี้สิน/สินทรัพย์ เปลี่ยนจากหมวดย่อยไหน (Waterfall)</h3>
+      <div class="src-note">📌 ที่มาข้อมูล: งบทดลองหมวด 1 (สินทรัพย์) และหมวด 2 (หนี้สิน) ยอดคงเหลือปลายงวด ตามผัง RatioItemID 1001X (สินทรัพย์หมุนเวียน) / 1001Y (หนี้สินหมุนเวียน) — จัดกลุ่มหมวดย่อยด้วย <code>acc_hierarchy.Name2</code></div>
       <div id="wfBox"></div>
     </div>
 
@@ -327,6 +344,9 @@ function renderDetail(hcode){
   </div>`;
 
   renderRatioChart(h);
+  renderNIBridge(h);
+  renderWaterfallPL(h);
+  renderTopAccPL(h);
   renderDecomp(h);
   renderWaterfall(h);
   renderTopAcc(h);
@@ -338,6 +358,7 @@ function setPeriodMode(m){
   periodMode=m;
   document.getElementById('pdMom').classList.toggle('on',m==='mom');
   document.getElementById('pdYoy').classList.toggle('on',m==='yoy');
+  renderNIBridge(HDATA);renderWaterfallPL(HDATA);renderTopAccPL(HDATA);
   renderDecomp(HDATA);renderWaterfall(HDATA);renderTopAcc(HDATA);
 }
 
@@ -397,11 +418,16 @@ function renderDecomp(h){
 }
 
 // ── L3: waterfall by subgroup ──────────────────────────────────
+const GOOD_UP_CLS=new Set(['CA','REV']); // เพิ่มขึ้น=ดี(เขียว) — CL/EXP เพิ่มขึ้น=แย่(แดง)
+function deltaColor(delta, cls){
+  if(delta===0) return 'var(--mut)';
+  const pos = GOOD_UP_CLS.has(cls) ? delta>0 : delta<0;
+  return pos?'var(--green)':'var(--red)';
+}
 function wfRows(rows, cls){
   const maxAbs=Math.max(1,...rows.map(r=>Math.abs(r.delta)));
   return rows.slice(0,12).map(r=>{
-    const pos = cls==='CA' ? r.delta>0 : r.delta<0; // CA เพิ่ม=ดี(เขียว) / CL เพิ่ม=แย่(แดง)
-    const col = r.delta===0?'var(--mut)':(pos?'var(--green)':'var(--red)');
+    const col=deltaColor(r.delta, cls);
     const w=Math.min(50,Math.abs(r.delta)/maxAbs*50);
     return `<div class="wf-row">
       <div class="top"><span class="nm" title="${r.name}">${r.name}</span><span class="dl" style="color:${col}">${r.delta>0?'+':''}${fmtM(r.delta)}</span></div>
@@ -420,18 +446,49 @@ function renderWaterfall(h){
 }
 
 // ── L4: top accounts ─────────────────────────────────────────
-function renderTopAcc(h){
-  const tbl=document.getElementById('acctbl');
-  const t=h.topAccounts[periodMode];
-  if(!t || !t.accounts.length){tbl.innerHTML='<tr><td style="padding:10px;color:var(--mut)">ไม่มีข้อมูล</td></tr>';return}
+function renderAcctTable(tblId, accounts){
+  const tbl=document.getElementById(tblId);
+  if(!accounts || !accounts.length){tbl.innerHTML='<tr><td style="padding:10px;color:var(--mut)">ไม่มีข้อมูล</td></tr>';return}
   tbl.innerHTML=`<tr><th>รหัส</th><th>ชื่อบัญชี</th><th>ประเภท</th><th>มูลค่าปัจจุบัน</th><th>Δ เปลี่ยนแปลง</th></tr>` +
-    t.accounts.map(a=>`<tr>
+    accounts.map(a=>`<tr>
       <td style="font-family:monospace;font-size:11.5px">${a.acc}</td>
       <td>${a.name}</td>
       <td><span class="clstag ${a.cls}">${a.cls}</span></td>
       <td>${fmtM(a.value)}</td>
-      <td style="color:${a.delta>0?(a.cls==='CA'?'var(--green)':'var(--red)'):(a.cls==='CA'?'var(--red)':'var(--green)')};font-weight:700">${a.delta>0?'+':''}${fmtM(a.delta)}</td>
+      <td style="color:${deltaColor(a.delta,a.cls)};font-weight:700">${a.delta>0?'+':''}${fmtM(a.delta)}</td>
     </tr>`).join('');
+}
+function renderTopAcc(h){
+  const t=h.topAccounts[periodMode];
+  renderAcctTable('acctbl', t?t.accounts:null);
+}
+
+// ── L2c/L3b/L4b: รายได้-ค่าใช้จ่าย (P&L) ─────────────────────────
+function renderNIBridge(h){
+  const box=document.getElementById('niBridgeBox');
+  const v=(h.decomp[periodMode]||{}).ni;
+  if(!v){box.innerHTML='<div class="note">ไม่มีข้อมูลงวดเปรียบเทียบ</div>';return}
+  const baseT=h.decomp[periodMode].baseT;
+  const sign=x=>x>0?'+':'';
+  const rawExpDelta=-v.fromExpense; // = ค่าใช้จ่ายงวดนี้ − งวดฐาน (บวก=ค่าใช้จ่ายเพิ่ม)
+  box.innerHTML=`<div class="note" style="margin-bottom:8px">เทียบกับงวด ${tLab(baseT)} ${baseT}</div>
+  <div class="nibridge-row">
+    <div class="dcard"><div class="lbl">รายได้เปลี่ยน</div><div class="tot" style="color:${deltaColor(v.fromRevenue,'REV')}">${sign(v.fromRevenue)}${fmtM(v.fromRevenue)}</div></div>
+    <div class="dcard"><div class="lbl">ค่าใช้จ่ายเปลี่ยน</div><div class="tot" style="color:${deltaColor(rawExpDelta,'EXP')}">${sign(rawExpDelta)}${fmtM(rawExpDelta)}</div></div>
+    <div class="dcard"><div class="lbl">ผลสุทธิ (NI เปลี่ยน)</div><div class="tot" style="color:${v.total>0?'var(--green)':v.total<0?'var(--red)':'var(--mut)'}">${sign(v.total)}${fmtM(v.total)}</div></div>
+  </div>`;
+}
+function renderWaterfallPL(h){
+  const box=document.getElementById('wfPLBox');
+  const wf=h.waterfall[periodMode];
+  if(!wf){box.innerHTML='<div class="note">ไม่มีข้อมูลงวดเปรียบเทียบ</div>';return}
+  box.innerHTML=`
+    <div><div class="wf-title">รายได้ (REV)</div>${wfRows(wf.rev,'REV')}</div>
+    <div><div class="wf-title">ค่าใช้จ่าย (EXP)</div>${wfRows(wf.exp,'EXP')}</div>`;
+}
+function renderTopAccPL(h){
+  const t=h.topAccountsPL[periodMode];
+  renderAcctTable('acctblPL', t?t.accounts:null);
 }
 
 init();
