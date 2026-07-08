@@ -115,6 +115,35 @@ table.acctbl td:nth-child(1),table.acctbl td:nth-child(2){text-align:left;white-
 .acctbl-wrap{max-height:340px;overflow-y:auto}
 .nibridge-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
 @media(max-width:640px){.nibridge-row{grid-template-columns:1fr}}
+table.wltbl{width:100%;border-collapse:collapse;font-size:12.5px}
+table.wltbl th{background:var(--th-bg);color:var(--mut);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.wltbl td{padding:8px;border-bottom:1px solid var(--row-strip);vertical-align:top}
+table.wltbl tr.click{cursor:pointer}
+table.wltbl tr.click:hover{background:var(--hover)}
+table.wltbl .bullets{margin:0;padding-left:14px}
+table.wltbl .bullets li{margin-bottom:2px}
+.backlink{font-size:12.5px;color:var(--blue);cursor:pointer;text-decoration:none}
+.backlink:hover{text-decoration:underline}
+details.refpanel{border:1px solid var(--line);border-radius:12px;background:var(--card)}
+details.refpanel summary{padding:12px 16px;font-weight:700;font-size:13.5px;cursor:pointer;list-style:none}
+details.refpanel summary::-webkit-details-marker{display:none}
+details.refpanel summary::before{content:'▶ ';font-size:11px}
+details.refpanel[open] summary::before{content:'▼ '}
+.refbody{padding:0 16px 16px}
+.pillar-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:720px){.pillar-grid{grid-template-columns:1fr}}
+.pillar-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.pillar-card h4{font-size:12.5px;margin-bottom:6px}
+.pillar-card ul{padding-left:16px;font-size:12px;color:var(--mut);line-height:1.6}
+table.systbl{width:100%;border-collapse:collapse;font-size:12px}
+table.systbl th{background:var(--th-bg);padding:6px 8px;border:1px solid var(--line);text-align:left}
+table.systbl td{padding:8px;border:1px solid var(--line);vertical-align:top;line-height:1.6}
+table.systbl td ul{padding-left:16px;margin:0}
+.eff-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.eff-tbl th{background:var(--th-bg);color:var(--mut);padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)}
+.eff-tbl td{padding:7px 8px;border-bottom:1px solid var(--row-strip)}
+.eff-pass{color:var(--green);font-weight:700}
+.eff-fail{color:var(--red);font-weight:700}
 </style>
 </head>
 <body>
@@ -149,7 +178,7 @@ table.acctbl td:nth-child(1),table.acctbl td:nth-child(2){text-align:left;white-
 
   <!-- RIGHT -->
   <div class="right" id="right">
-    <div class="hint-empty">เลือกโรงพยาบาลจากรายการซ้ายเพื่อดูรายละเอียดสาเหตุ</div>
+    <div class="hint-empty">กำลังโหลด...</div>
   </div>
 </div>
 
@@ -196,7 +225,7 @@ async function init(){
 
   renderList();
 
-  // deep link: #h/{hcode}
+  // deep link: #h/{hcode} — ไม่มี hash หรือ hash ไม่ตรง = หน้า Watchlist (ค่าเริ่มต้น)
   window.addEventListener('hashchange',applyHash);
   applyHash();
 }
@@ -204,6 +233,7 @@ async function init(){
 function applyHash(){
   const m=location.hash.match(/^#h\/(\w+)/);
   if(m && SUMMARY.hospitals.find(h=>h.hcode===m[1])) selectHosp(m[1]);
+  else { CUR=null; renderList(); renderWatchlist(); }
 }
 
 // ── List (L0) ───────────────────────────────────────────────
@@ -251,6 +281,126 @@ async function selectHosp(hcode){
 
 function summaryOf(hcode){ return SUMMARY.hospitals.find(h=>h.hcode===hcode) }
 
+// ── Watchlist: สาเหตุ + คำแนะนำ อัตโนมัติ (map จากกรอบ "4 เสาหลัก") ──────
+function causeBullets(h){
+  const b=[];
+  if((h.triggers||[]).includes('cash')) b.push(`Cash ratio ต่ำ ${fmtR(h.cash)}`);
+  if((h.triggers||[]).includes('qr')) b.push(`Quick ratio ต่ำ ${fmtR(h.qr)}`);
+  if((h.triggers||[]).includes('cr')) b.push(`Current ratio ต่ำ ${fmtR(h.cr)}`);
+  if(h.nwc<0) b.push(`NWC ติดลบ ${fmtM(h.nwc)}`);
+  if(h.reserve<0) b.push(`เงินบำรุงคงเหลือสุทธิติดลบ ${fmtM(h.reserve)}`);
+  if((h.triggers||[]).includes('ni')) b.push(`ขาดทุนสะสม ${fmtM(h.ni)}`);
+  const tc=h.topCause||{};
+  if(tc.exp && tc.exp.name && tc.exp.delta>0) b.push(`${tc.exp.name} เพิ่ม ${fmtM(tc.exp.delta)}`);
+  if(tc.ca && tc.ca.name && tc.ca.delta<0) b.push(`${tc.ca.name} ลด ${fmtM(Math.abs(tc.ca.delta))}`);
+  if(tc.cl && tc.cl.name && tc.cl.delta>0) b.push(`${tc.cl.name} เพิ่ม ${fmtM(tc.cl.delta)}`);
+  return b.slice(0,4);
+}
+function recommendFor(h){
+  const rec=[]; const tc=h.topCause||{};
+  const isPersonnel = tc.exp && tc.exp.name && /เงินเดือน|ค่าจ้าง|ค่าตอบแทน/.test(tc.exp.name);
+  const trig=h.triggers||[];
+  if(trig.includes('cash')||trig.includes('ni'))
+    rec.push('เร่งปิด gap รายได้: ตรวจ claim ค้าง/ถูกปฏิเสธ, coding/DRG, เร่งรัดลูกหนี้ค้างจ่าย');
+  if(isPersonnel && (trig.includes('ni')||h.nwc<0))
+    rec.push('Lean จัดกำลังคนตามภาระงานจริง คุมสัดส่วนค่าใช้จ่ายบุคลากรต่อรายได้ไม่เกิน 50-60%');
+  if(trig.includes('qr'))
+    rec.push('ทำ Lean Inventory / เข้าร่วมจัดซื้อร่วมระดับเขต ลด safety stock ยา-เวชภัณฑ์');
+  if((trig.includes('cr')||h.nwc<0) && !isPersonnel)
+    rec.push('คุมสภาพคล่องผ่านสัปดาห์ แยกงบลงทุนออกจากเงินหมุนเวียน รักษาวินัยแผนเงินบำรุง/Planfin');
+  if(h.ebitda!=null && h.ebitda<0 && !rec.length)
+    rec.push('ทำ EBITDA recovery plan: เพิ่มรายได้ที่เรียกเก็บได้จริง ลดต้นทุนที่ไม่กระทบบริการ');
+  if(!rec.length) rec.push('ติดตามต่อเนื่อง ยังอยู่ในเกณฑ์ควบคุมได้');
+  return rec.slice(0,2);
+}
+
+function renderWatchlist(){
+  const rows=SUMMARY.hospitals.filter(h=>(h.risk||0)>=6).sort((a,b)=>(b.risk||0)-(a.risk||0));
+  document.getElementById('right').innerHTML=`
+  <div class="dwrap" style="max-width:1200px">
+    <div class="dhead">
+      <h2>🚨 Watchlist — โรงพยาบาลวิกฤต 6-7 คะแนน</h2>
+      <span class="meta">งวด ${SUMMARY.periodLabel} ${SUMMARY.period} · ${rows.length} แห่ง จาก ${SUMMARY.nHosp}</span>
+    </div>
+    <div class="note">คลิกแถวเพื่อดูรายละเอียดสาเหตุเต็มรูปแบบ (เทรนด์/waterfall/บัญชี GL) ของ รพ.นั้น</div>
+    <div class="panel">
+      <div class="acctbl-wrap" style="max-height:none">
+        <table class="wltbl">
+          <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>Risk</th><th>Cash<br>ratio</th><th>เงินบำรุง<br>สุทธิ</th><th>สาเหตุ/ประเด็นชี้ปัญหา</th><th>คำแนะนำเฉพาะ รพ.</th></tr>
+          ${rows.map(h=>`<tr class="click" onclick="location.hash='h/${h.hcode}'">
+            <td>${h.prov||''}</td>
+            <td><b>${h.name}</b><div class="note">${h.typeSer||''}${h.bed?' · '+h.bed+' เตียง':''}${h.grp?' · '+h.grp:''}</div></td>
+            <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk}</span></td>
+            <td>${fmtR(h.cash)}</td>
+            <td style="color:${h.reserve<0?'var(--red)':'var(--ink)'}">${fmtM(h.reserve)}</td>
+            <td><ul class="bullets">${causeBullets(h).map(b=>`<li>${b}</li>`).join('')}</ul></td>
+            <td><ul class="bullets">${recommendFor(h).map(r=>`<li>${r}</li>`).join('')}</ul></td>
+          </tr>`).join('')}
+        </table>
+      </div>
+      ${!rows.length?'<div class="note" style="padding:10px">ไม่มี รพ. ที่ Risk Score ≥ 6 ในงวดนี้ 🎉</div>':''}
+    </div>
+    ${refPanelHtml()}
+  </div>`;
+}
+
+// ── Reference Panel: กรอบ 4 เสาหลัก + ข้อเสนอเชิงระบบ 3 ระดับ ───────────
+// เนื้อหาจาก "เขตฯ - การที่จะนำพาให้โรงพยาบาล ไม่ติด 7.docx" — ยุทธศาสตร์ร่วมทั้งองค์กร
+function refPanelHtml(){
+  return `<details class="refpanel">
+    <summary>📖 กรอบยุทธศาสตร์ 4 เสาหลัก + ข้อเสนอเชิงระบบ (ไม่ให้ติดวิกฤต 7)</summary>
+    <div class="refbody">
+      <p class="note" style="margin-bottom:10px">เป้าหมาย: ดัน CR≥1.5, QR≥1, CashR≥0.8 และล็อก NWC กับ NI ให้เป็นบวกพร้อมกัน (เข้าเกณฑ์ 0 คะแนนความเสี่ยงทันที)</p>
+      <div class="pillar-grid">
+        <div class="pillar-card"><h4>1. รายได้และงานประกัน — "คีย์ครบ เคลมไว ตรวจสอบเข้ม"</h4>
+          <ul><li>ตั้งทีม Audit หน้างานเชิงรุก (Pre-audit เวชระเบียนก่อนส่งเคลม)</li>
+          <li>เพิ่มคุณภาพสรุปชาร์ต IPD ให้ Coder บันทึกรหัสถูกต้อง → เพิ่ม CMI/AdjRW</li>
+          <li>ระบบลูกหนี้เรียลไทม์ + Reconciliation กับ Statement กองทุน</li></ul></div>
+        <div class="pillar-card"><h4>2. เจ้าหนี้และต้นทุนบุคลากร — "Lean จัดกำลังตามภาระงานจริง"</h4>
+          <ul><li>ใช้ Workload Data จัดเวร OT แบบ Dynamic แทน Fixed</li>
+          <li>คุมค่าใช้จ่ายบุคลากรไม่เกิน 50-60% ของรายได้หลัก</li></ul></div>
+        <div class="pillar-card"><h4>3. บริหารคลังและพัสดุ — "คลัง Lean ด้วยการซื้อร่วม"</h4>
+          <ul><li>จัดซื้อร่วมระดับจังหวัด/เขต + ขยาย Credit Term 90-120 วัน</li>
+          <li>Lean Inventory ลด Safety Stock + VMI สำหรับยาเคลื่อนไหวช้า</li></ul></div>
+        <div class="pillar-card"><h4>4. วินัยการเงินและการลงทุน — "ห้ามเอาเงินหมุนไปสร้างตึก"</h4>
+          <ul><li>แยกกระเป๋างบลงทุนออกจากเงินหมุนเวียนเด็ดขาด (CR จะหักงบลงทุนออกอัตโนมัติ)</li>
+          <li>ของใหญ่พึ่งงบประมาณ/เงินบริจาค ไม่ดึงเงินบำรุงรายวัน</li></ul></div>
+      </div>
+      <h4 style="font-size:13px;margin-bottom:8px">ข้อเสนอเชิงระบบ 3 ระดับ × ระยะเวลา</h4>
+      <div style="overflow-x:auto">
+      <table class="systbl">
+        <tr><th style="width:12%">ระดับ</th><th style="width:44%">ระยะ 1-3 เดือน</th><th style="width:44%">ระยะ 1 ปี</th></tr>
+        <tr><td><b>โรงพยาบาล</b></td>
+          <td><ul><li>ตั้ง War room การเงินรายสัปดาห์ ทำ 13-week cashflow แยกเจ้าหนี้/ลูกหนี้/เงินสด</li>
+              <li>เคลียร์ claim ค้างและ claim ถูกปฏิเสธ แยก UC-CS-SS-EMS พร้อมเจ้าของงานและ target รายสัปดาห์</li>
+              <li>ตั้งเพดานรายจ่าย 90 วัน: ยา วัสดุเวชภัณฑ์ จ้างเหมาบริการ OT/ค่าตอบแทน</li>
+              <li>ทบทวน Planfin รายเดือน: variance >5% ต้องมี action และผู้รับผิดชอบ</li></ul></td>
+          <td><ul><li>ทำ Service line P&L/Unit cost รายบริการ ปรับโครงสร้างต้นทุนตามภาระบริการจริง</li>
+              <li>ระบบ inventory management เป้า stock 30-45 วัน + จัดซื้อร่วม</li>
+              <li>พัฒนาคุณภาพ coding/DRG/CMI ตั้งแต่หน้างานถึงการเคลม</li>
+              <li>ปรับ productivity เทียบบุคลากร-บริการตามระดับบริการและเครือข่ายส่งต่อ</li></ul></td></tr>
+        <tr><td><b>จังหวัด</b></td>
+          <td><ul><li>จัดทีมจังหวัดลงตรวจบัญชีลูกหนี้/เจ้าหนี้ รายการค่าใช้จ่ายสูงผิดปกติใน รพ. Risk 7 ก่อน</li>
+              <li>ทำ liquidity support แบบมีเงื่อนไขสำหรับ รพ. NWC ติดลบ/EBITDA ติดลบ พร้อมแผนคืนเงิน</li>
+              <li>ประชุม CFO จังหวัดทุก 2 สัปดาห์ ติดตาม Cash ratio, NWC, EBITDA, claim backlog</li></ul></td>
+          <td><ul><li>ทำแผนเครือข่ายบริการจังหวัด ลดบริการซ้ำซ้อน เพิ่มการรับกลับ/ส่งต่อที่คุ้มค่า</li>
+              <li>ตั้ง benchmark ต้นทุนตามกลุ่ม รพ. และแผนลดส่วนเกินรายหมวด</li>
+              <li>พัฒนา shared coding/claim audit team ระดับจังหวัด</li>
+              <li>ตั้ง provincial early-warning dashboard ก่อนเข้า Risk 6-7</li></ul></td></tr>
+        <tr><td><b>เขตสุขภาพ</b></td>
+          <td><ul><li>ตั้งรายชื่อ watchlist เขต: Risk 7 + Cash <0.5 + EBITDA ติดลบ ให้ช่วยเหลือก่อน</li>
+              <li>สนับสนุนทีมผู้เชี่ยวชาญพื้นที่ รพ. กลุ่มเงินบำรุงติดลบสูง</li>
+              <li>พิจารณาเขตช่วยพยุงสภาพคล่องเฉพาะ รพ. ที่มีมาตรการลดต้นทุน/เพิ่มรายได้ชัดเจน</li></ul></td>
+          <td><ul><li>ออกแบบกลไกจัดสรร/ช่วยเหลือที่คำนึงถึงพื้นที่ ภาระบริการ ต้นทุน และ productivity</li>
+              <li>จัดระบบ procurement/warehouse ร่วมบางรายการระดับเขตเพื่อลดต้นทุนสูงกว่าค่ากลาง</li>
+              <li>จัดทำ peer review รายกลุ่มบริการ M1/M2/F1/F2 ทุกไตรมาส</li>
+              <li>พัฒนาระบบข้อมูลเชื่อม TPS-Planfin-Unit cost-HDC เพื่อแก้ปัญหาก่อนเกิดวิกฤต</li></ul></td></tr>
+      </table>
+      </div>
+    </div>
+  </details>`;
+}
+
 function narrative(s, h){
   const trig=s.triggers||[];
   const TRIG_TH={cr:'Current Ratio',qr:'Quick Ratio',cash:'Cash Ratio',nwc:'เงินทุนหมุนเวียนสุทธิติดลบ',ni:'ขาดทุนสะสม',survival:'ระยะเวลาอยู่รอดสั้น'};
@@ -282,8 +432,9 @@ function renderDetail(hcode){
 
   document.getElementById('right').innerHTML = `
   <div class="dwrap">
+    <a class="backlink" onclick="location.hash=''">← กลับไป Watchlist ทั้งเขต</a>
     <div class="dhead">
-      <h2>${h.name} <span style="font-size:13px;color:var(--mut);font-weight:400">${h.prov||''} · ${h.grp||''}</span></h2>
+      <h2>${h.name} <span style="font-size:13px;color:var(--mut);font-weight:400">${h.prov||''} · ${h.grp||''}${h.typeSer?' · '+h.typeSer:''}${h.bed?' · '+h.bed+' เตียง':''}</span></h2>
       <span class="badge" style="background:${riskColor(s.risk)};font-size:16px;height:30px;min-width:34px">${s.risk??'-'}</span>
       <span class="meta">งวด ${h.periodLabel} ${h.period} ${s.source==='gl'?'· <b style="color:var(--gold)">คำนวณจาก GL (ยังไม่มีรายงานคะแนนทางการ)</b>':''}</span>
     </div>
@@ -341,6 +492,12 @@ function renderDetail(hcode){
       <h3>บัญชีที่ขยับแรงสุด (Top 20)</h3>
       <div class="acctbl-wrap"><table class="acctbl" id="acctbl"></table></div>
     </div>
+
+    <div class="panel">
+      <h3>ประสิทธิภาพการดำเนินงาน (7 Plus Efficiency Score)</h3>
+      <div class="src-note">📌 ที่มาข้อมูล: งบทดลอง ตามผัง RatioItemID ของกองเศรษฐกิจสุขภาพ — APP/ACP/Inventory ใช้ยอดคงเหลือเฉลี่ยต้น-ปลายงวด × จำนวนวันในเดือน (RatioID 260/261/262/263/264), Operating Margin/ROA ใช้ EBITDA และ NI ที่พิสูจน์ตรง 100% แล้วหารด้วยรายได้ค่ารักษา/สินทรัพย์รวม (RatioID 320/321) — เกณฑ์เป้าหมายจากชีท "7 Plus Efficiency Score"</div>
+      <div id="effBox"></div>
+    </div>
   </div>`;
 
   renderRatioChart(h);
@@ -350,6 +507,38 @@ function renderDetail(hcode){
   renderDecomp(h);
   renderWaterfall(h);
   renderTopAcc(h);
+  renderEfficiency(h, s);
+}
+
+// ── 7 Plus Efficiency Score ─────────────────────────────────
+function renderEfficiency(h, s){
+  const box=document.getElementById('effBox');
+  const t=h.trend[h.trend.length-1];
+  if(!t){box.innerHTML='<div class="note">ไม่มีข้อมูล</div>';return}
+  const peerGrp=(h.peer.grp||[]).slice(-1)[0]||{};
+  const cashLow = s && s.cash!=null && s.cash<0.8;
+  const rows=[
+    {label:'Operating Margin %', val:t.opMargin, unit:'%', thLabel:`≥ ค่ากลางกลุ่ม (${fmtR(peerGrp.opMargin_med)}%)`,
+     pass: t.opMargin!=null && peerGrp.opMargin_med!=null && t.opMargin>=peerGrp.opMargin_med},
+    {label:'Return on Asset (ROA) %', val:t.roa, unit:'%', thLabel:`≥ ค่ากลางกลุ่ม (${fmtR(peerGrp.roa_med)}%)`,
+     pass: t.roa!=null && peerGrp.roa_med!=null && t.roa>=peerGrp.roa_med},
+    {label:'Average Payment Period (ยา/เวชภัณฑ์)', val:t.app, unit:'วัน',
+     thLabel: cashLow?'≤ 180 วัน (สภาพคล่องต่ำ)':'≤ 90 วัน',
+     pass: t.app!=null && t.app<=(cashLow?180:90)},
+    {label:'Average Collection Period — UC', val:t.acpUc, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpUc!=null && t.acpUc<=60},
+    {label:'Average Collection Period — กรมบัญชีกลาง', val:t.acpCs, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpCs!=null && t.acpCs<=60},
+    {label:'Average Collection Period — ประกันสังคม', val:t.acpSs, unit:'วัน', thLabel:'≤ 90 วัน', pass: t.acpSs!=null && t.acpSs<=90},
+    {label:'Inventory Management (ยา/เวชภัณฑ์)', val:t.invDays, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.invDays!=null && t.invDays<=60},
+  ];
+  box.innerHTML=`<table class="eff-tbl">
+    <tr><th>ตัวชี้วัด</th><th>ค่าปัจจุบัน</th><th>เกณฑ์เป้าหมาย</th><th>ผล</th></tr>
+    ${rows.map(r=>`<tr>
+      <td>${r.label}</td>
+      <td>${r.val==null?'—':fmtR(r.val)+' '+r.unit}</td>
+      <td class="note">${r.thLabel}</td>
+      <td class="${r.val==null?'':(r.pass?'eff-pass':'eff-fail')}">${r.val==null?'—':(r.pass?'✓ ผ่าน':'✗ ไม่ผ่าน')}</td>
+    </tr>`).join('')}
+  </table>`;
 }
 
 function setRatioMetric(m){ratioMetric=m;renderDetail(CUR)}

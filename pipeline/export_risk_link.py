@@ -30,10 +30,16 @@ TOPN_ACC = 20
 HIST_N = 36  # จำนวนงวดล่าสุดที่เก็บใน trend/waterfall ราย รพ.
 
 # ---------- 1) โหลดผังสูตร + ชื่อบัญชีจาก MySQL ----------
+# 26xx/2600Y ฯลฯ = "7 Plus Efficiency Score" (AP ยา/AR UC-CS-SS/Inventory/Operating Margin/ROA)
+# ตามชีท "7 Plus Efficiency Score" ใน รวมสูตร - พี่ตาล.xlsx — ไม่ผูกกับ Risk Score โดยตรง
+# แต่เป็นตัวชี้ประสิทธิภาพเสริมที่ นพ.วัฒนชัยขอ (ข้อมูลพื้นฐาน+ประสิทธิภาพการดำเนินงาน)
+EFF_IDS = ("2600X", "2600Y", "2610X", "2610Y", "2620X", "2620Y", "2630X", "2630Y",
+           "2640X", "2640Y", "3200Y", "3210Y")
 conn = pymysql.connect(host="localhost", user="root", db="rh1_health", charset="utf8mb4")
 items = pd.read_sql(
     "SELECT RatioItemID, CodeL1 FROM ratio_items WHERE UseYN='Yes' AND RatioItemID IN "
-    "('1001X','1001Y','1002X','1003X','1005X','1005Y','3006Y','3010X','3330X','3330Y')", conn)
+    "('1001X','1001Y','1002X','1003X','1005X','1005Y','3006Y','3010X','3330X','3330Y'," +
+    ",".join(f"'{x}'" for x in EFF_IDS) + ")", conn)
 acc_names = pd.read_sql("SELECT CodeL1, Account1, CodeL2, Name2 FROM acc_hierarchy", conn)
 rs = pd.read_sql(
     "SELECT hcode, time_id, cr, qr, cash, nwc, ni, li_score, st_score, su_score, "
@@ -55,19 +61,36 @@ orgs = {o["id"]: o for o in meta["orgs"]}
 for o in orgs.values():
     o["level"] = (o.get("grp") or "").split(" ")[0] or None
 
+# จำนวนเตียง — จาก รวมสูตร - พี่ตาล.xlsx (ไฟล์เดียวกับที่ใช้แบ่งกลุ่ม grp อยู่แล้ว ครบ 901/901 แถว)
+bed_df = pd.read_excel(r"D:\Hospital\รวมสูตรและหลักเกณฑ์ต่างๆ\รวมสูตร - พี่ตาล.xlsx", sheet_name="รายชื่อ รพ")
+bed_df = bed_df[bed_df["Ket"] == 1].copy()
+bed_df["org5"] = bed_df["OrgID"].astype(int).astype(str).str.zfill(5)
+bed_map = bed_df.set_index("org5")["Bed"].to_dict()
+type_map = bed_df.set_index("org5")["TypeSer"].to_dict()
+for k, o in orgs.items():
+    o["bed"] = int(bed_map[k]) if k in bed_map and pd.notna(bed_map[k]) else None
+    o["typeSer"] = type_map.get(k)
+
 # ---------- 3) งบทดลอง → ค่า GL ราย รพ./งวด ----------
 def acc_root(acc):
     p, _, rest = acc.partition(".")
     digits = rest.replace(".", "")
     return p + "." + digits[:3] if digits else acc
 
-m = pd.read_parquet(MASTER, columns=["org5", "t", "acc", "bs"])
+m = pd.read_parquet(MASTER, columns=["org5", "t", "acc", "bs", "inc"])
 m = m[m["org5"].isin(orgs.keys())].copy()
 m["root"] = m["acc"].map(acc_root)
 
+# HowTo='Sum,Cr' (เช่น 2600Y เจ้าหนี้การค้ารวม) ต้องรวมยอดด้าน Cr ดิบ ไม่ใช่ยอดสุทธิ (bs)
+# — คอลัมน์ 'inc' ใน master.parquet คือด้านเพิ่มตามธรรมชาติบัญชีอยู่แล้ว (Cr สำหรับหมวด 2/3/4)
+SUM_CR_IDS = {"2600Y"}
+# HowTo='Avg' (X-side ของ AP/AR/Inventory) ต้องเฉลี่ยยอดคงเหลือต้นงวด-ปลายงวด
+AVG_END_IDS = {"2600X", "2610X", "2620X", "2630X", "2640X"}
+
 agg = {}
 for k, codes in code_sets.items():
-    agg[k] = m[m["root"].isin(codes)].groupby(["org5", "t"])["bs"].sum()
+    col = "inc" if k in SUM_CR_IDS else "bs"
+    agg[k] = m[m["root"].isin(codes)].groupby(["org5", "t"])[col].sum()
 gl = pd.DataFrame(agg).fillna(0.0).reset_index()
 gl["cr_gl"]  = gl["1001X"] / gl["1001Y"].where(gl["1001Y"] != 0)
 gl["qr_gl"]  = gl["1002X"] / gl["1001Y"].where(gl["1001Y"] != 0)
@@ -77,13 +100,56 @@ gl["ni_gl"]  = gl["3006Y"] - gl["3010X"]
 gl["ebitda_gl"] = gl["3330X"] - gl["3330Y"]
 gl["reserve_gl"] = gl["1005X"] - gl["1005Y"]
 
+# ---------- 3b) เฉลี่ยยอดคงเหลือต้น-ปลายงวด (Avg) สำหรับ AP/AR/Inventory ----------
+gl = gl.sort_values(["org5", "t"]).reset_index(drop=True)
+for k in AVG_END_IDS:
+    prev = gl.groupby("org5")[k].shift(1)
+    gl[k + "_avg"] = np.where(prev.isna(), gl[k], (gl[k] + prev) / 2)
+
+# ---------- 3c) 7 Plus Efficiency Score: APP/ACP/Inventory (วัน) + Operating Margin/ROA (%) ----------
+def days_in_period(t):
+    """จำนวนวันตามปฏิทินของเดือนงวด (ต.ค.=1..ก.ย.=12) — ไม่ปรับปีอธิกสุรทิน (ผลกระทบเล็กน้อยต่อ ก.พ.)"""
+    m_ = t % 100
+    cal_month = m_ + 9 if m_ <= 3 else m_ - 3   # 1(ต.ค.)->10, ... 4(ม.ค.)->1, ... 12(ก.ย.)->9
+    return [31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30][cal_month - 1]
+
+days = gl["t"].map(days_in_period)
+gl["app_gl"]    = (gl["2600X_avg"] / gl["2600Y"].where(gl["2600Y"] != 0)) * days
+gl["acpUc_gl"]  = (gl["2610X_avg"] / gl["2610Y"].where(gl["2610Y"] != 0)) * days
+gl["acpCs_gl"]  = (gl["2620X_avg"] / gl["2620Y"].where(gl["2620Y"] != 0)) * days
+gl["acpSs_gl"]  = (gl["2630X_avg"] / gl["2630Y"].where(gl["2630Y"] != 0)) * days
+gl["invDays_gl"] = (gl["2640X_avg"] / gl["2640Y"].where(gl["2640Y"] != 0)) * days
+# หมายเหตุ: 3200X/3210X ใน ratio_items รวมบัญชีรายได้(หมวด4)+ค่าใช้จ่าย(หมวด5) ปนกันเป็น
+# RatioItemID เดียว (Rate=1 ทั้งคู่ ไม่มีตัวคูณแยกส่วน) หาก sum ตรงๆ จะเป็นการ "บวก" ไม่ใช่ "ลบ"
+# ทำให้ EBITDA/NI เพี้ยน — ใช้ ebitda_gl/ni_gl ที่คำนวณแยกฝั่งแล้วพิสูจน์ตรง 100% แทน
+gl["opMargin_gl"] = (gl["ebitda_gl"] / gl["3200Y"].where(gl["3200Y"] != 0)) * 100
+gl["roa_gl"]      = (gl["ni_gl"] / gl["3210Y"].where(gl["3210Y"] != 0)) * 100
+
 # LI/ST คำนวณจากเกณฑ์ที่ยืนยันแล้ว (ตรง 100% กับรายงานจริง) — ใช้เป็น fallback + ใช้โชว์ trigger เสมอ
 month_of = gl["t"] % 100
 gl["li_gl"] = (gl["cr_gl"] < 1.5).astype(int) + (gl["qr_gl"] < 1.0).astype(int) + (gl["cash_gl"] < 0.8).astype(int)
 gl["st_gl"] = (gl["nwc_gl"] < 0).astype(int) + (gl["ni_gl"] < 0).astype(int)
-ani = (gl["ni_gl"].abs() / month_of.where(month_of > 0, 1))
-surv = gl["nwc_gl"] / ani.where(ani != 0)
-gl["su_gl"] = np.where(gl["ni_gl"] >= 0, 0, np.where(surv < 3, 2, np.where(surv < 6, 1, 0)))
+
+# SU (Survival Index) — สูตรทางการฉบับเต็ม 4 quadrant (ยืนยันจากชีท "7 Risk Scoring plus"
+# ใน รวมสูตร - พี่ตาล.xlsx, พิสูจน์กับข้อมูลจริง 3,398 รพ.-งวด ตรง 99.3% — เหลือคลาดเฉพาะงวด ก.ย.
+# ที่มีปัญหางวดปรับปรุงบัญชีอยู่แล้ว (ดู caveat ข้อ 1 ใน RISK_BS_LINK_DESIGN.md):
+#   NWC>=0 & NI>=0  → SU=0 (ปลอดภัย)
+#   NWC<0  & NI<0   → SU=2 (แย่สุด)
+#   NWC>=0 & NI<0   → เวลาที่ NWC จะหมด = NWC/(|NI|/เดือน)  → <3mo:2, 3-6mo:1, >=6mo:0
+#   NWC<0  & NI>0   → เวลาที่กำไรจะดัน NWC กลับบวก = |NWC|/(NI/เดือน) → <3mo:0, 3-6mo:1, >=6mo:2
+m_safe = month_of.where(month_of > 0, 12)
+ani_loss = gl["ni_gl"].abs() / m_safe
+surv_deplete = gl["nwc_gl"] / ani_loss.where(ani_loss != 0)
+ani_profit = gl["ni_gl"] / m_safe
+surv_recover = (-gl["nwc_gl"]) / ani_profit.where(ani_profit != 0)
+
+nwc_pos, ni_pos = gl["nwc_gl"] >= 0, gl["ni_gl"] >= 0
+gl["su_gl"] = np.select(
+    [nwc_pos & ni_pos, ~nwc_pos & ~ni_pos, nwc_pos & ~ni_pos, ~nwc_pos & ni_pos],
+    [0, 2,
+     np.where(surv_deplete < 3, 2, np.where(surv_deplete < 6, 1, 0)),
+     np.where(surv_recover < 3, 0, np.where(surv_recover < 6, 1, 2))],
+    default=0)
 gl["risk_gl"] = gl["li_gl"] + gl["st_gl"] + gl["su_gl"]
 
 # ---------- 4) รวมค่า "รายงานจริง" (ใช้ก่อน) กับ GL (fallback) ----------
@@ -104,6 +170,10 @@ for rep, glc, out in [("li_score", "li_gl", "li"), ("st_score", "st_gl", "st"),
                        ("su_score", "su_gl", "su"), ("risk_score", "risk_gl", "risk")]:
     coalesce(rep, glc, out, j)
 
+# 7 Plus Efficiency Score — คำนวณจาก GL เสมอ (ไม่มีค่า "รายงานจริง" คู่กันใน risk_scores)
+for col in ("app", "acpUc", "acpCs", "acpSs", "invDays", "opMargin", "roa"):
+    j[col] = j[col + "_gl"]
+
 j = j.sort_values(["org5", "t"]).reset_index(drop=True)
 
 # ---------- 5) peer percentile ต่องวด (grp / level / prov) ----------
@@ -112,7 +182,7 @@ j["grp"] = j["org5"].map(lambda o: orgs.get(o, {}).get("grp"))
 j["level"] = j["org5"].map(lambda o: orgs.get(o, {}).get("level"))
 
 def peer_stats(dim):
-    g = j.groupby([dim, "t"])[["cr", "qr", "cash"]]
+    g = j.groupby([dim, "t"])[["cr", "qr", "cash", "opMargin", "roa"]]
     q = g.quantile([0.25, 0.5, 0.75]).unstack()
     q.columns = [f"{c}_{int(p*100)}" for c, p in q.columns]
     return q.reset_index()
@@ -143,23 +213,19 @@ for o, r in latest.iterrows():
     org = orgs.get(o, {})
     summary_rows.append({
         "hcode": o, "name": org.get("name", o), "prov": org.get("prov"), "grp": org.get("grp"),
-        "level": org.get("level"),
+        "level": org.get("level"), "bed": org.get("bed"), "typeSer": org.get("typeSer"),
         "risk": rnd(r["risk"], 0), "li": rnd(r["li"], 0), "st": rnd(r["st"], 0), "su": rnd(r["su"], 0),
         "riskPrev3": rnd(prev3.get(o), 0),
         "cr": rnd(r["cr"]), "qr": rnd(r["qr"]), "cash": rnd(r["cash"]),
         "nwc": rnd(r["nwc"], 0), "ni": rnd(r["ni"], 0), "ebitda": rnd(r["ebitda"], 0), "reserve": rnd(r["reserve"], 0),
         "triggers": triggers(r),
         "source": r["src_risk"],
+        "app": rnd(r["app"], 1), "acpUc": rnd(r["acpUc"], 1), "acpCs": rnd(r["acpCs"], 1),
+        "acpSs": rnd(r["acpSs"], 1), "invDays": rnd(r["invDays"], 1),
+        "opMargin": rnd(r["opMargin"], 1), "roa": rnd(r["roa"], 1),
     })
 summary_rows.sort(key=lambda x: (-(x["risk"] or 0), x["hcode"]))
-
-with open(os.path.join(OUT_DIR, "summary.json"), "w", encoding="utf-8") as f:
-    json.dump({
-        "period": T, "periodLabel": tlab(T), "periodPrev3": int(TPREV3),
-        "generated": pd.Timestamp.now().strftime("%Y-%m-%d"),
-        "nHosp": len(summary_rows), "hospitals": summary_rows,
-    }, f, ensure_ascii=False, separators=(",", ":"))
-print(f"WROTE {os.path.join(OUT_DIR, 'summary.json')} ({os.path.getsize(os.path.join(OUT_DIR, 'summary.json'))/1024:.1f} KB)")
+summary_by_org = {r["hcode"]: r for r in summary_rows}
 
 # ---------- 7) ราย รพ.: trend + decomposition + waterfall + topAccounts ----------
 CA_CODES  = code_sets["1001X"]
@@ -255,6 +321,9 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             "nwc": rnd(r["nwc"], 0), "ni": rnd(r["ni"], 0), "ebitda": rnd(r["ebitda"], 0),
             "reserve": rnd(r["reserve"], 0), "li": rnd(r["li"], 0), "st": rnd(r["st"], 0),
             "su": rnd(r["su"], 0), "risk": rnd(r["risk"], 0), "source": r["src_risk"],
+            "app": rnd(r["app"], 1), "acpUc": rnd(r["acpUc"], 1), "acpCs": rnd(r["acpCs"], 1),
+            "acpSs": rnd(r["acpSs"], 1), "invDays": rnd(r["invDays"], 1),
+            "opMargin": rnd(r["opMargin"], 1), "roa": rnd(r["roa"], 1),
         })
 
     org = orgs.get(org5, {})
@@ -269,7 +338,8 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             {"t": int(r["t"]),
              "cr_p25": rnd(r["cr_25"]), "cr_med": rnd(r["cr_50"]), "cr_p75": rnd(r["cr_75"]),
              "qr_p25": rnd(r["qr_25"]), "qr_med": rnd(r["qr_50"]), "qr_p75": rnd(r["qr_75"]),
-             "cash_p25": rnd(r["cash_25"]), "cash_med": rnd(r["cash_50"]), "cash_p75": rnd(r["cash_75"])}
+             "cash_p25": rnd(r["cash_25"]), "cash_med": rnd(r["cash_50"]), "cash_p75": rnd(r["cash_75"]),
+             "opMargin_med": rnd(r["opMargin_50"], 1), "roa_med": rnd(r["roa_50"], 1)}
             for _, r in sub.iterrows()
         ]
 
@@ -312,9 +382,21 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
         comboPL = sorted(acc_rev + acc_exp, key=lambda r: -abs(r["delta"]))[:TOPN_ACC]
         topaccPL[label] = {"baseT": int(base_t), "accounts": comboPL}
 
+    # เก็บ "สาเหตุหลัก" (top mover MoM ต่อหมวด) ไว้ใน summary.json ด้วย — ใช้ประกอบ Watchlist
+    # (ไม่ต้อง fetch ไฟล์ราย รพ. เพิ่มตอนแสดงตาราง Watchlist ทั้งเขต)
+    if org5 in summary_by_org and "mom" in wf:
+        top1 = lambda rows: (rows[0]["name"], rows[0]["delta"]) if rows else (None, None)
+        ca_n, ca_d = top1(wf["mom"]["ca"]); cl_n, cl_d = top1(wf["mom"]["cl"])
+        exp_n, exp_d = top1(wf["mom"]["exp"]); rev_n, rev_d = top1(wf["mom"]["rev"])
+        summary_by_org[org5]["topCause"] = {
+            "ca": {"name": ca_n, "delta": ca_d}, "cl": {"name": cl_n, "delta": cl_d},
+            "rev": {"name": rev_n, "delta": rev_d}, "exp": {"name": exp_n, "delta": exp_d},
+        }
+
     out = {
         "hcode": org5, "name": org.get("name"), "prov": org.get("prov"),
         "grp": org.get("grp"), "level": org.get("level"),
+        "bed": org.get("bed"), "typeSer": org.get("typeSer"),
         "period": int(tcur), "periodLabel": tlab(int(tcur)),
         "trend": trend, "peer": peer, "decomp": decomp, "waterfall": wf,
         "topAccounts": topacc, "topAccountsPL": topaccPL,
@@ -324,6 +406,14 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     if (idx + 1) % 20 == 0 or idx == len(orgs) - 1:
         print(f"  ... {idx+1}/{len(orgs)} รพ.")
+
+with open(os.path.join(OUT_DIR, "summary.json"), "w", encoding="utf-8") as f:
+    json.dump({
+        "period": T, "periodLabel": tlab(T), "periodPrev3": int(TPREV3),
+        "generated": pd.Timestamp.now().strftime("%Y-%m-%d"),
+        "nHosp": len(summary_rows), "hospitals": summary_rows,
+    }, f, ensure_ascii=False, separators=(",", ":"))
+print(f"WROTE {os.path.join(OUT_DIR, 'summary.json')} ({os.path.getsize(os.path.join(OUT_DIR, 'summary.json'))/1024:.1f} KB)")
 
 total = sum(os.path.getsize(os.path.join(dp, fn)) for dp, _, fs in os.walk(OUT_DIR) for fn in fs)
 print(f"\nWROTE {len(orgs)} ไฟล์ h/*.json | รวมขนาด docs/data/risk: {total/1024/1024:.2f} MB")
