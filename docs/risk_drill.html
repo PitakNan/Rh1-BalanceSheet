@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>สาเหตุวิกฤต — เขตสุขภาพที่ 1</title>
+<script>(function(){const t=localStorage.getItem('rh1-theme');if(t)document.documentElement.setAttribute('data-theme',t)})()</script>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--blue:#3b82f6;--gold:#d97706;--orange:#ea580c;--red:#dc2626;--green:#16a34a;
+  --hd1:#0f172a;--hd2:#1e293b;--th-bg:#f8fafc;--row-strip:#f1f5f9;--hover:#eff6ff;
+  --good-bg:#f0fdf4;--good-bd:#bbf7d0;--good-ink:#166534;
+  --bad-bg:#fef2f2;--bad-bd:#fecaca;--bad-ink:#991b1b;
+  --mid-bg:#eff6ff;--mid-bd:#bfdbfe;--mid-ink:#1e40af;
+  --shadow:rgba(0,0,0,.04)}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0f1115;--card:#181b21;--ink:#e6e9ef;--mut:#96a0b2;--line:#2a2f3a;--blue:#5b9dff;--gold:#e0a840;--orange:#fb923c;--red:#f0685f;--green:#4ade80;
+    --hd1:#0a0c10;--hd2:#151922;--th-bg:#1d2129;--row-strip:#1b1e25;--hover:#1c2635;
+    --good-bg:#112016;--good-bd:#1f4a2c;--good-ink:#5fd989;
+    --bad-bg:#2a1414;--bad-bd:#5a2222;--bad-ink:#f2a0a0;
+    --mid-bg:#131c2a;--mid-bd:#26426b;--mid-ink:#8fb8f0;
+    --shadow:rgba(0,0,0,.3)}
+}
+:root[data-theme="dark"]{--bg:#0f1115;--card:#181b21;--ink:#e6e9ef;--mut:#96a0b2;--line:#2a2f3a;--blue:#5b9dff;--gold:#e0a840;--orange:#fb923c;--red:#f0685f;--green:#4ade80;
+  --hd1:#0a0c10;--hd2:#151922;--th-bg:#1d2129;--row-strip:#1b1e25;--hover:#1c2635;
+  --good-bg:#112016;--good-bd:#1f4a2c;--good-ink:#5fd989;
+  --bad-bg:#2a1414;--bad-bd:#5a2222;--bad-ink:#f2a0a0;
+  --mid-bg:#131c2a;--mid-bd:#26426b;--mid-ink:#8fb8f0;
+  --shadow:rgba(0,0,0,.3)}
+:root[data-theme="light"]{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--blue:#3b82f6;--gold:#d97706;--orange:#ea580c;--red:#dc2626;--green:#16a34a;
+  --hd1:#0f172a;--hd2:#1e293b;--th-bg:#f8fafc;--row-strip:#f1f5f9;--hover:#eff6ff;
+  --good-bg:#f0fdf4;--good-bd:#bbf7d0;--good-ink:#166534;
+  --bad-bg:#fef2f2;--bad-bd:#fecaca;--bad-ink:#991b1b;
+  --mid-bg:#eff6ff;--mid-bd:#bfdbfe;--mid-ink:#1e40af;
+  --shadow:rgba(0,0,0,.04)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background .15s,color .15s}
+header{background:linear-gradient(135deg,var(--hd1) 0%,var(--hd2) 50%,var(--hd1) 100%);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex-shrink:0}
+header h1{font-size:16px;font-weight:700}
+header .sub{font-size:11.5px;color:#cbd5e1}
+#themeBtn{background:none;border:1px solid #ffffff33;color:#fff;border-radius:99px;width:30px;height:30px;font-size:14px;cursor:pointer;flex-shrink:0}
+#themeBtn:hover{background:#ffffff22}
+.main{display:flex;flex:1;overflow:hidden}
+/* LEFT: hospital list */
+.left{width:340px;min-width:260px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--card);flex-shrink:0}
+.lfilt{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.lfilt select,.lfilt input{font-family:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);width:100%}
+.lfilt .row{display:flex;gap:6px}
+.lfilt .row>*{flex:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font-family:inherit;font-size:11.5px;font-weight:600;padding:5px 8px;border:none;background:var(--card);color:var(--mut);cursor:pointer;flex:1}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.llist{flex:1;overflow-y:auto}
+.lrow{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--row-strip);cursor:pointer}
+.lrow:hover{background:var(--hover)}
+.lrow.actv{background:var(--mid-bg)}
+.lrow .rk{width:20px;font-size:11px;color:var(--mut);flex-shrink:0}
+.lrow .nm{flex:1;min-width:0}
+.lrow .nm .n1{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .nm .n2{font-size:10.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;border-radius:7px;font-size:12px;font-weight:700;color:#fff;padding:0 5px;flex-shrink:0}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:2px}
+.trend-arrow{font-size:11px;flex-shrink:0;width:16px;text-align:center}
+/* RIGHT: detail */
+.right{flex:1;overflow-y:auto;min-width:0}
+.hint-empty{padding:60px 20px;text-align:center;color:var(--mut);font-size:14px}
+.dwrap{max-width:980px;margin:0 auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.dhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dhead h2{font-size:18px;font-weight:700;flex:1;min-width:200px}
+.dhead .meta{font-size:12px;color:var(--mut)}
+#headline{padding:10px 14px;border-radius:10px;font-size:14px;font-weight:600;line-height:1.55}
+#headline.good{background:var(--good-bg);border:1px solid var(--good-bd);color:var(--good-ink)}
+#headline.bad{background:var(--bad-bg);border:1px solid var(--bad-bd);color:var(--bad-ink)}
+#headline.mid{background:var(--mid-bg);border:1px solid var(--mid-bd);color:var(--mid-ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:4px 11px;border-radius:99px;font-weight:600;border:1px solid var(--line);color:var(--mut);background:var(--card)}
+.chip.on{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--bad-ink)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.panel h3{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.panel h3::before{content:'';width:4px;height:16px;border-radius:99px;background:linear-gradient(180deg,#f59e0b,#d97706)}
+.panel h3 .sp{flex:1}
+.metric-tabs{display:flex;gap:4px}
+.mtab{font-family:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border:1px solid var(--line);border-radius:99px;background:var(--card);color:var(--mut);cursor:pointer}
+.mtab.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.peer-tabs{display:flex;gap:4px}
+.chartbox{position:relative;height:260px}
+.decomp-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.dcard .lbl{font-size:12px;color:var(--mut);font-weight:600}
+.dcard .tot{font-size:19px;font-weight:700;margin:4px 0}
+.dcard .brk{font-size:11.5px;color:var(--mut);display:flex;flex-direction:column;gap:2px}
+.dcard .brk b{font-variant-numeric:tabular-nums}
+@media(max-width:640px){.decomp-row{grid-template-columns:1fr}}
+.wf-toggle{display:flex;justify-content:flex-end;margin-bottom:8px}
+.wf-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:720px){.wf-cols{grid-template-columns:1fr}}
+.wf-title{font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.wf-row{padding:6px 0;border-bottom:1px solid var(--row-strip)}
+.wf-row .top{display:flex;justify-content:space-between;gap:8px;font-size:12.5px}
+.wf-row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.wf-row .dl{font-weight:700;white-space:nowrap}
+.wf-bar{height:5px;border-radius:3px;background:var(--row-strip);overflow:hidden;margin-top:3px;position:relative}
+.wf-bar>i{display:block;height:100%;border-radius:3px;position:absolute;top:0}
+table.acctbl{width:100%;border-collapse:collapse;font-size:12.5px}
+table.acctbl th{background:var(--th-bg);color:var(--mut);font-weight:600;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.acctbl th:nth-child(1),table.acctbl th:nth-child(2){text-align:left}
+table.acctbl td{padding:5px 8px;border-bottom:1px solid var(--row-strip);text-align:right;white-space:nowrap}
+table.acctbl td:nth-child(1),table.acctbl td:nth-child(2){text-align:left;white-space:normal}
+.clstag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px}
+.clstag.CA{background:var(--good-bg);color:var(--good-ink)}
+.clstag.CL{background:var(--bad-bg);color:var(--bad-ink)}
+.note{font-size:11.5px;color:var(--mut)}
+.acctbl-wrap{max-height:340px;overflow-y:auto}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔎 สาเหตุวิกฤต</h1>
+  <div class="sub">ไล่สาเหตุ Risk Score จากงบทดลอง — เขตสุขภาพที่ 1 · <span id="hPeriod">-</span> · <span id="hNHosp">-</span> รพ.</div>
+  <nav style="margin-left:auto;display:flex;gap:14px;font-size:13px;flex-wrap:wrap;align-items:center">
+    <a href="index.html" style="color:#cbd5e1;text-decoration:none">← Balance Sheet</a>
+    <a href="explorer.html" style="color:#fbbf24;text-decoration:none;font-weight:600">🔍 Explorer</a>
+    <a href="https://pitaknan.github.io/Risk-Score-Rh1/" target="_blank" style="color:#cbd5e1;text-decoration:none">🎯 Risk Score</a>
+    <button id="themeBtn" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">🌙</button>
+  </nav>
+</header>
+
+<div class="main">
+  <!-- LEFT -->
+  <div class="left">
+    <div class="lfilt">
+      <input id="qSearch" type="text" placeholder="ค้นหาชื่อ รพ. / จังหวัด..." oninput="renderList()">
+      <div class="row">
+        <select id="fLevel" onchange="renderList()"><option value="">ทุกระดับ</option></select>
+        <select id="fProv" onchange="renderList()"><option value="">ทุกจังหวัด</option></select>
+      </div>
+      <div class="seg">
+        <button id="sRisk" class="on" onclick="setSort('risk')">Risk สูงสุด</button>
+        <button id="sDelta" onclick="setSort('delta')">แย่ลงเร็วสุด</button>
+      </div>
+    </div>
+    <div class="llist" id="llist"></div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right" id="right">
+    <div class="hint-empty">เลือกโรงพยาบาลจากรายการซ้ายเพื่อดูรายละเอียดสาเหตุ</div>
+  </div>
+</div>
+
+<script>
+// ── โหมดมืด/สว่าง ─────────────────────────────────────────
+function isDarkNow(){const t=document.documentElement.getAttribute('data-theme');if(t)return t==='dark';return window.matchMedia('(prefers-color-scheme: dark)').matches}
+function syncThemeBtn(){document.getElementById('themeBtn').textContent=isDarkNow()?'☀️':'🌙'}
+function toggleTheme(){const next=isDarkNow()?'light':'dark';document.documentElement.setAttribute('data-theme',next);localStorage.setItem('rh1-theme',next);syncThemeBtn();if(CUR)renderDetail(CUR)}
+syncThemeBtn();
+
+// ── Config / State ──────────────────────────────────────────
+const D='data/risk/';
+let SUMMARY=null, CUR=null, HDATA=null;
+let sortMode='risk';
+let periodMode='mom';   // mom | yoy
+let ratioMetric='cr';   // cr | qr | cash
+let peerDim='grp';      // grp | level | prov
+let ratioChart=null;
+const H_CACHE={};
+
+const TH_M=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
+function tLab(t){return TH_M[t%100-1]+String(t).slice(2,4)}
+function fmtM(v){if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()}
+function fmtR(v){return v==null?'—':v.toFixed(2)}
+function riskColor(r){
+  if(r==null)return '#94a3b8';
+  if(r<=1)return getCss('--green'); if(r<=3)return getCss('--gold'); if(r<=5)return getCss('--orange'); return getCss('--red');
+}
+function getCss(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+
+// ── Init ──────────────────────────────────────────────────
+async function init(){
+  try{ SUMMARY = await fetch(D+'summary.json').then(r=>r.json()); }
+  catch(e){ document.getElementById('llist').innerHTML='<div style="padding:16px;color:var(--mut)">โหลดข้อมูลไม่ได้ — ยังไม่ได้รัน export_risk_link.py หรือ path ผิด</div>'; return; }
+
+  document.getElementById('hPeriod').textContent=SUMMARY.periodLabel+' '+SUMMARY.period;
+  document.getElementById('hNHosp').textContent=SUMMARY.nHosp;
+
+  const levels=[...new Set(SUMMARY.hospitals.map(h=>h.level).filter(Boolean))].sort();
+  const provs=[...new Set(SUMMARY.hospitals.map(h=>h.prov).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  const fL=document.getElementById('fLevel'), fP=document.getElementById('fProv');
+  for(const l of levels){const o=document.createElement('option');o.value=l;o.textContent=l;fL.appendChild(o)}
+  for(const p of provs){const o=document.createElement('option');o.value=p;o.textContent=p;fP.appendChild(o)}
+
+  renderList();
+
+  // deep link: #h/{hcode}
+  window.addEventListener('hashchange',applyHash);
+  applyHash();
+}
+
+function applyHash(){
+  const m=location.hash.match(/^#h\/(\w+)/);
+  if(m && SUMMARY.hospitals.find(h=>h.hcode===m[1])) selectHosp(m[1]);
+}
+
+// ── List (L0) ───────────────────────────────────────────────
+function setSort(s){sortMode=s;document.getElementById('sRisk').classList.toggle('on',s==='risk');document.getElementById('sDelta').classList.toggle('on',s==='delta');renderList()}
+
+function renderList(){
+  const q=document.getElementById('qSearch').value.trim().toLowerCase();
+  const lv=document.getElementById('fLevel').value, pv=document.getElementById('fProv').value;
+  let rows=SUMMARY.hospitals.filter(h=>
+    (!lv||h.level===lv)&&(!pv||h.prov===pv)&&
+    (!q||h.name.toLowerCase().includes(q)||(h.prov||'').toLowerCase().includes(q))
+  );
+  if(sortMode==='risk') rows=rows.slice().sort((a,b)=>(b.risk||0)-(a.risk||0));
+  else rows=rows.slice().sort((a,b)=>((b.risk||0)-(b.riskPrev3||0))-((a.risk||0)-(a.riskPrev3||0)));
+
+  document.getElementById('llist').innerHTML = rows.map((h,i)=>{
+    const d=(h.risk||0)-(h.riskPrev3??h.risk??0);
+    const arrow = d>0?`<span class="trend-arrow" style="color:var(--red)" title="แย่ลง ${d} จุด ใน 3 เดือน">▲</span>`
+                : d<0?`<span class="trend-arrow" style="color:var(--green)" title="ดีขึ้น ${-d} จุด ใน 3 เดือน">▼</span>`
+                : `<span class="trend-arrow" style="color:var(--mut)">–</span>`;
+    return `<div class="lrow${CUR===h.hcode?' actv':''}" onclick="location.hash='h/${h.hcode}'">
+      <span class="rk">${i+1}</span>
+      <span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span>
+      ${arrow}
+      <span class="nm"><span class="n1">${h.name}</span><span class="n2">${h.prov||''} · ${h.grp||''}</span></span>
+    </div>`;
+  }).join('') || '<div style="padding:16px;color:var(--mut)">ไม่พบโรงพยาบาล</div>';
+}
+
+// ── Select hospital → load detail (L1-L4) ───────────────────
+async function selectHosp(hcode){
+  CUR=hcode;
+  renderList();
+  document.getElementById('right').innerHTML='<div class="hint-empty">กำลังโหลด...</div>';
+  try{
+    if(!(hcode in H_CACHE)) H_CACHE[hcode]=await fetch(`${D}h/${hcode}.json`).then(r=>r.json());
+    HDATA=H_CACHE[hcode];
+  }catch(e){
+    document.getElementById('right').innerHTML='<div class="hint-empty">โหลดรายละเอียดของ รพ.นี้ไม่ได้</div>';
+    return;
+  }
+  ratioMetric='cr'; periodMode='mom';
+  renderDetail(hcode);
+}
+
+function summaryOf(hcode){ return SUMMARY.hospitals.find(h=>h.hcode===hcode) }
+
+function narrative(s, h){
+  const trig=s.triggers||[];
+  const TRIG_TH={cr:'Current Ratio',qr:'Quick Ratio',cash:'Cash Ratio',nwc:'เงินทุนหมุนเวียนสุทธิติดลบ',ni:'ขาดทุนสะสม',survival:'ระยะเวลาอยู่รอดสั้น'};
+  const d=(s.risk||0)-(s.riskPrev3??s.risk??0);
+  const trend = d>0?`แย่ลงจาก ${s.riskPrev3} เป็น ${s.risk} ใน 3 เดือน`:d<0?`ดีขึ้นจาก ${s.riskPrev3} เป็น ${s.risk} ใน 3 เดือน`:`คงที่ที่ ${s.risk} คะแนน มา 3 เดือน`;
+  let cause='';
+  const acc=(h.topAccounts[periodMode]||h.topAccounts.mom||{}).accounts||[];
+  if(acc.length){
+    const top=acc[0];
+    cause=` สาเหตุหลักที่ขยับแรงสุด: ${top.name} (${top.cls==='CA'?'สินทรัพย์':'หนี้สิน'}) เปลี่ยน ${top.delta>0?'+':''}${fmtM(top.delta)} บาท`;
+  }
+  const cls = (s.risk||0)>=6?'bad':(s.risk||0)>=3?'mid':'good';
+  const trigTxt = trig.length? `จุดที่พลาดเกณฑ์: ${trig.map(t=>TRIG_TH[t]||t).join(', ')}.` : 'ผ่านทุกเกณฑ์ในงวดนี้';
+  return {cls, text:`${h.name} ระดับความเสี่ยง ${s.risk??'-'}/7 (${trend}) — ${trigTxt}${cause}`};
+}
+
+function renderDetail(hcode){
+  const s=summaryOf(hcode), h=HDATA;
+  const nar=narrative(s,h);
+  const TRIGGERS=[
+    {k:'cr',label:`CR < 1.5 (${fmtR(s.cr)})`},
+    {k:'qr',label:`QR < 1.0 (${fmtR(s.qr)})`},
+    {k:'cash',label:`Cash < 0.8 (${fmtR(s.cash)})`},
+    {k:'nwc',label:`NWC ติดลบ (${fmtM(s.nwc)})`},
+    {k:'ni',label:`ขาดทุนสะสม (${fmtM(s.ni)})`},
+    {k:'survival',label:`อยู่รอด < 6 เดือน`},
+  ];
+  const trig=new Set(s.triggers||[]);
+
+  document.getElementById('right').innerHTML = `
+  <div class="dwrap">
+    <div class="dhead">
+      <h2>${h.name} <span style="font-size:13px;color:var(--mut);font-weight:400">${h.prov||''} · ${h.grp||''}</span></h2>
+      <span class="badge" style="background:${riskColor(s.risk)};font-size:16px;height:30px;min-width:34px">${s.risk??'-'}</span>
+      <span class="meta">งวด ${h.periodLabel} ${h.period} ${s.source==='gl'?'· <b style="color:var(--gold)">คำนวณจาก GL (ยังไม่มีรายงานคะแนนทางการ)</b>':''}</span>
+    </div>
+
+    <div id="headline" class="${nar.cls}">${nar.text}</div>
+
+    <div class="chips" id="chips">${TRIGGERS.map(t=>`<span class="chip${trig.has(t.k)?' on':''}">${trig.has(t.k)?'✗':'✓'} ${t.label}</span>`).join('')}</div>
+
+    <div class="panel">
+      <h3>เทรนด์ Ratio เทียบกลุ่มเปรียบเทียบ <span class="sp"></span>
+        <div class="metric-tabs">
+          <button class="mtab${ratioMetric==='cr'?' on':''}" onclick="setRatioMetric('cr')">Current Ratio</button>
+          <button class="mtab${ratioMetric==='qr'?' on':''}" onclick="setRatioMetric('qr')">Quick Ratio</button>
+          <button class="mtab${ratioMetric==='cash'?' on':''}" onclick="setRatioMetric('cash')">Cash Ratio</button>
+        </div>
+      </h3>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+        <div class="peer-tabs">
+          <button class="mtab${peerDim==='grp'?' on':''}" onclick="setPeerDim('grp')">กลุ่ม ${h.grp||''}</button>
+          <button class="mtab${peerDim==='level'?' on':''}" onclick="setPeerDim('level')">ระดับ ${h.level||''}</button>
+          <button class="mtab${peerDim==='prov'?' on':''}" onclick="setPeerDim('prov')">จังหวัด ${h.prov||''}</button>
+        </div>
+      </div>
+      <div class="chartbox"><canvas id="ratioChart"></canvas></div>
+      <div class="note">เส้นทึบ = รพ.นี้ · เส้นประ = median กลุ่ม · แถบเทา = ช่วง P25–P75 ของกลุ่ม</div>
+    </div>
+
+    <div class="panel">
+      <h3>ทำไม Ratio เปลี่ยน — แยกจากสินทรัพย์ (ตัวเศษ) หรือหนี้สิน (ตัวส่วน) <span class="sp"></span>
+        <div class="seg" style="width:160px"><button id="pdMom" class="${periodMode==='mom'?'on':''}" onclick="setPeriodMode('mom')">MoM</button><button id="pdYoy" class="${periodMode==='yoy'?'on':''}" onclick="setPeriodMode('yoy')">YoY</button></div>
+      </h3>
+      <div id="decompBox"></div>
+    </div>
+
+    <div class="panel">
+      <h3>หนี้สิน/สินทรัพย์ เปลี่ยนจากหมวดย่อยไหน (Waterfall)</h3>
+      <div id="wfBox"></div>
+    </div>
+
+    <div class="panel">
+      <h3>บัญชีที่ขยับแรงสุด (Top 20)</h3>
+      <div class="acctbl-wrap"><table class="acctbl" id="acctbl"></table></div>
+    </div>
+  </div>`;
+
+  renderRatioChart(h);
+  renderDecomp(h);
+  renderWaterfall(h);
+  renderTopAcc(h);
+}
+
+function setRatioMetric(m){ratioMetric=m;renderDetail(CUR)}
+function setPeerDim(d){peerDim=d;renderDetail(CUR)}
+function setPeriodMode(m){
+  periodMode=m;
+  document.getElementById('pdMom').classList.toggle('on',m==='mom');
+  document.getElementById('pdYoy').classList.toggle('on',m==='yoy');
+  renderDecomp(HDATA);renderWaterfall(HDATA);renderTopAcc(HDATA);
+}
+
+// ── L2: ratio trend + peer band ──────────────────────────────
+function renderRatioChart(h){
+  const ctx=document.getElementById('ratioChart');
+  const labels=h.trend.map(r=>tLab(r.t));
+  const own=h.trend.map(r=>r[ratioMetric]);
+  const peerSeries=h.peer[peerDim]||[];
+  const peerByT={}; for(const p of peerSeries) peerByT[p.t]=p;
+  const p25=h.trend.map(r=>{const p=peerByT[r.t];return p?p[ratioMetric+'_p25']:null});
+  const p75=h.trend.map(r=>{const p=peerByT[r.t];return p?p[ratioMetric+'_p75']:null});
+  const med=h.trend.map(r=>{const p=peerByT[r.t];return p?p[ratioMetric+'_med']:null});
+  const ink=getCss('--ink'), blue=getCss('--blue'), mut=getCss('--mut'), line=getCss('--line');
+
+  if(ratioChart) ratioChart.destroy();
+  ratioChart=new Chart(ctx,{
+    type:'line',
+    data:{labels, datasets:[
+      {label:'P75 กลุ่ม',data:p75,borderWidth:0,pointRadius:0,fill:false,order:3},
+      {label:'ช่วง P25–P75',data:p25,borderWidth:0,pointRadius:0,fill:'-1',backgroundColor:mut+'33',order:3},
+      {label:'Median กลุ่ม',data:med,borderColor:mut,borderDash:[4,4],borderWidth:1.5,pointRadius:0,fill:false,order:2},
+      {label:h.name,data:own,borderColor:blue,backgroundColor:blue,borderWidth:2.5,pointRadius:2,fill:false,order:1},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{font:{family:'Sarabun',size:11},color:ink},filter:it=>it.text!=='P75 กลุ่ม'}},
+      scales:{
+        x:{ticks:{font:{family:'Sarabun',size:10},color:mut,maxRotation:45},grid:{color:line}},
+        y:{ticks:{font:{size:10},color:mut},grid:{color:line}},
+      }
+    }
+  });
+}
+
+// ── L2b: decomposition ────────────────────────────────────────
+function renderDecomp(h){
+  const box=document.getElementById('decompBox');
+  const d=(h.decomp[periodMode])||null;
+  if(!d){box.innerHTML='<div class="note">ไม่มีข้อมูลงวดเปรียบเทียบ</div>';return}
+  const items=[['cr','Current Ratio'],['qr','Quick Ratio'],['cash','Cash Ratio']];
+  box.innerHTML=`<div class="note" style="margin-bottom:8px">เทียบกับงวด ${tLab(d.baseT)} ${d.baseT}</div>
+  <div class="decomp-row">${items.map(([k,label])=>{
+    const v=d[k];
+    if(!v)return `<div class="dcard"><div class="lbl">${label}</div><div class="note">ไม่มีข้อมูล</div></div>`;
+    const sign=x=>x>0?'+':'';
+    const col=x=>x>0?'var(--green)':x<0?'var(--red)':'var(--mut)';
+    return `<div class="dcard">
+      <div class="lbl">${label}</div>
+      <div class="tot" style="color:${col(v.total)}">${sign(v.total)}${v.total.toFixed(3)}</div>
+      <div class="brk">
+        <span>จากสินทรัพย์: <b style="color:${col(v.fromNumerator)}">${sign(v.fromNumerator)}${v.fromNumerator.toFixed(3)}</b></span>
+        <span>จากหนี้สิน: <b style="color:${col(v.fromDenominator)}">${sign(v.fromDenominator)}${v.fromDenominator.toFixed(3)}</b></span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── L3: waterfall by subgroup ──────────────────────────────────
+function wfRows(rows, cls){
+  const maxAbs=Math.max(1,...rows.map(r=>Math.abs(r.delta)));
+  return rows.slice(0,12).map(r=>{
+    const pos = cls==='CA' ? r.delta>0 : r.delta<0; // CA เพิ่ม=ดี(เขียว) / CL เพิ่ม=แย่(แดง)
+    const col = r.delta===0?'var(--mut)':(pos?'var(--green)':'var(--red)');
+    const w=Math.min(50,Math.abs(r.delta)/maxAbs*50);
+    return `<div class="wf-row">
+      <div class="top"><span class="nm" title="${r.name}">${r.name}</span><span class="dl" style="color:${col}">${r.delta>0?'+':''}${fmtM(r.delta)}</span></div>
+      <div class="wf-bar"><i style="width:${w}%;background:${col};${r.delta<0?'right:50%':'left:50%'}"></i></div>
+    </div>`;
+  }).join('') || '<div class="note">ไม่มีการเปลี่ยนแปลงมีนัยสำคัญ</div>';
+}
+function renderWaterfall(h){
+  const box=document.getElementById('wfBox');
+  const wf=h.waterfall[periodMode];
+  if(!wf){box.innerHTML='<div class="note">ไม่มีข้อมูลงวดเปรียบเทียบ</div>';return}
+  box.innerHTML=`<div class="wf-cols">
+    <div><div class="wf-title">สินทรัพย์หมุนเวียน (CA)</div>${wfRows(wf.ca,'CA')}</div>
+    <div><div class="wf-title">หนี้สินหมุนเวียน (CL)</div>${wfRows(wf.cl,'CL')}</div>
+  </div>`;
+}
+
+// ── L4: top accounts ─────────────────────────────────────────
+function renderTopAcc(h){
+  const tbl=document.getElementById('acctbl');
+  const t=h.topAccounts[periodMode];
+  if(!t || !t.accounts.length){tbl.innerHTML='<tr><td style="padding:10px;color:var(--mut)">ไม่มีข้อมูล</td></tr>';return}
+  tbl.innerHTML=`<tr><th>รหัส</th><th>ชื่อบัญชี</th><th>ประเภท</th><th>มูลค่าปัจจุบัน</th><th>Δ เปลี่ยนแปลง</th></tr>` +
+    t.accounts.map(a=>`<tr>
+      <td style="font-family:monospace;font-size:11.5px">${a.acc}</td>
+      <td>${a.name}</td>
+      <td><span class="clstag ${a.cls}">${a.cls}</span></td>
+      <td>${fmtM(a.value)}</td>
+      <td style="color:${a.delta>0?(a.cls==='CA'?'var(--green)':'var(--red)'):(a.cls==='CA'?'var(--red)':'var(--green)')};font-weight:700">${a.delta>0?'+':''}${fmtM(a.delta)}</td>
+    </tr>`).join('');
+}
+
+init();
+</script>
+</body>
+</html>
