@@ -38,6 +38,9 @@ if errorlevel 1 ( echo *** export ล้มเหลว *** & pause & exit /b 1 
 if exist pipeline\export_anomaly.py python pipeline\export_anomaly.py
 if exist pipeline\export_ratio_check.py python pipeline\export_ratio_check.py
 if exist pipeline\export_acc.py python pipeline\export_acc.py
+if exist pipeline\export_leaf13.py python pipeline\export_leaf13.py
+if exist pipeline\export_code13_prov.py python pipeline\export_code13_prov.py
+if exist pipeline\export_acc_names.py python pipeline\export_acc_names.py
 
 echo.
 echo [4/5] อัพเดตหน้า "สาเหตุวิกฤต" (risk_drill.html)...

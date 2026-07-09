@@ -6,46 +6,80 @@
 <title>Financial Explorer — เขตสุขภาพที่ 1</title>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>(function(){const t=localStorage.getItem('rh1-theme');if(t)document.documentElement.setAttribute('data-theme',t)})()</script>
 <style>
-:root{--ink:#1a202c;--sub:#374151;--mut:#6b7280;--line:#e5e7eb;--bg:#f3f4f6;--card:#fff;--accent:#2563eb;--green:#16a34a;--red:#dc2626}
+:root{--ink:#1a202c;--sub:#374151;--mut:#6b7280;--line:#e5e7eb;--bg:#f3f4f6;--card:#fff;--accent:#2563eb;--green:#16a34a;--red:#dc2626;
+  --hover-bg:#f3f4f6;--pill-on:#dcfce7;--shadow:rgba(0,0,0,.04);--hd:#1a202c;--hd-ink:#fff;--accent-bg:#eaf1ff}
+@media (prefers-color-scheme: dark){
+  :root{--ink:#e6e9ef;--sub:#c3cad6;--mut:#8b93a3;--line:#2a2f3a;--bg:#0f1115;--card:#181b21;--accent:#5b9dff;--green:#4ade80;--red:#f0685f;
+    --hover-bg:#1c2028;--pill-on:#13351f;--shadow:rgba(0,0,0,.3);--hd:#0a0c10;--hd-ink:#e6e9ef;--accent-bg:#152238}
+}
+:root[data-theme="dark"]{--ink:#e6e9ef;--sub:#c3cad6;--mut:#8b93a3;--line:#2a2f3a;--bg:#0f1115;--card:#181b21;--accent:#5b9dff;--green:#4ade80;--red:#f0685f;
+  --hover-bg:#1c2028;--pill-on:#13351f;--shadow:rgba(0,0,0,.3);--hd:#0a0c10;--hd-ink:#e6e9ef;--accent-bg:#152238}
+:root[data-theme="light"]{--ink:#1a202c;--sub:#374151;--mut:#6b7280;--line:#e5e7eb;--bg:#f3f4f6;--card:#fff;--accent:#2563eb;--green:#16a34a;--red:#dc2626;
+  --hover-bg:#f3f4f6;--pill-on:#dcfce7;--shadow:rgba(0,0,0,.04);--hd:#1a202c;--hd-ink:#fff;--accent-bg:#eaf1ff}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.hd{background:var(--ink);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background .15s,color .15s}
+.hd{background:var(--hd);color:var(--hd-ink);padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0}
 .hd h1{font-size:15px;font-weight:700;flex:1}
-.hd a{color:#9ca3af;font-size:12px;text-decoration:none}.hd a:hover{color:#fff}
+.hd a{color:#9ca3af;font-size:12px;text-decoration:none}.hd a:hover{color:var(--hd-ink)}
+#themeBtn{background:none;border:1px solid #80808055;color:var(--hd-ink);border-radius:99px;width:28px;height:28px;font-size:13px;cursor:pointer;flex-shrink:0}
+#themeBtn:hover{background:#80808033}
 .bar{background:var(--card);border-bottom:1px solid var(--line);padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
 .bar label{font-size:12px;color:var(--mut)}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seg button{font-family:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:none;background:#fff;color:var(--mut);cursor:pointer;transition:all .1s}
-.seg button.on{background:var(--ink);color:#fff}
-select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.seg button{font-family:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:none;background:var(--card);color:var(--mut);cursor:pointer;transition:all .1s}
+.seg button.on{background:var(--ink);color:var(--bg)}
+select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
 .main{display:flex;flex:1;overflow:hidden}
 /* LEFT */
 .left{width:400px;min-width:280px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--card);overflow-y:auto;flex-shrink:0}
 .bc{padding:8px 14px;font-size:12px;color:var(--mut);background:#f9fafb;border-bottom:1px solid var(--line);min-height:34px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .bc span{cursor:pointer}.bc span:hover{color:var(--accent);text-decoration:underline}
 .bc .sep{color:#d1d5db}
-#sunburst{width:100%;height:310px}
+.lvl-sel{padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.lvl-sel label{font-size:11px;color:var(--mut);margin-top:2px}
+.lvl-sel select{width:100%}
+.lvl-sel select:disabled{opacity:.5;cursor:not-allowed}
+.lvl-sel select:not(:disabled), #provPick{background:var(--accent-bg);border:1.5px solid var(--accent);color:var(--ink);font-weight:600}
+.lvl-row{display:flex;gap:4px;align-items:center}
+.lvl-row select{flex:1;min-width:0}
+.lvl-row .abtn{flex-shrink:0}
+.lvl-row .abtn:disabled{opacity:.4;cursor:not-allowed;background:var(--card);color:var(--mut);border-color:var(--line)}
 .sec{padding:10px 14px;border-top:1px solid var(--line)}
 .sec h3{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .gf-list{display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto}
 .gf-item{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;cursor:default}
-.gf-item:hover{background:#f3f4f6}
+.gf-item:hover{background:var(--hover-bg)}
 .gf-item .nm{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gf-item .vl{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}
-.abtn{font-family:inherit;font-size:11px;padding:2px 8px;border:1px solid var(--accent);border-radius:6px;background:#fff;color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0}
+.abtn{font-family:inherit;font-size:11px;padding:2px 8px;border:1px solid var(--accent);border-radius:6px;background:var(--card);color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0}
 .abtn:hover{background:var(--accent);color:#fff}
-.abtn.on{background:#dcfce7;border-color:var(--green);color:var(--green)}
+.abtn.on{background:var(--pill-on);border-color:var(--green);color:var(--green)}
 .acc-sec{padding:10px 14px;border-top:1px solid var(--line)}
 .acc-sec h3{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
-.acc-sec input{width:100%;font-family:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:6px}
+.acc-sec input{width:100%;font-family:inherit;font-size:13px;padding:5px 8px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent-bg);color:var(--ink);margin-bottom:6px}
 .acc-sec input:focus{outline:none;border-color:var(--accent)}
 .acc-res{max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
 .acc-item{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px}
-.acc-item:hover{background:#f3f4f6}
+.acc-item:hover{background:var(--hover-bg)}
 .acc-code{font-size:11px;font-family:monospace;color:var(--sub);flex-shrink:0}
 .acc-gfn{font-size:11px;color:var(--mut);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hint{font-size:12px;color:var(--mut);padding:4px 0}
+.rowchk{width:15px;height:15px;flex-shrink:0;cursor:pointer;accent-color:var(--accent)}
+.queue-bar{display:none;align-items:center;gap:8px;padding:6px;margin-top:6px;background:var(--pill-on);border-radius:8px;font-size:12px}
+.queue-bar span{flex:1;color:var(--green);font-weight:600}
+.unit-sec{padding:10px 14px;border-top:1px solid var(--line);background:var(--hover-bg)}
+.unit-sec .seg{width:100%}
+.unit-sec .seg button{flex:1}
+.unit-sec input{width:100%;font-family:inherit;font-size:13px;padding:5px 8px;border:1.5px solid var(--accent);border-radius:8px;background:var(--accent-bg);color:var(--ink);margin-bottom:2px}
+.unit-sec input:focus{outline:none;border-color:var(--accent)}
+.unit-sec .hint{padding-top:4px}
+.acc-group{border-bottom:1px dashed var(--line);padding-bottom:2px;margin-bottom:2px}
+.acc-group:last-child{border-bottom:none}
+.acc-grouphdr{font-weight:700}
+.acc-grouphdr .acc-gfn i{opacity:.7;font-style:normal;font-size:10px}
+.acc-children{padding-left:12px}
 /* RIGHT */
 .right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .sbar{padding:8px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--card);min-height:44px;flex-shrink:0}
@@ -62,6 +96,7 @@ select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(-
 
 <div class="hd">
   <h1>Financial Explorer — เขตสุขภาพที่ 1</h1>
+  <button id="themeBtn" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">🌙</button>
   <a href="index.html">← Balance Sheet</a>
 </div>
 
@@ -87,19 +122,61 @@ select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(-
 <div class="main">
   <!-- LEFT -->
   <div class="left">
+    <div class="unit-sec">
+      <label style="display:block;font-size:11px;color:var(--mut);margin-bottom:3px">1. เลือกหน่วยงานก่อน</label>
+      <div class="seg" id="scopeSeg">
+        <button id="scRegion" class="on" onclick="setScope('region')">ทั้งเขต</button>
+        <button id="scProv" onclick="setScope('province')">จังหวัด</button>
+        <button id="scHosp" onclick="setScope('hospital')">โรงพยาบาล</button>
+      </div>
+      <select id="provPick" onchange="pickProvince(this.value)" style="display:none;width:100%;margin-top:6px">
+        <option value="">— เลือกจังหวัด —</option>
+      </select>
+      <div id="hospPickWrap" style="display:none;margin-top:6px">
+        <input id="unitSearchIn" list="hospDatalist" type="text" placeholder="เลือกจากรายการ หรือพิมพ์ค้นหาชื่อ/จังหวัด..." oninput="onHospInput(this.value)" onfocus="onHospFocus()" onblur="onHospBlur()">
+        <datalist id="hospDatalist"></datalist>
+      </div>
+      <div class="hint" id="srcHint">กำลังแสดงบัญชีจากภาพรวมทั้งเขต — บางบัญชีอาจไม่มีจริงในบาง รพ. เมื่อเทียบ</div>
+    </div>
     <div class="bc" id="bc"><span onclick="drillTo(0)">ทั้งหมด</span></div>
-    <div id="sunburst"></div>
+    <div class="lvl-sel">
+      <label>2. งบการเงิน</label>
+      <div class="lvl-row">
+        <select id="selFin" onchange="onLvlChange('fin',this.value)"></select>
+        <button class="abtn" id="addFin" onclick="addLevelSeries(1)" disabled>+ เพิ่ม</button>
+      </div>
+      <label>3. หมวดบัญชี</label>
+      <div class="lvl-row">
+        <select id="selAccg" onchange="onLvlChange('accg',this.value)" disabled></select>
+        <button class="abtn" id="addAccg" onclick="addLevelSeries(2)" disabled>+ เพิ่ม</button>
+      </div>
+      <label>4. ประเภทย่อย</label>
+      <div class="lvl-row">
+        <select id="selSub" onchange="onLvlChange('sub',this.value)" disabled></select>
+        <button class="abtn" id="addSub" onclick="addLevelSeries(3)" disabled>+ เพิ่ม</button>
+      </div>
+      <label>5. งบประมาณ</label>
+      <div class="lvl-row">
+        <select id="selBudget" onchange="onLvlChange('budget',this.value)" disabled></select>
+        <button class="abtn" id="addBudget" onclick="addLevelSeries(4)" disabled>+ เพิ่ม</button>
+      </div>
+      <label>6. บัญชี 13 หลัก</label>
+      <select id="selCode13" onchange="onLvlCode13Change(this.value)" disabled></select>
+      <div class="hint" id="code13Hint" style="display:none">เลือกแล้วจะเพิ่มเข้ากราฟทันที สำหรับหน่วยงานที่เลือกไว้ด้านบน — ทำซ้ำได้เรื่อยๆ เปลี่ยนหน่วยงานแล้วเลือกบัญชีต่อได้</div>
+      <div class="hint">แต่ละชั้น (2-5) กดปุ่ม "+ เพิ่ม" ได้ทันทีเมื่อเลือกแล้ว — ไม่ต้องไล่ลึกจนถึงชั้นสุดท้าย</div>
+    </div>
     <div class="sec">
       <h3>
         <span id="gfLabel">กลุ่มบัญชี (GF)</span>
         <button class="abtn" id="addAllBtn" onclick="addAllGf()" style="display:none">+ ทั้งหมด</button>
       </h3>
-      <div class="gf-list" id="gfList"><div class="hint">คลิก Sunburst เพื่อดู GF items</div></div>
+      <div class="gf-list" id="gfList"><div class="hint">เลือกจากดรอปดาวน์ด้านบนเพื่อดู GF items</div></div>
     </div>
     <div class="acc-sec">
-      <h3>ค้นหารหัสบัญชี GL (ชั้น 6)</h3>
-      <input id="accIn" type="text" placeholder="พิมพ์รหัส 4+ หลัก เช่น 1101..." oninput="searchAcc(this.value)">
+      <h3 id="accSecTitle">ค้นหาบัญชี (13 หลัก จัดกลุ่มตามบัญชี 10 หลัก)</h3>
+      <input id="accIn" type="text" placeholder="พิมพ์รหัสบัญชี เช่น 1101 หรือ 1101010101.101" oninput="searchAcc(this.value)">
       <div class="acc-res" id="accRes"><div class="hint">พิมพ์รหัส 4 หลักขึ้นไป</div></div>
+      <div class="queue-bar" id="queueBar"></div>
     </div>
   </div>
 
@@ -121,6 +198,22 @@ select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(-
 </div>
 
 <script>
+// ── โหมดมืด/สว่าง ─────────────────────────────────────────
+function isDarkNow(){
+  const t=document.documentElement.getAttribute('data-theme');
+  if(t)return t==='dark';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function syncThemeBtn(){document.getElementById('themeBtn').textContent=isDarkNow()?'☀️':'🌙'}
+function toggleTheme(){
+  const next=isDarkNow()?'light':'dark';
+  document.documentElement.setAttribute('data-theme',next);
+  localStorage.setItem('rh1-theme',next);
+  syncThemeBtn();
+  renderChart();
+}
+syncThemeBtn();
+
 // ── Config ──────────────────────────────────────────────
 const D = 'data/';
 const ACCB = {}; // cache: bId → acc_region/b<bId>.json (ชั้น 6 static, แทน Supabase)
@@ -130,12 +223,22 @@ const MC  = {bs:'bs',inc:'inc',dec:'dec',endDr:'EndDr',endCr:'EndCr'};
 const ML  = {bs:'ยอดสุทธิ',endDr:'EndDr',endCr:'EndCr',inc:'Dr เพิ่ม',dec:'Cr ลด'};
 
 // ── State ────────────────────────────────────────────────
-let META, REGION, PROV_DATA, ACC_LIST;
-let sbChart, trendChart;
+let META, REGION, PROV_DATA, CODE13_LIST, CODE13_LIST_PROV, LEAF_LIST, REGION_ACC_NAMES, ACC_NAMES_PROV;
+let trendChart;
+const LEAFB = {}; // cache: org5 → leaf/<org5>.json (บัญชีย่อยที่สุดรายหน่วยบริการ)
+const CODE13B = {}; // cache: bId → code13_region/b<bId>.json (บัญชี 13 หลัก รวมทั้งเขต)
+const PROVC13B = {}; // cache: "<prov>|<bId>" → code13_prov/<prov>/b<bId>.json
+const PROVACCB = {}; // cache: "<prov>|<bId>" → acc_prov/<prov>/b<bId>.json
+const HOSPB = {}; // cache: bId → hosp/b<bId>.json (GF ระดับรายหน่วยบริการ)
+const ORGNAMES = {}; // cache: org5 → acc_names/<org5>.json (ชื่อบัญชีจริงตามที่ รพ.นั้นตั้งเอง)
 const ST = {
   metric:'bs', gran:'y', fy:null, avg:'none',
   fin:null, accg:null, sub:null, budget:null,
+  // หน่วยงานที่เลือกไว้ตอนนี้ — ต้องเลือกก่อนเสมอ แล้วค่อยเลือกบัญชี (ทำซ้ำได้ เปลี่ยนหน่วยงานแล้วเลือกบัญชีต่อได้)
+  unit:{scope:'region'}, // {scope:'region'} | {scope:'province',name} | {scope:'hospital',id,name}
   series:[],  // {id,label,color,type,gfIds,accPrefix,allM}
+  queue:[],   // {key,kind,code,gfId,label} — บัญชีที่ติ๊กไว้ (checkbox) รอกดเพิ่มทั้งหมด (สำหรับหน่วยงานที่เลือกไว้ตอนนี้)
+  rowPayload:{}, // id → payload สำหรับ toggleQueue (เติมตอน render ผลค้นหา)
 };
 
 // ── Init ─────────────────────────────────────────────────
@@ -159,20 +262,44 @@ async function init(){
   const fyEl = document.getElementById('fySelect');
   for (const fy of fys){const o=document.createElement('option');o.value=fy;o.textContent=`ปีงบ ${fy}`;fyEl.appendChild(o)}
   ST.fy = fys[0]; fyEl.value=ST.fy;
-  fyEl.onchange = ()=>{ST.fy=+fyEl.value;renderSB()};
+  fyEl.onchange = ()=>{ST.fy=+fyEl.value;renderLevelSelects()};
 
-  // Load acc_list if available
-  try { ACC_LIST = await fetch(D+'acc_list.json').then(r=>r.json()); } catch(e){ ACC_LIST=null; }
+  // จังหวัด dropdown (สำหรับเลือกหน่วยงาน = จังหวัด)
+  const provPickEl = document.getElementById('provPick');
+  const provs = [...new Set(META.orgs.map(o=>o.prov))].sort((a,b)=>a.localeCompare(b,'th'));
+  for (const p of provs){
+    const o=document.createElement('option'); o.value=p; o.textContent=p; provPickEl.appendChild(o);
+  }
 
-  // Load province data
+  // รายชื่อ รพ. ทั้งหมด (สำหรับเลือกหน่วยงาน = โรงพยาบาล) — datalist ให้เลือกจากรายการ (คลิกลูกศร) หรือพิมพ์ค้นหาก็ได้
+  // เรียงตามประเภท รพ. ก่อน (A,S,M1,M2,F1,F2,F3) แล้วค่อยเรียงชื่อภายในประเภทเดียวกัน
+  const hospDatalistEl = document.getElementById('hospDatalist');
+  const orgsSorted = [...META.orgs].sort((a,b)=>{
+    const ra=hospClassRank(a), rb=hospClassRank(b);
+    return ra!==rb ? ra-rb : a.name.localeCompare(b.name,'th');
+  });
+  for (const o of orgsSorted){
+    const opt=document.createElement('option'); opt.value=hospDisplayLabel(o); hospDatalistEl.appendChild(opt);
+  }
+
+  // Load code13_list if available (แคตตาล็อกบัญชี 13 หลักทั้งเขต — ใช้ค้นหา/จัดกลุ่ม)
+  try { CODE13_LIST = await fetch(D+'code13_list.json').then(r=>r.json()); } catch(e){ CODE13_LIST=null; }
+
+  // Load code13_list_prov (แคตตาล็อกบัญชี 13 หลักรายจังหวัด)
+  try { CODE13_LIST_PROV = await fetch(D+'code13_list_prov.json').then(r=>r.json()); } catch(e){ CODE13_LIST_PROV=null; }
+
+  // Load ชื่อบัญชีจริง (ที่พบบ่อยที่สุดข้ามทุก รพ. — ใช้กับมุมมองทั้งเขต / รายจังหวัด)
+  try { REGION_ACC_NAMES = await fetch(D+'acc_names_region.json').then(r=>r.json()); } catch(e){ REGION_ACC_NAMES=null; }
+  try { ACC_NAMES_PROV = await fetch(D+'acc_names_prov.json').then(r=>r.json()); } catch(e){ ACC_NAMES_PROV=null; }
+
+  // Load province data (GF ระดับจังหวัด — ใช้กับ Sunburst-เดิม/GF panel ตอนเลือกหน่วยงาน=จังหวัด)
   try { PROV_DATA = await fetch(D+'prov_gf.json').then(r=>r.json()); } catch(e){ PROV_DATA=null; }
 
-  // Charts
-  sbChart    = echarts.init(document.getElementById('sunburst'));
+  // Chart
   trendChart = echarts.init(document.getElementById('mainChart'));
-  window.addEventListener('resize',()=>{sbChart.resize();trendChart.resize()});
+  window.addEventListener('resize',()=>{trendChart.resize()});
 
-  renderSB();
+  renderLevelSelects();
   renderChart();
 }
 
@@ -215,10 +342,11 @@ function regionSeries(gfIds){
   return map;
 }
 
-// build allMetrics map for a gfId Set
-function regionAllMetrics(gfIds){
+// build allMetrics map for a gfId Set from any GF-level row array [gfId,t,bs,inc,dec,endDr,endCr]
+// (REGION ระดับเขต, PROV_DATA[prov] ระดับจังหวัด, HOSPB[bId][org5] ระดับ รพ. — รูปแบบแถวเดียวกันหมด)
+function allMetricsFromRows(rows, gfIds){
   const m={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
-  for(const r of REGION){
+  for(const r of rows){
     if(!gfIds.has(r[0]))continue;
     const t=r[1];
     m.bs.set(t,(m.bs.get(t)||0)+r[2]);
@@ -230,85 +358,401 @@ function regionAllMetrics(gfIds){
   return m;
 }
 
-// ── Sunburst ─────────────────────────────────────────────
-const SB_COL_FIN=['#3b82f6','#10b981'];
-const SB_COL_AG =['#60a5fa','#34d399','#f87171','#fbbf24','#a78bfa'];
-
-function buildSBData(){
-  const mi=MI[ST.metric], lp=latestPeriod(ST.fy);
-  const gfV=new Map();
-  for(const r of REGION) if(r[1]===lp) gfV.set(r[0],Math.abs(r[mi]));
-
-  const finMap=new Map();
-  for(const g of filteredGroups()){
-    if(!finMap.has(g.fin)) finMap.set(g.fin,new Map());
-    const agM=finMap.get(g.fin);
-    if(!agM.has(g.accg)) agM.set(g.accg,new Map());
-    const sgM=agM.get(g.accg);
-    if(!sgM.has(g.sub)) sgM.set(g.sub,new Map());
-    const bgM=sgM.get(g.sub);
-    if(!bgM.has(g.budget)) bgM.set(g.budget,[]);
-    bgM.get(g.budget).push(g.gfId);
+// id/label ของ series ระดับ GF ที่ขึ้นกับหน่วยงานที่เลือกไว้ตอนนี้ — กันชนกันเมื่อสลับหน่วยงานแล้วเพิ่ม GF เดียวกันซ้ำ
+function gfSeriesId(gfId){
+  const u=ST.unit;
+  if(u.scope==='province') return `gf-prov-${u.name}-${gfId}`;
+  if(u.scope==='hospital') return `gf-hosp-${u.id}-${gfId}`;
+  return `gf-${gfId}`;
+}
+function unitSuffixLabel(){
+  const u=ST.unit;
+  if(u.scope==='province') return u.name?` — ${u.name}`:'';
+  if(u.scope==='hospital') return u.name?` — ${u.name}`:'';
+  return '';
+}
+function unitSeriesType(){
+  const u=ST.unit;
+  if(u.scope==='province') return 'gfprov';
+  if(u.scope==='hospital') return 'gfhosp';
+  return 'gf';
+}
+// แถวข้อมูล GF ระดับที่ตรงกับหน่วยงานที่เลือกไว้ตอนนี้ (null = ยังโหลดไม่เสร็จ/ยังไม่ได้เลือกหน่วยงานให้ครบ)
+// รับ gfIds เป็น Set ได้หลายตัว (รวมหลาย GF พร้อมกัน — ใช้กับปุ่ม "+ เพิ่ม" ในทุกชั้นของดรอปดาวน์)
+async function unitRowsForGfIds(gfIds){
+  const u=ST.unit;
+  if(u.scope==='region') return REGION;
+  if(u.scope==='province'){
+    if(!u.name || !PROV_DATA) return null;
+    return PROV_DATA[u.name]||[];
   }
-
-  const data=[];let fi=0;
-  for(const[fin,agM]of finMap){
-    const fc=SB_COL_FIN[fi%2],fCh=[];let ai=0;
-    for(const[accg,sgM]of agM){
-      const ac=SB_COL_AG[ai%5],aCh=[];
-      for(const[sub,bgM]of sgM){
-        const sCh=[];
-        for(const[budget,gfIds]of bgM){
-          const val=gfIds.reduce((s,id)=>s+(gfV.get(id)||0),0);
-          if(val<=0)continue;
-          sCh.push({name:budget,value:val,gfIds,level:'budget',itemStyle:{color:ac+'88'}});
-        }
-        const sv=sCh.reduce((s,c)=>s+c.value,0);
-        if(sv<=0)continue;
-        aCh.push({name:sub,value:sv,level:'sub',itemStyle:{color:ac+'aa'},children:sCh});
+  if(u.scope==='hospital'){
+    if(!u.id) return null;
+    const bIds=new Set([...gfIds].map(id=>{const g=META.gfMap[id]; return g?g.bId:null;}).filter(b=>b!=null));
+    let rows=[];
+    for(const bId of bIds){
+      if(!(bId in HOSPB)){
+        try{ HOSPB[bId]=await fetch(`${D}hosp/b${bId}.json`).then(r=>r.json()); }
+        catch(e){ HOSPB[bId]=null; }
       }
-      const av=aCh.reduce((s,c)=>s+c.value,0);
-      if(av<=0)continue;
-      fCh.push({name:accg,value:av,level:'accg',itemStyle:{color:ac},children:aCh});
-      ai++;
+      if(HOSPB[bId] && HOSPB[bId][u.id]) rows=rows.concat(HOSPB[bId][u.id]);
     }
-    const fv=fCh.reduce((s,c)=>s+c.value,0);
-    if(fv<=0)continue;
-    data.push({name:fin,value:fv,level:'fin',itemStyle:{color:fc},children:fCh});
-    fi++;
+    return rows;
   }
-  return data;
+  return null;
+}
+async function gfSeriesRows(gfId){ return unitRowsForGfIds(new Set([gfId])); }
+
+// ── เพิ่มเข้ากราฟได้ตั้งแต่ชั้นแรก — ไม่ต้องไล่ลึกจนถึงบัญชี 13 หลักเสมอไป ────
+// depth: 1=งบการเงิน, 2=+หมวดบัญชี, 3=+ประเภทย่อย, 4=+งบประมาณ (รวมทุก GF ที่ตรงกับตัวกรองถึงชั้นนั้น)
+function levelGroupIds(depth){
+  if(depth>=1 && !ST.fin) return null;
+  if(depth>=2 && !ST.accg) return null;
+  if(depth>=3 && !ST.sub) return null;
+  if(depth>=4 && !ST.budget) return null;
+  const gs=META.groups.filter(g=>
+    (depth<1 || g.fin===ST.fin) && (depth<2 || g.accg===ST.accg) &&
+    (depth<3 || g.sub===ST.sub) && (depth<4 || g.budget===ST.budget)
+  );
+  return new Set(gs.map(g=>g.gfId));
+}
+function levelLabel(depth){
+  return [ST.fin,ST.accg,ST.sub,ST.budget].slice(0,depth).filter(Boolean).join(' › ');
+}
+function levelSeriesId(depth){
+  const key=[ST.fin,ST.accg,ST.sub,ST.budget].slice(0,depth).join('|');
+  const u=ST.unit;
+  if(u.scope==='province') return `lvl${depth}-${key}-prov-${u.name}`;
+  if(u.scope==='hospital') return `lvl${depth}-${key}-hosp-${u.id}`;
+  return `lvl${depth}-${key}`;
+}
+async function addLevelSeries(depth){
+  const gfIds=levelGroupIds(depth);
+  if(!gfIds || !gfIds.size) return;
+  const id=levelSeriesId(depth);
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);renderLevelSelects();return;}
+  const rows=await unitRowsForGfIds(gfIds);
+  if(rows==null){ alert('กรุณาเลือกหน่วยงานให้ครบก่อน (จังหวัด/รพ.)'); return; }
+  const label=levelLabel(depth)+unitSuffixLabel();
+  ST.series.push({id,label,color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),gfIds:[...gfIds],allM:allMetricsFromRows(rows,gfIds)});
+  renderChart();renderSbar();renderLevelSelects();
 }
 
-function renderSB(){
-  sbChart.setOption({
-    tooltip:{formatter:p=>`<b>${p.name}</b><br/>${ML[ST.metric]}: ${fmtM(p.value)}`},
-    series:[{
-      type:'sunburst',
-      data:buildSBData(),
-      radius:['12%','92%'],
-      sort:null,
-      emphasis:{focus:'ancestor'},
-      levels:[
-        {},
-        {r0:'12%',r:'32%',label:{rotate:'tangential',fontSize:10,color:'#fff'},itemStyle:{borderWidth:2}},
-        {r0:'32%',r:'55%',label:{rotate:'tangential',fontSize:9,color:'#fff'}},
-        {r0:'55%',r:'73%',label:{rotate:'tangential',fontSize:8,color:'#fff'}},
-        {r0:'73%',r:'92%',label:{show:false}},
-      ],
-    }],
-  },true);
+// ── หน่วยงาน (unit) ────────────────────────────────────────
+// หลักการ: เลือกหน่วยงานก่อนเสมอ (ทั้งเขต/ทั้งจังหวัด/รพ.เฉพาะ) แล้วค่อยเลือกบัญชีของหน่วยงานนั้น
+// ST.unit = {scope:'region'} | {scope:'province',name} | {scope:'hospital',id,name}
+function currentCatalog(){
+  const u=ST.unit;
+  if(u.scope==='region') return CODE13_LIST;
+  if(u.scope==='province'){
+    if(!u.name || !CODE13_LIST_PROV) return null;
+    return CODE13_LIST_PROV[u.name]||[];
+  }
+  if(u.scope==='hospital'){
+    if(!u.id || !LEAF_LIST) return null;
+    const list=LEAF_LIST[u.id]||[];
+    return list.filter(([c])=>/^\d{10}\.\d{3}$/.test(c));
+  }
+  return null;
+}
 
-  sbChart.off('click');
-  sbChart.on('click',p=>{
-    if(!p.data)return;
-    const d=p.data;
-    if(d.level==='fin')   {ST.fin=d.name;ST.accg=null;ST.sub=null;ST.budget=null;}
-    if(d.level==='accg')  {ST.accg=d.name;ST.sub=null;ST.budget=null;}
-    if(d.level==='sub')   {ST.sub=d.name;ST.budget=null;}
-    if(d.level==='budget'){ST.budget=d.name;}
-    updateBC();renderGF();
-  });
+// ชื่อบัญชีจริง — ของหน่วยงานที่เลือกถ้ามีข้อมูล มิฉะนั้น fallback ลงมาเป็นชื่อที่พบบ่อยที่สุดของจังหวัด/ทั้งเขต
+// คืนค่า null ถ้าไม่มีข้อมูลชื่อจริงเลย (ผู้เรียก fallback ไปใช้ชื่อกลุ่ม GF แทน)
+function realName(code){
+  const u=ST.unit;
+  if(u.scope==='hospital' && u.id && ORGNAMES[u.id] && ORGNAMES[u.id][code]) return ORGNAMES[u.id][code];
+  if(u.scope==='province' && u.name && ACC_NAMES_PROV && ACC_NAMES_PROV[u.name] && ACC_NAMES_PROV[u.name][code]) return ACC_NAMES_PROV[u.name][code];
+  if(REGION_ACC_NAMES && REGION_ACC_NAMES[code]) return REGION_ACC_NAMES[code];
+  return null;
+}
+
+async function ensureOrgNames(org5){
+  if(!(org5 in ORGNAMES)){
+    try{ ORGNAMES[org5] = await fetch(`${D}acc_names/${org5}.json`).then(r=>r.json()); }
+    catch(e){ ORGNAMES[org5] = null; }
+  }
+  return ORGNAMES[org5];
+}
+
+function refreshSourceUI(overrideHint){
+  const hint=document.getElementById('srcHint');
+  const title=document.getElementById('accSecTitle');
+  if(overrideHint){ hint.textContent=overrideHint; return; }
+  const u=ST.unit;
+  if(u.scope==='region'){
+    hint.textContent='กำลังแสดงบัญชีจากภาพรวมทั้งเขต — บางบัญชีอาจไม่มีจริงในบาง รพ. เมื่อเทียบ';
+    title.textContent='ค้นหาบัญชี (13 หลัก จัดกลุ่มตามบัญชี 10 หลัก)';
+  } else if(u.scope==='province'){
+    if(!u.name){ hint.textContent='กรุณาเลือกจังหวัดด้านบน'; title.textContent='ค้นหาบัญชี (เลือกจังหวัดก่อน)'; return; }
+    hint.textContent=`กำลังแสดงบัญชีของจังหวัด: ${u.name} (รวมทุก รพ. ในจังหวัดนี้)`;
+    title.textContent=`ค้นหาบัญชี (จังหวัด${u.name})`;
+  } else if(u.scope==='hospital'){
+    if(!u.id){ hint.textContent='พิมพ์ค้นหาแล้วเลือก รพ. ด้านบน'; title.textContent='ค้นหาบัญชี (เลือก รพ. ก่อน)'; return; }
+    hint.textContent=`กำลังแสดงเฉพาะบัญชี 13 หลักที่มีข้อมูลจริงของ: ${u.name}`;
+    title.textContent=`ค้นหาบัญชี (ผังบัญชีจริงของ ${u.name})`;
+  }
+}
+
+// ตั้งหน่วยงานปัจจุบัน (ขั้นตอนที่ 1 เสมอ) — โหลดข้อมูลที่จำเป็นแล้วรีเฟรช UI ทั้งหมดที่ขึ้นกับหน่วยงาน
+async function applyUnit(unit){
+  ST.unit=unit;
+  refreshSourceUI();
+  renderLevelSelects();
+  searchAcc(document.getElementById('accIn').value);
+
+  if(unit.scope==='hospital' && unit.id){
+    const needLeaf=!LEAF_LIST, needNames=!(unit.id in ORGNAMES);
+    if(needLeaf||needNames){
+      refreshSourceUI('กำลังโหลดผังบัญชีของหน่วยบริการ...');
+      if(needLeaf){
+        try{ LEAF_LIST=await fetch(D+'leaf_list.json').then(r=>r.json()); }
+        catch(e){ LEAF_LIST=null; alert('โหลดผังบัญชีของหน่วยบริการไม่ได้'); }
+      }
+      await ensureOrgNames(unit.id);
+      refreshSourceUI();
+      renderLevelSelects();
+      searchAcc(document.getElementById('accIn').value);
+    }
+  }
+}
+
+function setScope(scope){
+  for(const [id,s] of [['scRegion','region'],['scProv','province'],['scHosp','hospital']])
+    document.getElementById(id).classList.toggle('on', s===scope);
+  document.getElementById('provPick').style.display = scope==='province' ? '' : 'none';
+  document.getElementById('hospPickWrap').style.display = scope==='hospital' ? '' : 'none';
+
+  if(scope==='region'){
+    applyUnit({scope:'region'});
+  } else if(scope==='province'){
+    const v=document.getElementById('provPick').value;
+    if(v) applyUnit({scope:'province',name:v});
+    else { ST.unit={scope:'province',name:null}; refreshSourceUI(); renderLevelSelects(); searchAcc(document.getElementById('accIn').value); }
+  } else {
+    if(ST.unit.scope==='hospital' && ST.unit.id) applyUnit(ST.unit);
+    else {
+      ST.unit={scope:'hospital',id:null};
+      refreshSourceUI(); renderLevelSelects(); searchAcc(document.getElementById('accIn').value);
+      document.getElementById('unitSearchIn').value='';
+    }
+  }
+}
+
+function pickProvince(name){
+  if(!name){ ST.unit={scope:'province',name:null}; refreshSourceUI(); renderLevelSelects(); searchAcc(document.getElementById('accIn').value); return; }
+  applyUnit({scope:'province',name});
+}
+
+// รพ. เฉพาะ — ใช้ <input list> ผูกกับ <datalist> ให้เป็นได้ทั้งเลือกจากรายการ (คลิกลูกศร) และพิมพ์ค้นหากรองในตัวเดียวกัน
+function hospDisplayLabel(o){ return o.grp ? `${o.name} — ${o.grp}` : o.name; }
+
+// ลำดับประเภท รพ. สำหรับเรียง datalist — ดึงรหัสประเภท (A/S/M1/M2/F1/F2/F3) จากท้าย "รพช./รพท./รพศ." ใน grp
+const HOSP_CLASS_ORDER=['A','S','M1','M2','F1','F2','F3'];
+function hospClassRank(o){
+  const m=(o.grp||'').match(/\.(A|S|M1|M2|F1|F2|F3)(?=\s|$)/);
+  const idx=m?HOSP_CLASS_ORDER.indexOf(m[1]):-1;
+  return idx===-1?HOSP_CLASS_ORDER.length:idx;
+}
+
+function onHospInput(value){
+  const o=META.orgs.find(o=>hospDisplayLabel(o)===value);
+  if(o) pickHospital(o.id);
+}
+
+// คลิกเข้าช่องแล้วเคลียร์ข้อความเดิมทันที — ไม่ต้องลบชื่อ รพ. เก่าออกเองก่อนเลือกใหม่
+// (คลิกลูกศรตอนนี้จะเห็นรายชื่อทั้งหมด ไม่ถูกรายชื่อเดิมกรองบัง, พิมพ์ค้นหาต่อได้ทันที)
+function onHospFocus(){ document.getElementById('unitSearchIn').value=''; }
+
+// ถ้าออกจากช่องโดยไม่ได้เลือก รพ. ใหม่ (ยังว่างอยู่) ให้คืนชื่อ รพ. ที่เลือกไว้เดิมกลับมาแสดง
+let hospPicking=false;
+function onHospBlur(){
+  setTimeout(()=>{
+    if(hospPicking) return;
+    const el=document.getElementById('unitSearchIn');
+    if(el.value.trim()) return;
+    if(ST.unit.scope==='hospital' && ST.unit.id){
+      const o=META.orgs.find(o=>o.id===ST.unit.id);
+      if(o) el.value=hospDisplayLabel(o);
+    }
+  },200);
+}
+
+async function pickHospital(id){
+  hospPicking=true;
+  const o=META.orgs.find(o=>o.id===id)||{id,name:id,prov:''};
+  await applyUnit({scope:'hospital', id, name:o.name});
+  document.getElementById('unitSearchIn').value=hospDisplayLabel(o);
+  hospPicking=false;
+}
+
+// ── Level dropdowns (แทน Sunburst เดิม) ──────────────────
+// โหลด hosp/b<bId>.json ทุกไฟล์ (ครั้งเดียว แคชตลอด session — ใช้ร่วมกันได้ทุก รพ. เพราะแต่ละไฟล์มีทุก รพ. อยู่แล้ว)
+async function ensureAllHospB(){
+  const bIds=new Set(META.groups.map(g=>g.bId));
+  const missing=[...bIds].filter(b=>!(b in HOSPB));
+  if(!missing.length) return;
+  await Promise.all(missing.map(async bId=>{
+    try{ HOSPB[bId]=await fetch(`${D}hosp/b${bId}.json`).then(r=>r.json()); }
+    catch(e){ HOSPB[bId]=null; }
+  }));
+}
+
+// Map<gfId,value> ณ งวดล่าสุดของปีงบที่เลือก — ค่าจริง (ไม่ตัดเครื่องหมาย) ต้องตรงกับหน่วยงานที่เลือกไว้ตอนนี้เสมอ
+// (ใช้ทั้งแสดง preview ใน dropdown/GF list และต้องตรงกับค่าจริงที่จะได้ตอนกด "+ เพิ่ม" — สูตรเดียวกับ allMetricsFromRows เป๊ะ)
+async function unitGfValueMap(){
+  const u=ST.unit, mi=MI[ST.metric], lp=latestPeriod(ST.fy);
+  const gfV=new Map();
+  if(u.scope==='region'){
+    for(const r of REGION) if(r[1]===lp) gfV.set(r[0],r[mi]);
+  } else if(u.scope==='province'){
+    if(!u.name || !PROV_DATA) return gfV;
+    for(const r of (PROV_DATA[u.name]||[])) if(r[1]===lp) gfV.set(r[0],r[mi]);
+  } else if(u.scope==='hospital'){
+    if(!u.id) return gfV;
+    await ensureAllHospB();
+    for(const bId in HOSPB){
+      const obj=HOSPB[bId];
+      if(!obj || !obj[u.id]) continue;
+      for(const r of obj[u.id]) if(r[1]===lp) gfV.set(r[0],r[mi]);
+    }
+  }
+  return gfV;
+}
+
+// รวมยอด (ค่าจริง ณ งวดล่าสุดของปีงบที่เลือก, ตามหน่วยงานที่เลือกไว้ — ผลรวมแบบมีเครื่องหมายเหมือนตอนกด "+ เพิ่ม" จริง) แยกตามชื่อในระดับ level
+async function levelTotals(level, filter){
+  const gfV=await unitGfValueMap();
+  const totals=new Map();
+  for(const g of META.groups){
+    if(filter.fin  != null && g.fin  !==filter.fin)  continue;
+    if(filter.accg != null && g.accg !==filter.accg) continue;
+    if(filter.sub  != null && g.sub  !==filter.sub)  continue;
+    totals.set(g[level],(totals.get(g[level])||0)+(gfV.get(g.gfId)||0));
+  }
+  return totals;
+}
+
+async function fillLevelSelect(sel, level, filter, placeholder){
+  sel.innerHTML='';
+  const opt0=document.createElement('option');
+  opt0.value=''; opt0.textContent=placeholder;
+  sel.appendChild(opt0);
+  const entries=[...(await levelTotals(level,filter)).entries()].filter(([,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  for(const [name,val] of entries){
+    const o=document.createElement('option');
+    o.value=name; o.textContent=`${name} (${fmtM(val)})`;
+    sel.appendChild(o);
+  }
+}
+
+async function renderLevelSelects(){
+  const selFin=document.getElementById('selFin');
+  const selAccg=document.getElementById('selAccg');
+  const selSub=document.getElementById('selSub');
+  const selBudget=document.getElementById('selBudget');
+
+  await fillLevelSelect(selFin,'fin',{},'— ทั้งหมด (งบการเงิน) —');
+  selFin.value=ST.fin||''; selFin.disabled=false;
+
+  if(ST.fin){
+    await fillLevelSelect(selAccg,'accg',{fin:ST.fin},'— ทั้งหมด (หมวดบัญชี) —');
+    selAccg.value=ST.accg||''; selAccg.disabled=false;
+  } else {
+    selAccg.innerHTML='<option value="">— เลือกงบการเงินก่อน —</option>';
+    selAccg.disabled=true;
+  }
+
+  if(ST.fin && ST.accg){
+    await fillLevelSelect(selSub,'sub',{fin:ST.fin,accg:ST.accg},'— ทั้งหมด (ประเภทย่อย) —');
+    selSub.value=ST.sub||''; selSub.disabled=false;
+  } else {
+    selSub.innerHTML='<option value="">— เลือกหมวดบัญชีก่อน —</option>';
+    selSub.disabled=true;
+  }
+
+  if(ST.fin && ST.accg && ST.sub){
+    await fillLevelSelect(selBudget,'budget',{fin:ST.fin,accg:ST.accg,sub:ST.sub},'— ทั้งหมด (งบประมาณ) —');
+    selBudget.value=ST.budget||''; selBudget.disabled=false;
+  } else {
+    selBudget.innerHTML='<option value="">— เลือกประเภทย่อยก่อน —</option>';
+    selBudget.disabled=true;
+  }
+
+  // ปุ่ม "+ เพิ่ม" ของแต่ละชั้น — enable ทันทีที่เลือกชั้นนั้นแล้ว (ไม่ต้องไล่ลึกจนสุด)
+  for(const [depth,btnId,chosen] of [[1,'addFin',ST.fin],[2,'addAccg',ST.accg],[3,'addSub',ST.sub],[4,'addBudget',ST.budget]]){
+    const btn=document.getElementById(btnId);
+    if(!chosen){ btn.disabled=true; btn.classList.remove('on'); btn.textContent='+ เพิ่ม'; continue; }
+    btn.disabled=false;
+    const on=ST.series.some(s=>s.id===levelSeriesId(depth));
+    btn.classList.toggle('on',on);
+    btn.textContent=on?'✓ เพิ่มแล้ว':'+ เพิ่ม';
+  }
+
+  renderCode13Select();
+}
+
+// ระดับที่ 6 — บัญชี 13 หลัก ที่อยู่ภายใต้ fin/accg/sub/budget ที่เลือกไว้ (จากแคตตาล็อกของหน่วยงานที่เลือกไว้ ST.unit)
+function renderCode13Select(){
+  const sel=document.getElementById('selCode13');
+  const hint=document.getElementById('code13Hint');
+  const catalog=currentCatalog();
+  if(ST.fin && ST.accg && ST.sub && ST.budget && catalog){
+    const gfIds=new Set(filteredGroups().map(g=>g.gfId));
+    const codes=catalog.filter(([,gfId])=>gfIds.has(gfId));
+    sel.innerHTML='';
+    const opt0=document.createElement('option');
+    opt0.value=''; opt0.textContent=`— เลือกบัญชี 13 หลัก (${codes.length} รายการ) —`;
+    sel.appendChild(opt0);
+    for(const [code,gfId] of codes){
+      const g=META.gfMap[gfId];
+      const nm=realName(code)||(g?g.gf:'');
+      const o=document.createElement('option');
+      o.value=code; o.textContent=`${code}${nm?` — ${nm}`:''}`;
+      sel.appendChild(o);
+    }
+    sel.disabled=false;
+    hint.style.display=codes.length?'':'none';
+  } else {
+    sel.innerHTML=`<option value="">${catalog?'— เลือกงบประมาณก่อน —':'— กำลังโหลด... —'}</option>`;
+    sel.disabled=true;
+    hint.style.display='none';
+  }
+}
+
+async function onLvlCode13Change(code){
+  const sel=document.getElementById('selCode13');
+  sel.value='';
+  const catalog=currentCatalog();
+  if(!code || !catalog) return;
+  const entry=catalog.find(([c])=>c===code);
+  if(!entry) return;
+  const [,gfId]=entry;
+  await addSeriesForUnit('code13', code, gfId);
+}
+
+// ทุกการ "เพิ่มเข้ากราฟ" (checkbox ค้นหา, dropdown ชั้น 6) ผ่านจุดเดียวนี้ — สร้าง 1 เส้นสำหรับหน่วยงานที่เลือกไว้ตอนนี้ (ST.unit)
+async function addSeriesForUnit(kind, code, gfId){
+  const u=ST.unit;
+  if(u.scope==='region'){
+    return kind==='acc' ? addAccSeries(code, gfId) : addCode13Series(code, gfId);
+  }
+  if(u.scope==='province'){
+    if(!u.name){ alert('กรุณาเลือกจังหวัดก่อน (ด้านบน)'); return; }
+    return kind==='acc' ? addProvAccSeries(code, gfId, u.name) : addProvCode13Series(code, gfId, u.name);
+  }
+  if(u.scope==='hospital'){
+    if(!u.id){ alert('กรุณาค้นหาแล้วเลือก รพ. ก่อน (ด้านบน)'); return; }
+    return kind==='acc' ? addLeafAccSeries(code, gfId, u.id, u.name) : addLeafSeries(code, gfId, u.id);
+  }
+}
+
+function onLvlChange(level, value){
+  const v=value||null;
+  if(level==='fin')        {ST.fin=v;ST.accg=null;ST.sub=null;ST.budget=null;}
+  else if(level==='accg')  {ST.accg=v;ST.sub=null;ST.budget=null;}
+  else if(level==='sub')   {ST.sub=v;ST.budget=null;}
+  else if(level==='budget'){ST.budget=v;}
+  updateBC();renderLevelSelects();renderGF();
 }
 
 // ── Breadcrumb ───────────────────────────────────────────
@@ -330,11 +774,11 @@ function drillTo(lv){
   else if(lv<=1){ST.accg=null;ST.sub=null;ST.budget=null;}
   else if(lv<=2){ST.sub=null;ST.budget=null;}
   else if(lv<=3){ST.budget=null;}
-  updateBC();renderSB();renderGF();
+  updateBC();renderLevelSelects();renderGF();
 }
 
 // ── GF Panel ─────────────────────────────────────────────
-function renderGF(){
+async function renderGF(){
   const gs=filteredGroups();
   const el=document.getElementById('gfList');
   const lb=document.getElementById('gfLabel');
@@ -344,20 +788,18 @@ function renderGF(){
 
   if(!gs.length){el.innerHTML='<div class="hint">ไม่มีข้อมูล</div>';aab.style.display='none';return;}
   if(!ST.budget && gs.length>20){
-    el.innerHTML='<div class="hint">เลือก Budget จาก Sunburst เพื่อดู GF items</div>';
+    el.innerHTML='<div class="hint">เลือกงบประมาณจากดรอปดาวน์ด้านบนเพื่อดู GF items</div>';
     aab.style.display='none';return;
   }
 
-  const lp=latestPeriod(ST.fy), mi=MI[ST.metric];
-  const gfV=new Map();
-  for(const r of REGION) if(r[1]===lp) gfV.set(r[0],r[mi]);
+  // มูลค่าที่แสดงตรงกับหน่วยงานที่เลือกไว้ตอนนี้เสมอ (ตรงกับค่าที่จะได้จริงตอนกด "+ เพิ่ม")
+  const gfV=await unitGfValueMap();
 
-  const addedIds=new Set(ST.series.flatMap(s=>s.gfIds||[]));
   aab.style.display=ST.budget?'':'none';
 
   el.innerHTML=gs.map(g=>{
     const val=gfV.get(g.gfId)||0;
-    const on=addedIds.has(g.gfId);
+    const on=ST.series.some(s=>s.id===gfSeriesId(g.gfId));
     return `<div class="gf-item">
       <span class="nm" title="${g.gf}">${g.gf}</span>
       <span class="vl">${fmtM(val)}</span>
@@ -368,48 +810,118 @@ function renderGF(){
   }).join('');
 }
 
-function addAllGf(){
+async function addAllGf(){
   const gs=filteredGroups();
   let changed=false;
-  for(const g of gs) if(!ST.series.find(s=>s.type==='gf'&&s.gfIds[0]===g.gfId)){
+  for(const g of gs){
+    const id=gfSeriesId(g.gfId);
+    if(ST.series.find(s=>s.id===id)) continue;
+    const rows=await gfSeriesRows(g.gfId);
+    if(rows==null) continue; // หน่วยงานยังเลือกไม่ครบ (จังหวัด/รพ. ยังไม่ระบุ) — ข้าม
     const gfIds=new Set([g.gfId]);
-    ST.series.push({id:`gf-${g.gfId}`,label:g.gf,color:PAL[ST.series.length%PAL.length],type:'gf',gfIds:[g.gfId],allM:regionAllMetrics(gfIds)});
+    ST.series.push({id,label:g.gf+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),gfIds:[g.gfId],allM:allMetricsFromRows(rows,gfIds)});
     changed=true;
   }
   if(changed){renderChart();renderSbar();renderGF();}
 }
 
-// ── Acc Search ───────────────────────────────────────────
+// ── Acc Search — ค้นหาบัญชี 13 หลักจากแคตตาล็อกของหน่วยงานที่เลือกไว้ จัดกลุ่มตามรหัส 10 หลัก (prefix) ──
+// แถวหัวกลุ่ม (10 หลัก) ติ๊ก = รวมทั้งบัญชี 10 หลักนั้น | แถวลูก (13 หลัก) ติ๊ก = เฉพาะรหัสนั้น
+// ทั้งสองระดับ เมื่อกด "+ เพิ่มเข้ากราฟ" จะเพิ่ม 1 เส้นสำหรับหน่วยงานที่เลือกไว้ตอนนี้ (ST.unit)
+function resultRow(code, gfId, kind){
+  const g=META.gfMap[gfId];
+  const id=`${kind}-${code}`;
+  const nm=kind==='code13'?(realName(code)||(g?g.gf:'')):(g?g.gf:'');
+  ST.rowPayload[id]={kind,code,gfId,label:code+(nm?` (${nm})`:'')};
+  const isQueued=ST.queue.some(q=>q.key===id);
+  return `<div class="acc-item">
+    <span class="acc-code">${code}</span>
+    <span class="acc-gfn">${nm}</span>
+    <input type="checkbox" class="rowchk" ${isQueued?'checked':''} onchange="toggleQueue('${id}')" title="ติ๊กเพื่อเลือก">
+  </div>`;
+}
+
+function groupRowHtml(prefix, grp){
+  const hdrHtml=resultRow(prefix, grp.gfId, 'acc');
+  const childHtml=grp.children.map(([code,gfId])=>resultRow(code,gfId,'code13')).join('');
+  return `<div class="acc-group">
+    <div class="acc-grouphdr">${hdrHtml.replace('acc-gfn">','acc-gfn"><i>(รวม 10 หลัก)</i> ')}</div>
+    <div class="acc-children">${childHtml}</div>
+  </div>`;
+}
+
 function searchAcc(q){
   const el=document.getElementById('accRes');
   if(!q||q.length<4){el.innerHTML='<div class="hint">พิมพ์รหัส 4 หลักขึ้นไป</div>';return;}
-  if(!ACC_LIST){el.innerHTML='<div class="hint">กำลังโหลดรายการบัญชี...</div>';return;}
-  const res=ACC_LIST.filter(([c])=>String(c).startsWith(q)||String(c).includes(q)).slice(0,25);
-  if(!res.length){el.innerHTML='<div class="hint">ไม่พบรหัสนี้</div>';return;}
-  const addedCodes=new Set(ST.series.filter(s=>s.type==='acc').map(s=>s.accPrefix));
-  el.innerHTML=res.map(([code,gfId])=>{
-    const g=META.gfMap[gfId];
-    const on=addedCodes.has(code);
-    return `<div class="acc-item">
-      <span class="acc-code">${code}</span>
-      <span class="acc-gfn">${g?g.gf:''}</span>
-      <button class="abtn${on?' on':''}" onclick="addAccSeries('${code}',${gfId})">
-        ${on?'✓':'+ เพิ่ม'}
-      </button>
-    </div>`;
-  }).join('');
+  const catalog=currentCatalog();
+  if(!catalog){el.innerHTML='<div class="hint">กำลังโหลดรายการบัญชี...</div>';return;}
+
+  const matches=catalog.filter(([c])=>c.includes(q));
+  if(!matches.length){el.innerHTML='<div class="hint">ไม่พบรหัสนี้</div>';return;}
+
+  const groups=new Map();
+  for(const [code,gfId] of matches){
+    const prefix=code.split('.')[0];
+    if(!groups.has(prefix)) groups.set(prefix,{gfId,children:[]});
+    groups.get(prefix).children.push([code,gfId]);
+  }
+  const groupArr=[...groups.entries()].slice(0,20);
+  const shown=groupArr.reduce((s,[,g])=>s+g.children.length,0);
+  const more=groups.size>groupArr.length?`<div class="hint">…และอีก ${groups.size-groupArr.length} กลุ่มบัญชี 10 หลัก (พิมพ์ให้เจาะจงขึ้น)</div>`:'';
+  el.innerHTML=groupArr.map(([prefix,grp])=>groupRowHtml(prefix,grp)).join('')+more;
+}
+
+// ── Queue (ติ๊กเลือกหลายบัญชี แล้วกดเพิ่มเข้ากราฟทีเดียว — คูณกับหน่วยเปรียบเทียบทุกตัว) ──
+function toggleQueue(id){
+  const i=ST.queue.findIndex(q=>q.key===id);
+  if(i>=0){ ST.queue.splice(i,1); }
+  else {
+    const p=ST.rowPayload[id];
+    if(!p)return;
+    ST.queue.push({key:id, ...p});
+  }
+  renderQueueBar();
+}
+
+function renderQueueBar(){
+  const bar=document.getElementById('queueBar');
+  if(!ST.queue.length){bar.style.display='none';bar.innerHTML='';return;}
+  bar.style.display='flex';
+  bar.innerHTML=`<span>เลือกไว้ ${ST.queue.length} บัญชี (หน่วยงานที่เลือกไว้ด้านบน)</span>
+    <button class="abtn on" onclick="addQueued()">+ เพิ่มเข้ากราฟ (${ST.queue.length})</button>
+    <button class="abtn" onclick="clearQueue()">ล้าง</button>`;
+}
+
+function clearQueue(){
+  ST.queue=[];
+  renderQueueBar();
+  searchAcc(document.getElementById('accIn').value);
+}
+
+async function addQueued(){
+  const items=[...ST.queue];
+  ST.queue=[];
+  renderQueueBar();
+  for(const it of items) await addSeriesForUnit(it.kind, it.code, it.gfId);
+  searchAcc(document.getElementById('accIn').value);
 }
 
 // ── Series ───────────────────────────────────────────────
-function addGfSeries(gfId, label){
-  if(ST.series.find(s=>s.type==='gf'&&s.gfIds.length===1&&s.gfIds[0]===gfId))return;
+// ทุกฟังก์ชัน add*Series เป็น toggle — กดซ้ำเพื่อเอาออก, สลับหน่วยบริการ/ค้นหาใหม่ได้โดยเส้นที่เพิ่มไว้แล้วไม่หาย
+// เปรียบเทียบข้ามระดับได้ในตัว: GF ระดับเขต + รหัสบัญชี GL ระดับเขต + บัญชีย่อยที่สุดรายหน่วยบริการ อยู่กราฟเดียวกันได้พร้อมกัน
+async function addGfSeries(gfId, label){
+  const id=gfSeriesId(gfId);
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
+  const rows=await gfSeriesRows(gfId);
+  if(rows==null){ alert('กรุณาเลือกหน่วยงานให้ครบก่อน (จังหวัด/รพ. ที่ต้องการ)'); return; }
   const gfIds=new Set([gfId]);
-  ST.series.push({id:`gf-${gfId}`,label,color:PAL[ST.series.length%PAL.length],type:'gf',gfIds:[gfId],allM:regionAllMetrics(gfIds)});
+  ST.series.push({id,label:label+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),gfIds:[gfId],allM:allMetricsFromRows(rows,gfIds)});
   renderChart();renderSbar();renderGF();
 }
 
 async function addAccSeries(prefix, gfId){
-  if(ST.series.find(s=>s.accPrefix===prefix))return;
+  const id=`acc-${prefix}`;
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
   const g=META.gfMap[gfId];
   const label=`${prefix}${g?` (${g.gf})`:''}`;
   const color=PAL[ST.series.length%PAL.length];
@@ -439,19 +951,194 @@ async function addAccSeries(prefix, gfId){
   renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
 }
 
+// บัญชี 13 หลัก (10 หลักหน้าจุด + 3 หลักหลังจุด) รวมทั้งเขต — ตรงข้ามกับ leaf ที่แยกรายหน่วยบริการ
+async function addCode13Series(code, gfId){
+  const id=`code13-${code}`;
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
+  const g=META.gfMap[gfId];
+  const nm=realName(code)||(g?g.gf:'');
+  const label=`${code}${nm?` (${nm})`:''}`;
+  const color=PAL[ST.series.length%PAL.length];
+  const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
+
+  try{
+    const bId=g?g.bId:null;
+    if(bId==null)throw new Error('ไม่พบ Budget Group ของรหัสนี้');
+    if(!(bId in CODE13B))CODE13B[bId]=await fetch(`${D}code13_region/b${bId}.json`).then(r=>r.json());
+    const rows=CODE13B[bId][code];
+    if(!rows)throw new Error('ไม่พบข้อมูลรหัสนี้');
+    for(const r of rows){
+      const t=r[0];
+      allM.bs.set(t,(allM.bs.get(t)||0)+r[1]);
+      allM.inc.set(t,(allM.inc.get(t)||0)+r[2]);
+      allM.dec.set(t,(allM.dec.get(t)||0)+r[3]);
+      allM.endDr.set(t,(allM.endDr.get(t)||0)+r[4]);
+      allM.endCr.set(t,(allM.endCr.get(t)||0)+r[5]);
+    }
+  } catch(e){
+    alert('โหลดข้อมูลรหัสบัญชีนี้ไม่ได้: '+e.message);
+    return;
+  }
+
+  ST.series.push({id,label,color,type:'code13',gfIds:[gfId],accPrefix:code,allM});
+  renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
+}
+
+// บัญชีย่อยที่สุด (รวมเลขหลังจุด) รายหน่วยบริการ — ไม่รวมข้าม รพ. เพราะเลขหลังจุดเป็นเลขที่แต่ละ รพ.ตั้งเอง
+async function addLeafSeries(fullkey, gfId, org5){
+  const id=`leaf-${org5}-${fullkey}`;
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
+  const g=META.gfMap[gfId];
+  const hospName=(META.orgs.find(o=>o.id===org5)||{}).name||org5;
+  await ensureOrgNames(org5);
+  const nm=realName(fullkey)||(g?g.gf:'');
+  const label=`${fullkey} — ${hospName}${nm?` (${nm})`:''}`;
+  const color=PAL[ST.series.length%PAL.length];
+  const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
+
+  try{
+    if(!(org5 in LEAFB))LEAFB[org5]=await fetch(`${D}leaf/${org5}.json`).then(r=>r.json());
+    const rows=LEAFB[org5][fullkey];
+    if(!rows)throw new Error('ไม่พบข้อมูลบัญชีนี้ของหน่วยบริการนี้');
+    for(const r of rows){
+      const t=r[0];
+      allM.bs.set(t,(allM.bs.get(t)||0)+r[1]);
+      allM.inc.set(t,(allM.inc.get(t)||0)+r[2]);
+      allM.dec.set(t,(allM.dec.get(t)||0)+r[3]);
+      allM.endDr.set(t,(allM.endDr.get(t)||0)+r[4]);
+      allM.endCr.set(t,(allM.endCr.get(t)||0)+r[5]);
+    }
+  } catch(e){
+    alert('โหลดข้อมูลบัญชีย่อยนี้ไม่ได้: '+e.message);
+    return;
+  }
+
+  ST.series.push({id,label,color,type:'leaf',gfIds:[gfId],accPrefix:fullkey,allM});
+  renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
+}
+
+// รวมบัญชี 10 หลัก (ทุกรหัสย่อยที่ขึ้นต้นด้วย prefix นี้) เฉพาะของ รพ. เดียว — สำหรับเปรียบเทียบข้าม รพ.
+async function addLeafAccSeries(prefix, gfId, org5, orgLabel){
+  const id=`leafacc-${org5}-${prefix}`;
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
+  const g=META.gfMap[gfId];
+  const hospName=orgLabel||(META.orgs.find(o=>o.id===org5)||{}).name||org5;
+  const label=`${prefix} — ${hospName}${g?` (${g.gf})`:''}`;
+  const color=PAL[ST.series.length%PAL.length];
+  const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
+
+  try{
+    if(!(org5 in LEAFB))LEAFB[org5]=await fetch(`${D}leaf/${org5}.json`).then(r=>r.json());
+    const obj=LEAFB[org5];
+    let found=false;
+    for(const key in obj){
+      if(key.split('.')[0]!==prefix)continue;
+      found=true;
+      for(const r of obj[key]){
+        const t=r[0];
+        allM.bs.set(t,(allM.bs.get(t)||0)+r[1]);
+        allM.inc.set(t,(allM.inc.get(t)||0)+r[2]);
+        allM.dec.set(t,(allM.dec.get(t)||0)+r[3]);
+        allM.endDr.set(t,(allM.endDr.get(t)||0)+r[4]);
+        allM.endCr.set(t,(allM.endCr.get(t)||0)+r[5]);
+      }
+    }
+    if(!found)throw new Error('ไม่พบข้อมูลบัญชีนี้ของหน่วยบริการนี้');
+  } catch(e){
+    alert('โหลดข้อมูลบัญชีนี้ไม่ได้: '+e.message);
+    return;
+  }
+
+  ST.series.push({id,label,color,type:'leafacc',gfIds:[gfId],accPrefix:prefix,allM});
+  renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
+}
+
+// บัญชี 13 หลัก รวมทั้งจังหวัด (ทุก รพ. ในจังหวัดนั้น) — เทียบกับระดับเขต/รพ.เดียวได้ในกราฟเดียวกัน
+async function addProvCode13Series(code, gfId, prov){
+  const id=`code13prov-${prov}-${code}`;
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
+  const g=META.gfMap[gfId];
+  const nm=realName(code)||(g?g.gf:'');
+  const label=`${code} — ${prov}${nm?` (${nm})`:''}`;
+  const color=PAL[ST.series.length%PAL.length];
+  const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
+
+  try{
+    const bId=g?g.bId:null;
+    if(bId==null)throw new Error('ไม่พบ Budget Group ของรหัสนี้');
+    const key=`${prov}|${bId}`;
+    if(!(key in PROVC13B))PROVC13B[key]=await fetch(`${D}code13_prov/${encodeURIComponent(prov)}/b${bId}.json`).then(r=>r.json());
+    const rows=PROVC13B[key][code];
+    if(!rows)throw new Error('ไม่พบข้อมูลรหัสนี้ของจังหวัดนี้');
+    for(const r of rows){
+      const t=r[0];
+      allM.bs.set(t,(allM.bs.get(t)||0)+r[1]);
+      allM.inc.set(t,(allM.inc.get(t)||0)+r[2]);
+      allM.dec.set(t,(allM.dec.get(t)||0)+r[3]);
+      allM.endDr.set(t,(allM.endDr.get(t)||0)+r[4]);
+      allM.endCr.set(t,(allM.endCr.get(t)||0)+r[5]);
+    }
+  } catch(e){
+    alert('โหลดข้อมูลรหัสบัญชีนี้ไม่ได้: '+e.message);
+    return;
+  }
+
+  ST.series.push({id,label,color,type:'code13prov',gfIds:[gfId],accPrefix:code,allM});
+  renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
+}
+
+// รวมบัญชี 10 หลัก ทั้งจังหวัด (ทุกรหัสย่อยที่ขึ้นต้นด้วย prefix นี้ รวมทุก รพ. ในจังหวัดนั้น)
+async function addProvAccSeries(prefix, gfId, prov){
+  const id=`accprov-${prov}-${prefix}`;
+  if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
+  const g=META.gfMap[gfId];
+  const label=`${prefix} — ${prov}${g?` (${g.gf})`:''}`;
+  const color=PAL[ST.series.length%PAL.length];
+  const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
+
+  try{
+    const bId=g?g.bId:null;
+    if(bId==null)throw new Error('ไม่พบ Budget Group ของรหัสนี้');
+    const key=`${prov}|${bId}`;
+    if(!(key in PROVACCB))PROVACCB[key]=await fetch(`${D}acc_prov/${encodeURIComponent(prov)}/b${bId}.json`).then(r=>r.json());
+    const rows=PROVACCB[key][String(prefix)];
+    if(!rows)throw new Error('ไม่พบข้อมูลรหัสนี้ของจังหวัดนี้');
+    for(const r of rows){
+      const t=r[0];
+      allM.bs.set(t,(allM.bs.get(t)||0)+r[1]);
+      allM.inc.set(t,(allM.inc.get(t)||0)+r[2]);
+      allM.dec.set(t,(allM.dec.get(t)||0)+r[3]);
+      allM.endDr.set(t,(allM.endDr.get(t)||0)+r[4]);
+      allM.endCr.set(t,(allM.endCr.get(t)||0)+r[5]);
+    }
+  } catch(e){
+    alert('โหลดข้อมูลรหัสบัญชีนี้ไม่ได้: '+e.message);
+    return;
+  }
+
+  ST.series.push({id,label,color,type:'accprov',gfIds:[gfId],accPrefix:prefix,allM});
+  renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
+}
+
 function removeSeries(id){
   ST.series=ST.series.filter(s=>s.id!==id);
-  renderChart();renderSbar();renderGF();
+  renderChart();renderSbar();renderGF();renderLevelSelects();
   searchAcc(document.getElementById('accIn').value);
 }
 
 // ── Sbar ─────────────────────────────────────────────────
+const LEVEL_TAG={
+  gf:'เขต·GF', acc:'เขต·GL', code13:'เขต·13หลัก',
+  gfprov:'จว.·GF', accprov:'จว.·GL(รวม)', code13prov:'จว.·13หลัก',
+  gfhosp:'รพ.·GF', leaf:'รพ.·13หลัก', leafacc:'รพ.·GL(รวม)',
+};
 function renderSbar(){
   const el=document.getElementById('sbar');
-  if(!ST.series.length){el.innerHTML='<span class="no-s">กด [+ เพิ่ม] จากซ้ายเพื่อเพิ่มเส้นในกราฟ</span>';return;}
+  if(!ST.series.length){el.innerHTML='<span class="no-s">กด [+ เพิ่ม] จากซ้ายเพื่อเพิ่มเส้นในกราฟ — เลือกได้หลายเส้น ข้ามระดับ/ข้ามหน่วยบริการได้ในกราฟเดียวกัน</span>';return;}
   el.innerHTML=ST.series.map(s=>
-    `<div class="chip" style="background:${s.color}">
-      ${s.label.length>22?s.label.slice(0,22)+'…':s.label}
+    `<div class="chip" style="background:${s.color}" title="${s.label}">
+      <span style="opacity:.75;font-weight:400">${LEVEL_TAG[s.type]||''}</span>
+      ${s.label.length>42?s.label.slice(0,42)+'…':s.label}
       <span class="rm" onclick="removeSeries('${s.id}')">×</span>
     </div>`
   ).join('');
@@ -527,7 +1214,8 @@ function renderChart(){
     }
   }
 
-  document.getElementById('chartTitle').textContent=`เทรน${ML[ST.metric]} (ระดับเขต)`;
+  const hasLeaf=ST.series.some(s=>s.type==='leaf');
+  document.getElementById('chartTitle').textContent=`เทรน${ML[ST.metric]}${hasLeaf?' (มีเส้นระดับหน่วยบริการปนอยู่)':' (ระดับเขต)'}`;
 
   trendChart.setOption({
     graphic:[],
@@ -548,7 +1236,7 @@ function setMetric(m){
   ST.metric=m;
   for(const[id,k]of[['mBs','bs'],['mEDr','endDr'],['mECr','endCr'],['mInc','inc'],['mDec','dec']])
     document.getElementById(id).classList.toggle('on',k===m);
-  renderSB();renderGF();renderChart();
+  renderLevelSelects();renderGF();renderChart();
 }
 
 function setGran(g){
