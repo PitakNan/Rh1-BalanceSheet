@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Financial Trend — เขตสุขภาพที่ 1</title>
 <script>(function(){const t=localStorage.getItem('rh1-theme');if(t)document.documentElement.setAttribute('data-theme',t)})()</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
@@ -43,6 +46,7 @@
   --tip-bg:#f0f9ff;--tip-bd:#bae6fd;--tip-ink:#075985;
   --anmr-hover:#fffbeb;--chat-a:#f1f5f9;--shadow:rgba(0,0,0,.04)}
 *{box-sizing:border-box;margin:0;padding:0}
+body.busy,body.busy *{cursor:progress!important}
 body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;transition:background .15s,color .15s}
 #themeBtn{background:none;border:1px solid #ffffff33;color:#fff;border-radius:99px;width:32px;height:32px;font-size:15px;cursor:pointer;flex-shrink:0}
 #themeBtn:hover{background:#ffffff22}
@@ -416,15 +420,20 @@ function syncUI(){
   areaUI();
 }
 async function boot(){
-  META=await (await fetch('data/meta.json',{cache:"no-store"})).json();
-  REGION=await (await fetch('data/region_gf.json',{cache:"no-store"})).json();
+  // โหลดขนานกัน (เดิมต่อคิวทีละไฟล์) + anomaly มาพร้อมกันเลยไม่ต้องรอรอบสอง
+  let anmP;
+  [META,REGION,anmP]=await Promise.all([
+    fetch('data/meta.json',{cache:"no-cache"}).then(r=>r.json()),
+    fetch('data/region_gf.json',{cache:"no-cache"}).then(r=>r.json()),
+    fetch('data/anomaly.json',{cache:"no-cache"}).then(r=>r.json()).catch(()=>null),
+  ]);
   document.getElementById('hUpd').textContent=META.updated;
   const fys=[...new Set(META.periods.map(t=>Math.floor(t/100)))];
   document.getElementById('hYears').textContent=Math.min(...fys)+'–'+Math.max(...fys);
   state.from=META.periods[0];state.to=META.periods[META.periods.length-1];
   readHash();
   buildDims();buildRange();syncUI();renderExecCards();render();
-  try{ANM=await (await fetch('data/anomaly.json',{cache:"no-store"})).json();renderAnomaly()}catch(e){}
+  if(anmP){ANM=anmP;renderAnomaly()}
 }
 function opt(sel,items,cur,allLabel){
   const el=document.getElementById(sel);
@@ -447,7 +456,7 @@ function codeBIds(d){
   return [...new Set(filteredGroups(d).filter(g=>gfIds.has(g.gfId)).map(g=>g.bId))];
 }
 async function fetchShards(map,dir,bIds){
-  await Promise.all(bIds.filter(b=>!(b in map)).map(async b=>{map[b]=await (await fetch(`data/${dir}/b${b}.json`,{cache:"no-store"})).json()}));
+  await Promise.all(bIds.filter(b=>!(b in map)).map(async b=>{map[b]=await (await fetch(`data/${dir}/b${b}.json`,{cache:"no-cache"})).json()}));
 }
 function shardRecs(map,bIds,ent){let out=[];for(const b of bIds){const r=map[b]&&map[b][ent];if(r)out=out.concat(r)}return out}
 // ขั้วของหมวดบัญชี: +1 = เพิ่มแล้วดี (สินทรัพย์/ทุน/รายได้), -1 = เพิ่มแล้วต้องเฝ้าระวัง (หนี้สิน/ค่าใช้จ่าย), 0 = ผสม
@@ -552,15 +561,15 @@ function entAdd(){
 function entDel(v){state.ents=state.ents.filter(e=>e!==v);if(!state.ents.length)state.area==='prov'?state.ents=[]:null;render()}
 
 async function ensureData(){
-  if(state.area==='prov'&&!PROV)PROV=await (await fetch('data/prov_gf.json',{cache:"no-store"})).json();
+  if(state.area==='prov'&&!PROV)PROV=await (await fetch('data/prov_gf.json',{cache:"no-cache"})).json();
   if(state.area==='hosp'){
     const d=state.dim;
     if(d.budget||d.gf)await fetchShards(HOSPB,'hosp',dimBIds(d));
-    else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json',{cache:"no-store"})).json();
+    else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json',{cache:"no-cache"})).json();
   }
   if(state.dim.code){
-    if(state.area==='region'&&!REGION_CODE)REGION_CODE=await (await fetch('data/region_code.json',{cache:"no-store"})).json();
-    if(state.area==='prov'&&!PROV_CODE)PROV_CODE=await (await fetch('data/prov_code.json',{cache:"no-store"})).json();
+    if(state.area==='region'&&!REGION_CODE)REGION_CODE=await (await fetch('data/region_code.json',{cache:"no-cache"})).json();
+    if(state.area==='prov'&&!PROV_CODE)PROV_CODE=await (await fetch('data/prov_code.json',{cache:"no-cache"})).json();
     if(state.area==='hosp')await fetchShards(HOSP_CODE,'hosp_code',codeBIds(state.dim));
   }
 }
@@ -600,12 +609,12 @@ const bucketVal=v=>v?(state.view==='bs'?v[state.metric]:v.inc+v.dec):null;
 async function ensurePopupData(kind){
   const d=state.dim;
   if(kind==='prov'){
-    if(d.code){if(!PROV_CODE)PROV_CODE=await (await fetch('data/prov_code.json',{cache:"no-store"})).json();}
-    else{if(!PROV)PROV=await (await fetch('data/prov_gf.json',{cache:"no-store"})).json();}
+    if(d.code){if(!PROV_CODE)PROV_CODE=await (await fetch('data/prov_code.json',{cache:"no-cache"})).json();}
+    else{if(!PROV)PROV=await (await fetch('data/prov_gf.json',{cache:"no-cache"})).json();}
   }else if(kind==='hosp'){
     if(d.code)await fetchShards(HOSP_CODE,'hosp_code',codeBIds(d));
     else if(d.budget||d.gf)await fetchShards(HOSPB,'hosp',dimBIds(d));
-    else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json',{cache:"no-store"})).json();
+    else if(!HOSPSUB)HOSPSUB=await (await fetch('data/hosp_sub.json',{cache:"no-cache"})).json();
   }else if(kind==='code'){
     await fetchShards(HOSP_CODE,'hosp_code',dimBIds(d)); // จัดอันดับทุกรหัสใต้ filter — ต้องครบทุก shard
   }
@@ -711,17 +720,20 @@ async function handleChartClick(bucketIdx,dsIdx,bks,series){
   }
 }
 async function render(){
-  state.from=+document.getElementById('selFrom').value||state.from;
-  state.to=+document.getElementById('selTo').value||state.to;
-  if(state.from>state.to)[state.from,state.to]=[state.to,state.from];
-  await ensureData();
-  const periods=META.periods.filter(t=>t>=state.from&&t<=state.to);
-  const ents=state.area==='region'?[null]:state.ents;
-  const series=ents.map(e=>({ent:e,m:seriesFor(e)}));
-  renderChips();renderWarn(periods);renderKpis(series[0],periods);
-  renderHeadline(series[0],periods);
-  renderChart(series,periods);renderChartTable(series,periods);renderTop(periods);renderHeat(series[0]);renderAnalysis(series,periods);
-  presetUI();renderExecCards();writeHash();
+  document.body.classList.add('busy'); // เคอร์เซอร์ progress ระหว่างดึง shard/คำนวณ — ให้รู้ว่ากำลังทำงาน
+  try{
+    state.from=+document.getElementById('selFrom').value||state.from;
+    state.to=+document.getElementById('selTo').value||state.to;
+    if(state.from>state.to)[state.from,state.to]=[state.to,state.from];
+    await ensureData();
+    const periods=META.periods.filter(t=>t>=state.from&&t<=state.to);
+    const ents=state.area==='region'?[null]:state.ents;
+    const series=ents.map(e=>({ent:e,m:seriesFor(e)}));
+    renderChips();renderWarn(periods);renderKpis(series[0],periods);
+    renderHeadline(series[0],periods);
+    renderChart(series,periods);renderChartTable(series,periods);renderTop(periods);renderHeat(series[0]);renderAnalysis(series,periods);
+    presetUI();renderExecCards();writeHash();
+  }finally{document.body.classList.remove('busy')}
 }
 function renderChips(){
   const row=document.getElementById('chipRow');
