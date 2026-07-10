@@ -1216,10 +1216,13 @@ function renderChart(){
     connectNulls:false,
   }));
 
-  // Province/Region averages for GF-type series (first series only)
+  // เส้นเฉลี่ยจังหวัด/เขต — ใช้กับเส้นระดับ GF ทุก scope (ทั้งเขต/จังหวัด/รพ.)
+  // เดิมเช็ค type==='gf' เป๊ะ ทำให้ scope จังหวัด ('gfprov') และ รพ. ('gfhosp') กดปุ่มแล้วเงียบ
+  let avgApplied=false;
   if(ST.avg!=='none' && ST.series.length>0){
-    const s0=ST.series[0];
-    if(s0.type==='gf'&&PROV_DATA){
+    const s0=ST.series.find(s=>['gf','gfprov','gfhosp'].includes(s.type));
+    if(s0&&PROV_DATA){
+      avgApplied=true;
       const gfSet=new Set(s0.gfIds);
       if(ST.avg==='prov'){
         const provs=Object.keys(PROV_DATA);
@@ -1247,7 +1250,8 @@ function renderChart(){
   }
 
   const hasLeaf=ST.series.some(s=>s.type==='leaf');
-  document.getElementById('chartTitle').textContent=`เทรน${ML[ST.metric]}${hasLeaf?' (มีเส้นระดับหน่วยบริการปนอยู่)':' (ระดับเขต)'}`;
+  const avgHint=(ST.avg!=='none'&&!avgApplied)?' · ⚠ เส้นเฉลี่ยใช้ได้กับเส้นระดับหมวดบัญชี/GF (เพิ่มจากดรอปดาวน์ด้านซ้าย) — เส้นรหัสบัญชีรายตัวยังไม่รองรับ':'';
+  document.getElementById('chartTitle').textContent=`เทรน${ML[ST.metric]}${hasLeaf?' (มีเส้นระดับหน่วยบริการปนอยู่)':' (ระดับเขต)'}`+avgHint;
 
   trendChart.setOption({
     graphic:[],
