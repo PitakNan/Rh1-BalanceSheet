@@ -41,6 +41,11 @@ header h1{font-size:16px;font-weight:700}
 header .sub{font-size:11.5px;color:#cbd5e1}
 #themeBtn{background:none;border:1px solid #ffffff33;color:#fff;border-radius:99px;width:30px;height:30px;font-size:14px;cursor:pointer;flex-shrink:0}
 #themeBtn:hover{background:#ffffff22}
+#menuBtn{display:none;background:none;border:1px solid #ffffff33;color:#fff;border-radius:8px;width:32px;height:32px;font-size:16px;cursor:pointer;flex-shrink:0}
+#menuBtn:hover{background:#ffffff22}
+.backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40}
+.backdrop.show{display:block}
+.drawer-close{display:none}
 .main{display:flex;flex:1;overflow:hidden}
 /* LEFT: hospital list */
 .left{width:340px;min-width:260px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--card);flex-shrink:0}
@@ -144,11 +149,28 @@ table.systbl td ul{padding-left:16px;margin:0}
 .eff-tbl td{padding:7px 8px;border-bottom:1px solid var(--row-strip)}
 .eff-pass{color:var(--green);font-weight:700}
 .eff-fail{color:var(--red);font-weight:700}
+.panel{overflow-x:auto}
+.acctbl-wrap{overflow-x:auto}
+@media(max-width:768px){
+  #menuBtn{display:inline-flex;align-items:center;justify-content:center}
+  header h1{font-size:14.5px}
+  header .sub{font-size:10.5px}
+  .left{position:fixed;top:0;left:0;bottom:0;width:86vw;max-width:360px;z-index:50;
+    transform:translateX(-100%);transition:transform .25s ease;box-shadow:4px 0 24px var(--shadow)}
+  .left.open{transform:translateX(0)}
+  .drawer-close{display:flex;justify-content:flex-end;padding:8px 12px 0}
+  .drawer-close button{font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;
+    border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+  .dwrap{padding:14px 12px}
+  .dhead h2{font-size:16px}
+  .decomp-row,.nibridge-row,.pillar-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
 
 <header>
+  <button id="menuBtn" onclick="toggleDrawer()" title="เปิดรายชื่อ รพ.">☰</button>
   <h1>🔎 สาเหตุวิกฤต</h1>
   <div class="sub">ไล่สาเหตุ Risk Score จากงบทดลอง — เขตสุขภาพที่ 1 · <span id="hPeriod">-</span> · <span id="hNHosp">-</span> รพ.</div>
   <nav style="margin-left:auto;display:flex;gap:14px;font-size:13px;flex-wrap:wrap;align-items:center">
@@ -162,6 +184,7 @@ table.systbl td ul{padding-left:16px;margin:0}
 <div class="main">
   <!-- LEFT -->
   <div class="left">
+    <div class="drawer-close"><button onclick="closeDrawer()">✕ ปิด</button></div>
     <div class="lfilt">
       <input id="qSearch" type="text" placeholder="ค้นหาชื่อ รพ. / จังหวัด..." oninput="renderList()">
       <div class="row">
@@ -181,8 +204,19 @@ table.systbl td ul{padding-left:16px;margin:0}
     <div class="hint-empty">กำลังโหลด...</div>
   </div>
 </div>
+<div class="backdrop" id="backdrop" onclick="closeDrawer()"></div>
 
 <script>
+// ── มือถือ/แท็บเล็ต: drawer สำหรับรายชื่อ รพ. ────────────────
+function toggleDrawer(){
+  const open=!document.querySelector('.left').classList.contains('open');
+  document.querySelector('.left').classList.toggle('open',open);
+  document.getElementById('backdrop').classList.toggle('show',open);
+}
+function closeDrawer(){
+  document.querySelector('.left').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('show');
+}
 // ── โหมดมืด/สว่าง ─────────────────────────────────────────
 function isDarkNow(){const t=document.documentElement.getAttribute('data-theme');if(t)return t==='dark';return window.matchMedia('(prefers-color-scheme: dark)').matches}
 function syncThemeBtn(){document.getElementById('themeBtn').textContent=isDarkNow()?'☀️':'🌙'}
@@ -267,6 +301,7 @@ function renderList(){
 async function selectHosp(hcode){
   CUR=hcode;
   renderList();
+  closeDrawer();
   document.getElementById('right').innerHTML='<div class="hint-empty">กำลังโหลด...</div>';
   try{
     if(!(hcode in H_CACHE)) H_CACHE[hcode]=await fetch(`${D}h/${hcode}.json`).then(r=>r.json());
