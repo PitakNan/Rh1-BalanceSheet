@@ -4,24 +4,60 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Financial Trend — เขตสุขภาพที่ 1</title>
+<script>(function(){const t=localStorage.getItem('rh1-theme');if(t)document.documentElement.setAttribute('data-theme',t)})()</script>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
-:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--blue:#3b82f6;--gold:#d97706;--red:#dc2626;--green:#16a34a}
+:root{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--blue:#3b82f6;--gold:#d97706;--red:#dc2626;--green:#16a34a;
+  --hd1:#0f172a;--hd2:#1e293b;--th-bg:#f8fafc;--row-strip:#f1f5f9;--hover:#eff6ff;
+  --warn-bg:#fffbeb;--warn-bd:#fde68a;--warn-ink:#92400e;
+  --good-bg:#f0fdf4;--good-bd:#bbf7d0;--good-ink:#166534;
+  --bad-bg:#fef2f2;--bad-bd:#fecaca;--bad-ink:#991b1b;
+  --mid-bg:#eff6ff;--mid-bd:#bfdbfe;--mid-ink:#1e40af;
+  --tip-bg:#f0f9ff;--tip-bd:#bae6fd;--tip-ink:#075985;
+  --anmr-hover:#fffbeb;--chat-a:#f1f5f9;--shadow:rgba(0,0,0,.04)}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0f1115;--card:#181b21;--ink:#e6e9ef;--mut:#96a0b2;--line:#2a2f3a;--blue:#5b9dff;--gold:#e0a840;--red:#f0685f;--green:#4ade80;
+    --hd1:#0a0c10;--hd2:#151922;--th-bg:#1d2129;--row-strip:#1b1e25;--hover:#1c2635;
+    --warn-bg:#2a2210;--warn-bd:#4d3d15;--warn-ink:#f0c674;
+    --good-bg:#112016;--good-bd:#1f4a2c;--good-ink:#5fd989;
+    --bad-bg:#2a1414;--bad-bd:#5a2222;--bad-ink:#f2a0a0;
+    --mid-bg:#131c2a;--mid-bd:#26426b;--mid-ink:#8fb8f0;
+    --tip-bg:#0e1f28;--tip-bd:#1d4459;--tip-ink:#7fd4f5;
+    --anmr-hover:#2a2210;--chat-a:#20242c;--shadow:rgba(0,0,0,.3)}
+}
+:root[data-theme="dark"]{--bg:#0f1115;--card:#181b21;--ink:#e6e9ef;--mut:#96a0b2;--line:#2a2f3a;--blue:#5b9dff;--gold:#e0a840;--red:#f0685f;--green:#4ade80;
+  --hd1:#0a0c10;--hd2:#151922;--th-bg:#1d2129;--row-strip:#1b1e25;--hover:#1c2635;
+  --warn-bg:#2a2210;--warn-bd:#4d3d15;--warn-ink:#f0c674;
+  --good-bg:#112016;--good-bd:#1f4a2c;--good-ink:#5fd989;
+  --bad-bg:#2a1414;--bad-bd:#5a2222;--bad-ink:#f2a0a0;
+  --mid-bg:#131c2a;--mid-bd:#26426b;--mid-ink:#8fb8f0;
+  --tip-bg:#0e1f28;--tip-bd:#1d4459;--tip-ink:#7fd4f5;
+  --anmr-hover:#2a2210;--chat-a:#20242c;--shadow:rgba(0,0,0,.3)}
+:root[data-theme="light"]{--bg:#f1f5f9;--card:#fff;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--blue:#3b82f6;--gold:#d97706;--red:#dc2626;--green:#16a34a;
+  --hd1:#0f172a;--hd2:#1e293b;--th-bg:#f8fafc;--row-strip:#f1f5f9;--hover:#eff6ff;
+  --warn-bg:#fffbeb;--warn-bd:#fde68a;--warn-ink:#92400e;
+  --good-bg:#f0fdf4;--good-bd:#bbf7d0;--good-ink:#166534;
+  --bad-bg:#fef2f2;--bad-bd:#fecaca;--bad-ink:#991b1b;
+  --mid-bg:#eff6ff;--mid-bd:#bfdbfe;--mid-ink:#1e40af;
+  --tip-bg:#f0f9ff;--tip-bd:#bae6fd;--tip-ink:#075985;
+  --anmr-hover:#fffbeb;--chat-a:#f1f5f9;--shadow:rgba(0,0,0,.04)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
-header{background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;transition:background .15s,color .15s}
+#themeBtn{background:none;border:1px solid #ffffff33;color:#fff;border-radius:99px;width:32px;height:32px;font-size:15px;cursor:pointer;flex-shrink:0}
+#themeBtn:hover{background:#ffffff22}
+header{background:linear-gradient(135deg,var(--hd1) 0%,var(--hd2) 50%,var(--hd1) 100%);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 header h1{font-size:18px;font-weight:700}
 header .sub{font-size:12px;color:#cbd5e1}
-.bar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.bar{position:sticky;top:0;z-index:50;background:var(--card);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .bar label{font-size:12px;color:var(--mut);display:block;margin-bottom:2px}
-.bar select,.bar input{font-family:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;max-width:210px}
+.bar select,.bar input{font-family:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);max-width:210px}
 .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.seg button{font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:none;background:#fff;color:var(--mut);cursor:pointer}
-.seg button.on{background:var(--ink);color:#fff}
+.seg button{font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:none;background:var(--card);color:var(--mut);cursor:pointer}
+.seg button.on{background:var(--ink);color:var(--bg)}
 .wrap{max-width:1280px;margin:0 auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 1px 2px var(--shadow)}
 .card .t{font-size:12px;color:var(--mut)}
 .card .v{font-size:22px;font-weight:700;margin-top:2px}
 .card .d{font-size:12px;margin-top:2px}
@@ -32,13 +68,13 @@ header .sub{font-size:12px;color:#cbd5e1}
 .chartbox{position:relative;height:430px}
 #mainChart{cursor:pointer}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#f8fafc;color:var(--mut);font-weight:600;text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:var(--th-bg);color:var(--mut);font-weight:600;text-align:right;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
-td{padding:6px 10px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap}
-tr.click{cursor:pointer}tr.click:hover{background:#eff6ff}
+td{padding:6px 10px;border-bottom:1px solid var(--row-strip);text-align:right;white-space:nowrap}
+tr.click{cursor:pointer}tr.click:hover{background:var(--hover)}
 .note{font-size:12px;color:var(--mut)}
-.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:8px 12px;font-size:12.5px}
-.btn{font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;color:var(--ink)}
+.warn{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink);border-radius:10px;padding:8px 12px;font-size:12.5px}
+.btn{font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;color:var(--ink)}
 .btn:hover{border-color:var(--blue);color:var(--blue)}
 .chips{display:flex;gap:6px;flex-wrap:wrap;max-width:480px}
 .chip{font-size:12px;padding:3px 10px;border-radius:99px;color:#fff;cursor:pointer}
@@ -67,34 +103,34 @@ tr.click{cursor:pointer}tr.click:hover{background:#eff6ff}
 }
 footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
-.pb{font-family:inherit;font-size:12.5px;font-weight:600;padding:5px 12px;border:1px solid var(--line);border-radius:99px;background:#fff;cursor:pointer;color:var(--ink)}
+.pb{font-family:inherit;font-size:12.5px;font-weight:600;padding:5px 12px;border:1px solid var(--line);border-radius:99px;background:var(--card);cursor:pointer;color:var(--ink)}
 .pb:hover{border-color:var(--blue);color:var(--blue)}
-.pb.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pb.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .card.click{cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .card.click:hover{border-color:var(--blue);box-shadow:0 2px 8px rgba(59,130,246,.15)}
 .card.actv{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
-.anmr:hover td{background:#fffbeb}
+.anmr:hover td{background:var(--anmr-hover)}
 #headline{margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:14.5px;font-weight:600;line-height:1.5}
-#headline.good{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
-#headline.bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
-#headline.mid{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+#headline.good{background:var(--good-bg);border:1px solid var(--good-bd);color:var(--good-ink)}
+#headline.bad{background:var(--bad-bg);border:1px solid var(--bad-bd);color:var(--bad-ink)}
+#headline.mid{background:var(--mid-bg);border:1px solid var(--mid-bd);color:var(--mid-ink)}
 .anl ul{padding-left:20px;display:flex;flex-direction:column;gap:7px}
 .anl li{line-height:1.6;font-size:13.5px}
-.anl .tip{margin-top:10px;background:#f0f9ff;border:1px solid #bae6fd;color:#075985;border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.6}
+.anl .tip{margin-top:10px;background:var(--tip-bg);border:1px solid var(--tip-bd);color:var(--tip-ink);border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.6}
 @keyframes s{to{transform:rotate(360deg)}}
 /* ===== AI Chat ===== */
 #chatBtn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(59,130,246,.45);z-index:900;transition:transform .15s}
 #chatBtn:hover{transform:scale(1.08)}
-#chatPanel{position:fixed;bottom:86px;right:24px;width:380px;max-height:560px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:900;display:none;flex-direction:column;overflow:hidden}
+#chatPanel{position:fixed;bottom:86px;right:24px;width:380px;max-height:560px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 32px var(--shadow);z-index:900;display:none;flex-direction:column;overflow:hidden}
 #chatPanel.open{display:flex}
-#chatHead{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;gap:8px}
+#chatHead{background:linear-gradient(135deg,var(--hd1),var(--hd2));color:#fff;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;gap:8px}
 #chatHead .hbtns{display:flex;gap:4px}
 #chatHead button{background:none;border:none;color:#94a3b8;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:6px}
 #chatHead button:hover{background:#ffffff22;color:#fff}
-#chatCtx{background:#f8fafc;padding:7px 12px;font-size:11px;color:var(--mut);border-bottom:1px solid var(--line);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#chatCtx{background:var(--th-bg);padding:7px 12px;font-size:11px;color:var(--mut);border-bottom:1px solid var(--line);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #chatMsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:180px;max-height:340px}
-.cmsg-u{align-self:flex-end;background:#3b82f6;color:#fff;border-radius:12px 12px 4px 12px;padding:8px 12px;max-width:82%;font-size:13px;line-height:1.5;word-break:break-word}
-.cmsg-a{align-self:flex-start;background:#f1f5f9;color:var(--ink);border-radius:12px 12px 12px 4px;padding:9px 12px;max-width:92%;font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.cmsg-u{align-self:flex-end;background:var(--blue);color:#fff;border-radius:12px 12px 4px 12px;padding:8px 12px;max-width:82%;font-size:13px;line-height:1.5;word-break:break-word}
+.cmsg-a{align-self:flex-start;background:var(--chat-a);color:var(--ink);border-radius:12px 12px 12px 4px;padding:9px 12px;max-width:92%;font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
 .cmsg-load{align-self:flex-start;color:var(--mut);font-size:12px;padding:6px 12px}
 .cmsg-load::after{content:'';animation:dots 1.2s infinite}
 @keyframes dots{0%{content:'กำลังคิด.'}33%{content:'กำลังคิด..'}66%{content:'กำลังคิด...'}100%{content:'กำลังคิด.'}}
@@ -108,15 +144,15 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 /* ===== Rank popup (คลิกจุดบนกราฟ) ===== */
 #rankModal{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
 #rankModal.open{display:flex}
-.rmodal-card{background:#fff;border-radius:14px;max-width:540px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.rmodal-card{background:var(--card);border-radius:14px;max-width:540px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .rmodal-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
 .rmodal-title{font-size:14.5px;font-weight:700;line-height:1.4}
 .rmodal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--mut);padding:4px 8px;border-radius:8px;flex-shrink:0}
-.rmodal-close:hover{background:#f1f5f9}
+.rmodal-close:hover{background:var(--row-strip)}
 .rmodal-body{overflow-y:auto;padding:6px 0}
 .rmodal-foot{padding:9px 18px;border-top:1px solid var(--line)}
 .rmrow{display:flex;align-items:center;gap:10px;padding:8px 18px;cursor:pointer}
-.rmrow:hover{background:#eff6ff}
+.rmrow:hover{background:var(--hover)}
 .rmrow.static{cursor:default}
 .rmrow.static:hover{background:none}
 .rmrow .rk{width:24px;flex-shrink:0;font-weight:700;color:var(--mut);font-size:12px}
@@ -124,23 +160,24 @@ footer{padding:18px;text-align:center;font-size:12px;color:var(--mut)}
 .rmrow .rmtop{display:flex;justify-content:space-between;gap:8px}
 .rmrow .nm{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rmrow .vv{font-weight:700;font-size:13px;white-space:nowrap}
-.rmrow .rmbar{height:5px;border-radius:3px;background:#f1f5f9;overflow:hidden;margin-top:3px}
+.rmrow .rmbar{height:5px;border-radius:3px;background:var(--row-strip);overflow:hidden;margin-top:3px}
 .rmrow .rmbar>i{display:block;height:100%;background:#3b82f6;border-radius:3px}
 .rmrow .pc{width:50px;text-align:right;font-size:11.5px;color:var(--mut);flex-shrink:0}
 .rmtabs{display:flex;gap:6px;margin-top:8px}
-.rmtab{font-family:inherit;font-size:12px;font-weight:600;padding:5px 12px;border:1px solid var(--line);border-radius:99px;background:#fff;cursor:pointer;color:var(--mut)}
-.rmtab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.rmtab{font-family:inherit;font-size:12px;font-weight:600;padding:5px 12px;border:1px solid var(--line);border-radius:99px;background:var(--card);cursor:pointer;color:var(--mut)}
+.rmtab.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 </style>
 </head>
 <body>
 <header>
   <h1>📊 Financial Trend Dashboard</h1>
   <div class="sub">งบการเงินโรงพยาบาล เขตสุขภาพที่ 1 · 103 แห่ง · ปีงบ <span id="hYears"></span> · อัปเดต <span id="hUpd"></span></div>
-  <nav style="margin-left:auto;display:flex;gap:14px;font-size:13px;flex-wrap:wrap">
+  <nav style="margin-left:auto;display:flex;gap:14px;font-size:13px;flex-wrap:wrap;align-items:center">
     <a href="risk_drill.html" style="color:#f87171;text-decoration:none;font-weight:600">🔎 สาเหตุวิกฤต</a>
     <a href="explorer.html" style="color:#fbbf24;text-decoration:none;font-weight:600">🔍 Explorer</a>
     <a href="https://pitaknan.github.io/Risk-Score-Rh1/" target="_blank" style="color:#cbd5e1;text-decoration:none">🎯 Risk Score</a>
     <a href="https://rh1-tps-v-3-1.vercel.app" target="_blank" style="color:#cbd5e1;text-decoration:none">🏆 TPS</a>
+    <button id="themeBtn" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">🌙</button>
   </nav>
 </header>
 
@@ -237,6 +274,22 @@ let state={view:'bs',metric:'bs',dim:{fin:'',accg:'หนี้สิน',sub:''
 let chart=null;
 let RANK_TABS=null,RANK_CTX=null;
 
+// ---------- โหมดมืด/สว่าง ----------
+function isDarkNow(){
+  const t=document.documentElement.getAttribute('data-theme');
+  if(t)return t==='dark';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function syncThemeBtn(){document.getElementById('themeBtn').textContent=isDarkNow()?'☀️':'🌙'}
+function getCss(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim()}
+function toggleTheme(){
+  const next=isDarkNow()?'light':'dark';
+  document.documentElement.setAttribute('data-theme',next);
+  localStorage.setItem('rh1-theme',next);
+  syncThemeBtn();
+  if(chart)render(); // สร้างกราฟใหม่เพื่ออ่านสีแกน/กริด/ป้ายจากธีมปัจจุบัน
+}
+syncThemeBtn();
 const fmtM=v=>{const m=v/1e6;return (Math.abs(m)>=100?m.toLocaleString('th-TH',{maximumFractionDigits:0}):m.toLocaleString('th-TH',{maximumFractionDigits:1}))+' ลบ.'};
 const fmtB=v=>v.toLocaleString('th-TH')+' บาท';
 const tLab=t=>{const fy=Math.floor(t/100),fm=t%100;const by=fm<=3?fy-1:fy;return TH_M[fm-1]+String(by%100).padStart(2,'0')};
@@ -513,10 +566,12 @@ async function ensureData(){
 }
 // รวม records [id,t,bs,inc,dec,endDr,endCr] ตาม filter → Map t→{bs,inc,dec,endDr,endCr}
 function sumSeries(recs,idSet){
+  // ไม่ตัดตามช่วงเวลาที่เลือก — เก็บทุกงวดไว้ให้การเทียบ YoY (t-100) มองย้อนหลังได้เสมอ
+  // ผู้ใช้ Map นี้ทุกจุด iterate ตาม list งวดที่กรองแล้วอยู่แล้ว จึงไม่กระทบกราฟ/ตาราง
   const m=new Map();
   for(const r of recs){
     if(idSet&&!idSet.has(r[0]))continue;
-    const t=r[1];if(t<state.from||t>state.to)continue;
+    const t=r[1];
     let o=m.get(t);if(!o){o={bs:0,inc:0,dec:0,endDr:0,endCr:0};m.set(t,o)}
     o.bs+=r[2];o.inc+=r[3];o.dec+=r[4];o.endDr+=r[5]||0;o.endCr+=r[6]||0;
   }return m;
@@ -556,21 +611,24 @@ async function ensurePopupData(kind){
   }
 }
 function computeRank(kind,ctx,bucket){
+  // YoY: bucket เดียวกันเลื่อนไป 1 ปีงบ (เดือน/ไตรมาส/ปีเดียวกันของปีก่อน)
+  const pyBucket={ts:bucket.ts.map(t=>t-100)};
+  const both=m=>({val:bucketVal(bVal({m},bucket)),py:bucketVal(bVal({m},pyBucket))});
   let items=[];
   if(kind==='prov'){
     const provs=[...new Set(META.orgs.map(o=>o.prov))];
-    items=provs.map(p=>({id:p,name:p,val:bucketVal(bVal({m:seriesFor(p,'prov')},bucket))}));
+    items=provs.map(p=>({id:p,name:p,...both(seriesFor(p,'prov'))}));
   }else if(kind==='hosp'){
     // ctx.prov ไม่ระบุ → รวมทุกโรงพยาบาลทั้งเขต (ใช้ตอนแท็บ "โรงพยาบาล" ในหน้าจังหวัด)
-    items=META.orgs.filter(o=>!ctx.prov||o.prov===ctx.prov).map(o=>({id:o.id,name:orgName(o.id),val:bucketVal(bVal({m:seriesFor(o.id,'hosp')},bucket))}));
+    items=META.orgs.filter(o=>!ctx.prov||o.prov===ctx.prov).map(o=>({id:o.id,name:orgName(o.id),...both(seriesFor(o.id,'hosp'))}));
   }else if(kind==='code'){
     const codes=filteredCodes({...state.dim,code:''});
     const recs=shardRecs(HOSP_CODE,dimBIds(state.dim),ctx.hospId);
-    items=codes.map(c=>({id:c.code,name:c.code,val:bucketVal(bVal({m:sumSeries(recs,new Set([c.codeId]))},bucket))}));
+    items=codes.map(c=>({id:c.code,name:c.code,...both(sumSeries(recs,new Set([c.codeId])))}));
   }else if(kind==='self'){
     // อยู่ระดับรหัสบัญชีแล้ว (leaf) — โชว์ตัวเองเสมอแม้ไม่มีข้อมูลงวดนี้ ไม่กรองทิ้ง
-    const v=bucketVal(bVal({m:seriesFor(ctx.hospId,'hosp')},bucket));
-    return [{id:state.dim.code,name:state.dim.code,val:v??0,pct:100}];
+    const b=both(seriesFor(ctx.hospId,'hosp'));
+    return [{id:state.dim.code,name:state.dim.code,val:b.val??0,py:b.py,pct:100}];
   }
   items=items.filter(x=>x.val!=null);
   const total=items.reduce((a,x)=>a+Math.abs(x.val),0);
@@ -606,12 +664,17 @@ function rankSetTab(tab){renderRankTabs(tab)}
 function renderRankRows(kind,ctx,items){
   const maxV=Math.max(1,...items.map(x=>Math.abs(x.val)));
   const staticRow=kind==='self';
+  const yoyTag=x=>{
+    if(x.py==null)return'<span class="zero" style="font-size:11px">YoY: ไม่มีข้อมูลปีก่อน</span>';
+    const d=x.val-x.py,p=pct(x.val,x.py);
+    return `<span class="${dirCls(d)}" style="font-size:11px;font-weight:600">YoY ${d>0?'▲ +':d<0?'▼ −':''}${fmtM(Math.abs(d))}${p!=null?' ('+Math.abs(p).toFixed(1)+'%)':''}</span>`};
   document.getElementById('rmBody').innerHTML=items.length?items.map((x,i)=>`
     <div class="rmrow${staticRow?' static':''}" ${staticRow?'':`onclick="rankRowClick('${kind}','${(ctx.prov||ctx.hospId||'').toString().replace(/'/g,"\\'")}','${x.id.toString().replace(/'/g,"\\'")}')"`}>
       <div class="rk">#${i+1}</div>
       <div class="rmmain">
         <div class="rmtop"><span class="nm">${x.name}</span><span class="vv">${fmtM(x.val)}</span></div>
         <div class="rmbar"><i style="width:${Math.abs(x.val)/maxV*100}%"></i></div>
+        <div style="text-align:right;margin-top:2px">${yoyTag(x)}</div>
       </div>
       <div class="pc">${x.pct.toFixed(1)}%</div>
     </div>`).join(''):'<div class="note" style="padding:12px 18px">ไม่มีข้อมูลในงวดนี้</div>';
@@ -724,7 +787,7 @@ function fyPlugin(bks,sums){
       bounds.push(i);
       if(state.gran!=='y'){
         const x=(xs.getPixelForValue(i-1)+xs.getPixelForValue(i))/2;
-        ctx.strokeStyle='#cbd5e1';ctx.setLineDash([4,4]);ctx.lineWidth=1;
+        ctx.strokeStyle=getCss('--line');ctx.setLineDash([4,4]);ctx.lineWidth=1;
         ctx.beginPath();ctx.moveTo(x,ys.top);ctx.lineTo(x,ys.bottom);ctx.stroke()}}
     bounds.push(bks.length);
     // ป้ายสรุปรายปี 3 บรรทัด: ปีงบ / คู่เทียบ (ก.ย.66 vs ก.ย.65) / ค่า
@@ -736,7 +799,7 @@ function fyPlugin(bks,sums){
         if(x1-x0<46&&state.gran==='m')continue;
         if(x1-x0<30)continue;
         const cx=(x0+x1)/2;
-        ctx.font='600 11px Sarabun';ctx.fillStyle='#475569';
+        ctx.font='600 11px Sarabun';ctx.fillStyle=getCss('--mut');
         ctx.fillText(state.gran==='y'?String(fy):'ปีงบ '+fy,cx,ys.top-34);
         if(o&&o.vs&&x1-x0>=78){ctx.font='10px Sarabun';ctx.fillStyle='#94a3b8';
           ctx.fillText(o.vs,cx,ys.top-22)}
@@ -864,10 +927,10 @@ function renderChart(series,periods){
       handleChartClick(hit[0].index,hit[0].datasetIndex,bks,series);
     },
     layout:{padding:{top:48}},
-    scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5}},stacked:state.view==='mv'&&series.length===1},
-      y:{stacked:state.view==='mv'&&series.length===1,...mvY,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v)}},
+    scales:{x:{ticks:{maxRotation:60,autoSkip:true,font:{family:'Sarabun',size:state.gran==='m'?11:12.5},color:getCss('--mut')},grid:{color:getCss('--line')},stacked:state.view==='mv'&&series.length===1},
+      y:{stacked:state.view==='mv'&&series.length===1,...mvY,ticks:{font:{family:'Sarabun'},callback:v=>fmtM(v),color:getCss('--mut')},grid:{color:getCss('--line')}},
       y2:{display:state.view==='mv'&&series.length===1,position:'right',...mvY2,grid:{drawOnChartArea:false},ticks:{font:{family:'Sarabun',size:11},callback:v=>v+'%',color:'#7c3aed'},title:{display:true,text:'% สุทธิ',color:'#7c3aed',font:{family:'Sarabun',size:11}}}},
-    plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun'},boxWidth:14,padding:12}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},footerFont:{family:'Sarabun',weight:'bold',size:13},footerColor:'#fbbf24',footerMarginTop:8,
+    plugins:{legend:{position:'bottom',labels:{font:{family:'Sarabun'},boxWidth:14,padding:12,color:getCss('--ink')}},tooltip:{titleFont:{family:'Sarabun'},bodyFont:{family:'Sarabun'},footerFont:{family:'Sarabun',weight:'bold',size:13},footerColor:'#fbbf24',footerMarginTop:8,
       callbacks:{label:c=>c.dataset.yAxisID==='y2'?`${c.dataset.label}: ${c.parsed.y}%`:`${c.dataset.label}: ${fmtB(c.parsed.y??0)}`,
         title:items=>{const b=bks[items[0].dataIndex];
           return b.label+(state.gran==='y'?'':' ปีงบ '+b.fy)+(bFlag[items[0].dataIndex]?'  ⚠ ข้อมูลอาจไม่ครบ':'')},
@@ -889,6 +952,8 @@ function renderChart(series,periods){
 }
 function renderTop(periods){
   const last=periods[periods.length-1],prev=periods[periods.length-2];
+  const yoyT=last-100; // งวดเดียวกันปีงบก่อน
+  const dCell=(d,has=true)=>has?`<td class="${dirCls(d)}">${d>0?'▲ +':d<0?'▼ −':''}${fmtM(Math.abs(d))}</td>`:'<td class="zero">—</td>';
   const tbl=document.getElementById('topTbl'),title=document.getElementById('topTitle');
   const gs=filteredGroups(state.dim),gfSet=new Set(gs.map(g=>g.gfId));
   let rows=[];
@@ -901,25 +966,25 @@ function renderTop(periods){
     const byG=new Map();
     const gMap=new Map(gs.map(g=>[g.gfId,keyOf(g)]));
     for(const r of recs){if(!gfSet.has(r[0]))continue;
-      const k=gMap.get(r[0]);let o=byG.get(k);if(!o){o={cur:0,prev:0};byG.set(k,o)}
-      if(r[1]===last)o.cur+=r[2];if(r[1]===prev)o.prev+=r[2]}
-    rows=[...byG.entries()].map(([k,o])=>({name:k,cur:o.cur,d:o.cur-o.prev}))
+      const k=gMap.get(r[0]);let o=byG.get(k);if(!o){o={cur:0,prev:0,py:0,hasPy:false};byG.set(k,o)}
+      if(r[1]===last)o.cur+=r[2];if(r[1]===prev)o.prev+=r[2];if(r[1]===yoyT){o.py+=r[2];o.hasPy=true}}
+    rows=[...byG.entries()].map(([k,o])=>({name:k,cur:o.cur,d:o.cur-o.prev,dy:o.cur-o.py,hasPy:o.hasPy}))
       .sort((a,b)=>Math.abs(b.cur)-Math.abs(a.cur)).slice(0,15);
     title.textContent=`อันดับตามยอดคงเหลือ ${tLab(last)}${state.area==='prov'&&state.ents.length?' — '+state.ents[0]:''}`;
-    tbl.innerHTML=`<tr><th>กลุ่ม</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ (${tLab(last)} vs ${tLab(prev)})</th></tr>`+
-      rows.map(r=>`<tr class="click" onclick="drill('${lvl}','${r.name.replace(/'/g,"\\'")}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${dirCls(r.d)}">${r.d>0?'▲ +':r.d<0?'▼ −':''}${fmtM(Math.abs(r.d))}</td></tr>`).join('');
+    tbl.innerHTML=`<tr><th>กลุ่ม</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ MoM (vs ${tLab(prev)})</th><th>Δ YoY (vs ${tLab(yoyT)} ปี ${Math.floor(yoyT/100)})</th></tr>`+
+      rows.map(r=>`<tr class="click" onclick="drill('${lvl}','${r.name.replace(/'/g,"\\'")}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td>${dCell(r.d)}${dCell(r.dy,r.hasPy)}</tr>`).join('');
   }else{
     const d=state.dim,useB=d.budget||d.gf;
     const bIds=useB?dimBIds(d):null;
     const idSet=useB?gfSet:new Set(gs.map(g=>g.sId));
-    rows=META.orgs.map(o=>{let cur=0,pv=0;
+    rows=META.orgs.map(o=>{let cur=0,pv=0,py=0,hasPy=false;
       const recs=useB?shardRecs(HOSPB,bIds,o.id):(HOSPSUB?.[o.id]||[]);
-      for(const r of recs){if(!idSet.has(r[0]))continue;if(r[1]===last)cur+=r[2];if(r[1]===prev)pv+=r[2]}
-      return {id:o.id,name:orgName(o.id),cur,d:cur-pv}}).filter(r=>r.cur||r.d)
+      for(const r of recs){if(!idSet.has(r[0]))continue;if(r[1]===last)cur+=r[2];if(r[1]===prev)pv+=r[2];if(r[1]===yoyT){py+=r[2];hasPy=true}}
+      return {id:o.id,name:orgName(o.id),cur,d:cur-pv,dy:cur-py,hasPy}}).filter(r=>r.cur||r.d)
       .sort((a,b)=>Math.abs(b.cur)-Math.abs(a.cur)).slice(0,20);
     title.textContent=`อันดับโรงพยาบาล ${tLab(last)} — ${dimLabel()}`;
-    tbl.innerHTML=`<tr><th>โรงพยาบาล</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ (${tLab(last)} vs ${tLab(prev)})</th></tr>`+
-      rows.map(r=>`<tr class="click" onclick="hospPick('${r.id}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td><td class="${dirCls(r.d)}">${r.d>0?'▲ +':r.d<0?'▼ −':''}${fmtM(Math.abs(r.d))}</td></tr>`).join('');
+    tbl.innerHTML=`<tr><th>โรงพยาบาล</th><th>ยอดคงเหลือ ${tLab(last)}</th><th>Δ MoM (vs ${tLab(prev)})</th><th>Δ YoY (vs ${tLab(yoyT)} ปี ${Math.floor(yoyT/100)})</th></tr>`+
+      rows.map(r=>`<tr class="click" onclick="hospPick('${r.id}')"><td>${r.name}</td><td>${fmtM(r.cur)}</td>${dCell(r.d)}${dCell(r.dy,r.hasPy)}</tr>`).join('');
   }
 }
 function drill(lvl,val){state.dim[lvl]=val;
