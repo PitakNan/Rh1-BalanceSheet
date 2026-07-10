@@ -47,6 +47,12 @@ pf = mp.groupby("prefix")[LV].agg(lambda s: s.iloc[0] if s.nunique() == 1 else N
 pf_ok = pf.dropna()
 print(f"Mapping: รหัสเต็ม {len(mp_full)} | prefix สม่ำเสมอ {len(pf_ok)}/{len(pf)}")
 
+# ---------- 2.5) Mapping patch — รหัสที่ไม่มีใน Mapping_Clean.xlsx เลย (fallback ชั้นที่ 3) ----------
+# ไม่แก้ Mapping_Clean.xlsx ต้นฉบับ — เพิ่มไฟล์แยกที่ผูก prefix เข้ากับหมวดใกล้เคียงที่สุดแทน
+patch = pd.read_csv(BASE + r"\Mapping_Patch_บัญชีนอกมาตรฐาน.csv", dtype={"prefix": str})
+patch_ok = patch.set_index(patch["prefix"].astype("int64"))[LV]
+print(f"Mapping patch: {len(patch_ok)} prefix เพิ่มเติม (นอกเหนือ Mapping_Clean.xlsx)")
+
 # ---------- 3) ประมวลผลทีละไฟล์ ----------
 def fy_timeid(pdate):
     """PDate → TimeID เช่น 2023-10-31 → 256701 (ต.ค. = เดือนงวด 01 ของ FY2567)"""
@@ -167,6 +173,14 @@ for c in LV:
 need = master[LV[0]].isna()
 for c in LV:
     master.loc[need, c] = master.loc[need, "prefix"].map(pf_ok[c])
+# fallback ชั้นที่ 3: Mapping patch (รหัสนอกมาตรฐานที่ยืนยันแล้วว่าควรอยู่หมวดไหน)
+need = master[LV[0]].isna()
+patched_rows = need.sum()
+for c in LV:
+    master.loc[need, c] = master.loc[need, "prefix"].map(patch_ok[c])
+patched_rows -= master[LV[0]].isna().sum()
+if patched_rows:
+    print(f"Mapping patch เติมให้: {patched_rows:,} แถว")
 cov = master[LV[0]].notna().mean() * 100
 miss_val = master.loc[master[LV[0]].isna(), "bs"].abs().sum()
 tot_val = master["bs"].abs().sum()

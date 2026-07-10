@@ -73,6 +73,10 @@ grp_map = grptbl.set_index("org5")["GroupName"].to_dict()
 for k, v in org_map.items():
     v["grp"] = grp_map.get(k)
 
+# เติม OrgT ที่ว่างในไฟล์ต้นทาง — ปางมะผ้า 11208 (รพช. 36 เตียง, F2 กลุ่มเดียวกับขุนยวม/สบเมย ที่เป็น "รพช. 30")
+if "11208" in org_map and (org_map["11208"]["type"] is None or pd.isna(org_map["11208"]["type"])):
+    org_map["11208"]["type"] = "รพช. 30"
+
 periods = sorted(m["t"].unique().tolist())
 
 # ข้อมูลครบทุกปีแล้ว (2564/2568 ใช้ Access .mdb แทน Excel ที่ truncated)
