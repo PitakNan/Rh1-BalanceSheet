@@ -219,6 +219,11 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .surv-pill{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:12.5px;background:var(--card)}
 .surv-pill .rb{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
 .surv-pill.out{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--bad-ink);font-weight:600}
+.surv-pill.down{background:var(--good-bg);border-color:var(--good-bd)}
+.surv-pill.up{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--bad-ink);font-weight:600}
+.surv-base{display:block;font-size:10.5px;color:var(--mut);margin-top:3px;line-height:1.4}
+.surv-base b{color:var(--ink);font-variant-numeric:tabular-nums}
+.surv-base a{color:var(--blue);text-decoration:none}.surv-base a:hover{text-decoration:underline}
 .surv-chartbox{position:relative;height:170px}
 /* ปุ่ม + ป็อปอัปประมาณการ NI รายหมวด (แนว Planfin) */
 .planfin-btn{font-family:inherit;font-size:11px;font-weight:600;padding:2px 9px;border:1px solid var(--blue);border-radius:7px;background:var(--card);color:var(--blue);cursor:pointer;margin-left:8px;white-space:nowrap;vertical-align:middle}
@@ -879,6 +884,14 @@ function renderNITiers(h, s){
 
 // ── D: Survival Simulator — จำลองเส้นทางอยู่รอด (อิงสูตร SU ทางการ) ──
 let SURV=null;
+// สเกลแกน NI (±ล้าน/เดือน) และเงินก้อน (ล้าน) ตามระดับหน่วยบริการ — ค่าเป็นล้านบาท
+function survLimits(h){
+  const m=(h.grp||'').match(/\.(A|S|M1|M2|F1|F2|F3)(?=\s|$)/)||(h.grp||'').match(/(A|S|M1|M2|F1|F2|F3)/);
+  const cls=m?m[1]:null;
+  const T={A:[500,100],S:[300,80],M1:[150,60],M2:[100,40],F1:[60,30],F2:[40,25],F3:[25,15]};
+  const [ni,inj]=T[cls]||[100,40];
+  return {niLim:ni*1e6, injMax:inj*1e6, cls};
+}
 function renderSurvival(h, s){
   const box=document.getElementById('survBox'); if(!box) return;
   const t=h.trend[h.trend.length-1];
@@ -892,16 +905,19 @@ function renderSurvival(h, s){
   const wf=h.waterfall&&(h.waterfall.mom||h.waterfall.yoy);
   const planRev=wf&&wf.rev?wf.rev.map(r=>({name:r.name,mo:r.value/mo})):null;
   const planExp=wf&&wf.exp?wf.exp.map(r=>({name:r.name,mo:r.value/mo})):null;
-  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp};
-  // สเกลกว้าง: NI ±1,000 ล้าน/เดือน · เงินก้อนสูงสุด 1,000 ล้าน (ใส่ค่าละเอียดของ NI ผ่านปุ่มประมาณการรายหมวด)
-  const NI_LIM=1000000000, INJ_MAX=1000000000;
+  // สเกลแกนปรับตามระดับหน่วยบริการ (A ใหญ่สุด → F3 เล็กสุด) เพื่อไม่ให้สเกลกว้างจนมองผลการเปลี่ยนแปลงไม่ออก
+  const lim=survLimits(h);
+  const NI_LIM=lim.niLim, INJ_MAX=lim.injMax;
   const clampNi=v=>Math.max(-NI_LIM,Math.min(NI_LIM,v));
+  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp,niLim:NI_LIM,injMax:INJ_MAX,niRun};
   box.innerHTML=`
     <div class="surv-ctrl">
       <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b>${planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
-        <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="100000" value="${clampNi(niRun)}"></div>
+        <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="100000" value="${clampNi(niRun)}">
+        <span class="surv-base">เฉลี่ยจริงตอนนี้ <b>${niRun>0?'+':''}${fmtM(niRun)}</b>/เดือน · สเกล ±${fmtM(NI_LIM)} (ระดับ ${lim.cls||'-'}) · <a href="#" onclick="svReset('ni');return false">คืนค่าเฉลี่ย</a></span></div>
       <div class="fld"><label>เงินก้อนเสริมสภาพคล่อง (ครั้งเดียว ตอนนี้): <b id="svInjLab"></b></label>
-        <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="500000" value="0"></div>
+        <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="500000" value="0">
+        <span class="surv-base">ครั้งเดียว ณ ตอนนี้ · สเกล 0–${fmtM(INJ_MAX)} · <a href="#" onclick="svReset('inj');return false">ล้างเป็น 0</a></span></div>
     </div>
     <div class="surv-sum" id="svSum"></div>
     <div class="surv-chartbox"><canvas id="survChart"></canvas></div>
@@ -923,7 +939,7 @@ function projSurv(){
   const r0=anc(scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo).risk);
   const startRisk=SURV.official;   // เดือน 0 (ก่อนใส่เงินก้อน) = คะแนนทางการ
   const path=[{k:0,risk:r0,cash:ccn}];
-  const cross={}; let cashOut=null;
+  const crossDown={}, crossUp={}; let cashOut=null;   // ดีขึ้น (คะแนนลด) / แย่ลง (คะแนนเพิ่ม)
   const HORIZON=24;
   for(let k=1;k<=HORIZON;k++){
     if(curMo>=12){curMo=1;curNi=0;} else curMo++;   // fiscal reset ที่ ต.ค.
@@ -931,23 +947,23 @@ function projSurv(){
     cca+=cashMo; ccn+=cashMo; cqn+=cashMo;
     const rk=anc(scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo).risk);
     path.push({k,risk:rk,cash:ccn});
-    for(let L=startRisk-1;L>=0;L--) if(cross[L]==null && rk<=L) cross[L]=k;
+    for(let L=startRisk-1;L>=0;L--) if(crossDown[L]==null && rk<=L) crossDown[L]=k;  // ถึงระดับดีขึ้น
+    for(let L=startRisk+1;L<=7;L++) if(crossUp[L]==null && rk>=L) crossUp[L]=k;       // ตกไประดับแย่ลง
     if(ccn<=0 && cashOut==null) cashOut=k;
   }
-  // สรุป
+  // สรุป — แสดงทั้งเส้นทางดีขึ้น (คะแนนลด) และแย่ลง (คะแนนเพิ่ม) พร้อมเดือน/ปีที่จะถึงแต่ละระดับ
   const pills=[];
-  const targets=[6,5,4,3,2,1,0].filter(L=>L<startRisk);
-  if(startRisk<=0){ pills.push(`<div class="surv-pill"><span class="rb" style="background:${riskColor(0)}">0</span>ผ่านทุกเกณฑ์อยู่แล้ว</div>`); }
-  else {
-    for(const L of targets){
-      if(cross[L]!=null) pills.push(`<div class="surv-pill"><span class="rb" style="background:${riskColor(L)}">${L}</span>ในอีก <b>${cross[L]}</b> เดือน (${tLab(addMo(SURV.startT,cross[L]))})</div>`);
-    }
-    if(!pills.length) pills.push(`<div class="surv-pill">คะแนนไม่ลดจาก ${startRisk} ภายใน ${HORIZON} เดือนที่สมมติ</div>`);
-  }
-  if(cashOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินสดหมดในอีก ${cashOut} เดือน (${tLab(addMo(SURV.startT,cashOut))})</div>`);
+  const at=k=>tLab(addMo(SURV.startT,k));
+  if(startRisk<=0) pills.push(`<div class="surv-pill down"><span class="rb" style="background:${riskColor(0)}">0</span>ผ่านทุกเกณฑ์อยู่แล้ว (ระดับ 0)</div>`);
+  for(let L=startRisk+1;L<=7;L++) if(crossUp[L]!=null)   // แย่ลง (ใกล้ตัวก่อน)
+    pills.push(`<div class="surv-pill up"><span class="rb" style="background:${riskColor(L)}">${L}</span>แย่ลงสู่ระดับ ${L} ในอีก <b>${crossUp[L]}</b> เดือน (${at(crossUp[L])})</div>`);
+  for(let L=startRisk-1;L>=0;L--) if(crossDown[L]!=null) // ดีขึ้น (ใกล้ตัวก่อน)
+    pills.push(`<div class="surv-pill down"><span class="rb" style="background:${riskColor(L)}">${L}</span>ดีขึ้นสู่ระดับ ${L} ในอีก <b>${crossDown[L]}</b> เดือน (${at(crossDown[L])})</div>`);
+  if(!pills.length) pills.push(`<div class="surv-pill">คะแนนคงที่ที่ ${startRisk} ตลอด ${HORIZON} เดือนที่จำลอง</div>`);
+  if(cashOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินสดหมดในอีก ${cashOut} เดือน (${at(cashOut)})</div>`);
   else if(cashMo<0) pills.push(`<div class="surv-pill out">⚠️ เงินสดลดลงเรื่อยๆ (${fmtM(cashMo)}/เดือน)</div>`);
   document.getElementById('svSum').innerHTML=pills.join('');
-  drawSurvChart(path, cross, cashOut, startRisk);
+  drawSurvChart(path, crossDown, cashOut, startRisk);
 }
 function addMo(t, k){ let y=Math.floor(t/100), m=t%100+k; y+=Math.floor((m-1)/12); m=((m-1)%12)+1; return y*100+m; }
 function drawSurvChart(path, cross, cashOut, startRisk){
@@ -1034,12 +1050,20 @@ function niPlanReset(){
 function niPlanApply(){
   const s=niPlanSums();
   let ni=Math.round(s.ni*1e6/100000)*100000;         // ล้านบาท → บาท ปัดขั้นละแสน (ตรง step ของแกน)
-  ni=Math.max(-1000000000,Math.min(1000000000,ni));
+  const lim=(SURV&&SURV.niLim)||1000000000;
+  ni=Math.max(-lim,Math.min(lim,ni));
   const sl=document.getElementById('svNi');
   if(sl){ sl.value=ni; projSurv(); }
   closeNIPlan();
 }
 function closeNIPlan(){ const el=document.getElementById('niPlanOverlay'); if(el) el.style.display='none'; }
+// คืนแกนเป็นค่าตั้งต้น: NI = ค่าเฉลี่ยจริงต่อเดือน · เงินก้อน = 0
+function svReset(which){
+  if(!SURV) return;
+  if(which==='ni'){ const el=document.getElementById('svNi'); if(el) el.value=Math.max(-SURV.niLim,Math.min(SURV.niLim,SURV.niRun)); }
+  else { const el=document.getElementById('svInj'); if(el) el.value=0; }
+  projSurv();
+}
 
 // ── C: Payables Stress — เจ้าหนี้การค้ารายหมวด + เดือนค้างจ่าย ──
 function renderPayables(h){
