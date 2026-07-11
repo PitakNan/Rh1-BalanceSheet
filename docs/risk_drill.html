@@ -668,7 +668,7 @@ function renderDetail(hcode){
   </div>`;
 
   renderGapSolver(h, s);
-  renderSurvival(h);
+  renderSurvival(h, s);
   renderRatioChart(h);
   renderNIBridge(h);
   renderWaterfallPL(h);
@@ -729,25 +729,30 @@ function renderGapSolver(h, s){
   const t=h.trend[h.trend.length-1];
   if(!t || t.cl==null || !t.cl){ box.innerHTML='<div class="note">งวดนี้ไม่มีค่าดิบงบดุล (ตัวส่วนเป็น 0 หรือ shard เวอร์ชันเก่า)</div>'; return; }
   const mo=t.t%100;
-  const cur=scoreOf(t.ca,t.cl,t.qn,t.cn,t.ni,mo);
+  // ยึดคะแนนทางการที่ badge/chips แสดง (s.*) เป็นสถานะปัจจุบัน — ใช้ scoreOf(GL) เป็น "ฐาน" คำนวณ delta ของการจำลองเท่านั้น
+  // (กันกรณี boundary เช่น QR≈1.0 ที่ค่า reported กับ GL ต่างกันเล็กน้อยจนคะแนนต่างกัน 1 → เครื่องมือต้องไม่ขัดกับ badge)
+  const base=scoreOf(t.ca,t.cl,t.qn,t.cn,t.ni,mo);
+  const trig=new Set(s.triggers||[]);
+  const sRisk=s.risk||0;
+  const anc=v=>Math.max(0,Math.min(7, sRisk + (v - base.risk)));  // map คะแนนจำลอง → ฐานทางการ
   const CR_T=1.5,QR_T=1.0,CASH_T=0.8;
   const rows=[
-    {name:'Current Ratio',val:fmtR(cur.cr),th:'≥ 1.5',fail:cur.cr<CR_T,type:'STOCK',
+    {name:'Current Ratio',val:fmtR(s.cr),th:'≥ 1.5',fail:trig.has('cr'),type:'STOCK',
      opt:`เพิ่มสินทรัพย์หมุนเวียน <b>+${fmtM(CR_T*t.cl-t.ca)}</b> หรือ ลดหนี้หมุนเวียน <b>−${fmtM(t.cl-t.ca/CR_T)}</b>`,
-     head:`เกิน ${fmtR(cur.cr-CR_T)}`},
-    {name:'Quick Ratio',val:fmtR(cur.qr),th:'≥ 1.0',fail:cur.qr<QR_T,type:'STOCK',
+     head:`เกิน ${fmtR((s.cr||0)-CR_T)}`},
+    {name:'Quick Ratio',val:fmtR(s.qr),th:'≥ 1.0',fail:trig.has('qr'),type:'STOCK',
      opt:`เพิ่มสินทรัพย์เร็ว <b>+${fmtM(QR_T*t.cl-t.qn)}</b> หรือ ลดหนี้หมุนเวียน <b>−${fmtM(t.cl-t.qn/QR_T)}</b>`,
-     head:`เกิน ${fmtR(cur.qr-QR_T)}`},
-    {name:'Cash Ratio',val:fmtR(cur.cash),th:'≥ 0.8',fail:cur.cash<CASH_T,type:'STOCK',
+     head:`เกิน ${fmtR((s.qr||0)-QR_T)}`},
+    {name:'Cash Ratio',val:fmtR(s.cash),th:'≥ 0.8',fail:trig.has('cash'),type:'STOCK',
      opt:`เพิ่มเงินสด+เงินฝาก <b>+${fmtM(CASH_T*t.cl-t.cn)}</b> หรือ ลดหนี้หมุนเวียน <b>−${fmtM(t.cl-t.cn/CASH_T)}</b>`,
-     head:`เกิน ${fmtR(cur.cash-CASH_T)}`},
-    {name:'NWC เงินทุนหมุนเวียนสุทธิ',val:fmtM(cur.nwc),th:'≥ 0',fail:cur.nwc<0,type:'STOCK',
-     opt:`ปิดช่องว่าง <b>+${fmtM(-cur.nwc)}</b> (เพิ่มสินทรัพย์ฯ หรือลดหนี้ฯ)`,
-     head:`บวกอยู่ ${fmtM(cur.nwc)}`},
-    {name:'NI กำไร/ขาดทุนสะสม',val:fmtM(t.ni),th:'≥ 0',fail:t.ni<0,type:'FLOW',
-     opt:`ทำกำไรเพิ่มอีก <b>+${fmtM(-t.ni)}</b> ภายในสิ้นปีงบ`,
-     head:`กำไรอยู่ ${fmtM(t.ni)}`},
-    {name:'SU คะแนนอยู่รอด',val:cur.su,th:'= 0',fail:cur.su>0,type:'STOCK',
+     head:`เกิน ${fmtR((s.cash||0)-CASH_T)}`},
+    {name:'NWC เงินทุนหมุนเวียนสุทธิ',val:fmtM(s.nwc),th:'≥ 0',fail:trig.has('nwc'),type:'STOCK',
+     opt:`ปิดช่องว่าง <b>+${fmtM(Math.max(0,-s.nwc))}</b> (เพิ่มสินทรัพย์ฯ หรือลดหนี้ฯ)`,
+     head:`บวกอยู่ ${fmtM(s.nwc)}`},
+    {name:'NI กำไร/ขาดทุนสะสม',val:fmtM(s.ni),th:'≥ 0',fail:trig.has('ni'),type:'FLOW',
+     opt:`ทำกำไรเพิ่มอีก <b>+${fmtM(Math.max(0,-s.ni))}</b> ภายในสิ้นปีงบ`,
+     head:`กำไรอยู่ ${fmtM(s.ni)}`},
+    {name:'SU คะแนนอยู่รอด',val:s.su,th:'= 0',fail:(s.su||0)>0,type:'STOCK',
      opt:`ต้องมี <b>NWC ≥ 0 และ NI ≥ 0 พร้อมกัน</b> (SU จะลดทันทีเมื่อพ้น 2 เงื่อนไขนี้)`,
      head:`ปลอดภัย`},
   ];
@@ -766,38 +771,39 @@ function renderGapSolver(h, s){
   // ── headline + ladder ──
   const steps=buildLadder(t, mo);
   let hl, ladderHtml='', noteHtml='';
-  if(cur.risk<=0){
+  if(sRisk<=0){
     hl=`<div class="gap-hl done">✓ ${h.name} ผ่านทุกเกณฑ์ในงวดนี้ (Risk 0) — ตารางด้านล่างแสดง "ระยะห่างเหนือเกณฑ์" ของแต่ละตัว เพื่อเฝ้าระวังไม่ให้หลุดกลับ</div>`;
   }else{
     const first=steps[0];
     if(first && first.type==='FLOW'){
       const monthsLeft=Math.max(1,12-mo);
-      const req=(-t.ni)/monthsLeft;
-      hl=`<div class="gap-hl flow">เกณฑ์แรกที่ควรโจมตี = <b>NI (กำไร)</b> ซึ่งอยู่ในมือ รพ. — ห่างเป้าแค่ <b>${fmtM(-t.ni)}</b> ≈ +${fmtM(req)}/เดือน อีก ${monthsLeft} เดือน แล้วคะแนนจะลดจาก ${cur.risk} → ${first.sc.risk} ทันที (ST ลด 1)</div>`;
+      const req=(-s.ni)/monthsLeft;
+      hl=`<div class="gap-hl flow">เกณฑ์แรกที่ควรโจมตี = <b>NI (กำไร)</b> ซึ่งอยู่ในมือ รพ. — ห่างเป้าแค่ <b>${fmtM(-s.ni)}</b> ≈ +${fmtM(req)}/เดือน อีก ${monthsLeft} เดือน แล้วคะแนนจะลดจาก ${sRisk} → ${anc(first.sc.risk)} ทันที (ST ลด 1)</div>`;
     }else if(first){
-      hl=`<div class="gap-hl stock">งวดนี้เกณฑ์ที่เหลือเป็น <b>STOCK</b> (ต้องใช้เงินก้อน/ปรับหนี้) — ก้อนแรก ${fmtM(first.stock)} จะลดคะแนน ${cur.risk} → ${first.sc.risk}</div>`;
+      hl=`<div class="gap-hl stock">งวดนี้เกณฑ์ที่เหลือเป็น <b>STOCK</b> (ต้องใช้เงินก้อน/ปรับหนี้) — ก้อนแรก ${fmtM(first.stock)} จะลดคะแนน ${sRisk} → ${anc(first.sc.risk)}</div>`;
     }
-    // ladder rungs: เริ่มจากคะแนนปัจจุบัน แล้วไล่ตาม milestone
+    // ladder rungs: เริ่มจากคะแนนทางการ (badge) แล้วไล่ตาม milestone (คะแนน = ฐานทางการ + delta จำลอง)
     const startBadge=`<div class="rung">
-      <div class="rbadge" style="background:${riskColor(cur.risk)}">${cur.risk}</div>
-      <div class="rmain"><div class="rl">คะแนนปัจจุบัน (LI ${cur.li} + ST ${cur.st} + SU ${cur.su})</div>
-      <div class="rs">พลาด ${cur.li+cur.st+ (cur.su>0?1:0)} กลุ่มเกณฑ์</div></div>
+      <div class="rbadge" style="background:${riskColor(sRisk)}">${sRisk}</div>
+      <div class="rmain"><div class="rl">คะแนนปัจจุบัน (LI ${s.li} + ST ${s.st} + SU ${s.su})</div>
+      <div class="rs">พลาด ${(s.li||0)+(s.st||0)+((s.su||0)>0?1:0)} กลุ่มเกณฑ์</div></div>
       <div class="rcost"></div></div>`;
     const rungs=steps.map((st_,i)=>{
-      const prev=i===0?cur:steps[i-1].sc;
-      const drop=prev.risk-st_.sc.risk;
+      const prevDisp=i===0?sRisk:anc(steps[i-1].sc.risk);
+      const disp=anc(st_.sc.risk);
+      const drop=prevDisp-disp;
       const costHtml=`${st_.flow>0?`<span class="cf">กำไร +${fmtM(st_.flow)}</span>`:''}${st_.flow>0&&st_.stock>0?'<br>':''}${st_.stock>0?`<span class="cs">เงินก้อน +${fmtM(st_.stock)}</span>`:''}<span class="cl">สะสมรวม</span>`;
       return `<div class="rung">
-        <div class="rbadge" style="background:${riskColor(st_.sc.risk)}">${st_.sc.risk}</div>
+        <div class="rbadge" style="background:${riskColor(disp)}">${disp}</div>
         <div class="rmain"><div class="rl">${st_.label}</div>
-          <div class="rs">${st_.type==='FLOW'?'FLOW · ทำเองได้':'STOCK · ต้องการทรัพยากร'} → ลด ${drop} คะแนน (LI ${st_.sc.li}+ST ${st_.sc.st}+SU ${st_.sc.su})${drop>=2?' · <b>ลดหลายคะแนนพร้อมกันเพราะปลดล็อก SU</b>':''}</div></div>
+          <div class="rs">${st_.type==='FLOW'?'FLOW · ทำเองได้':'STOCK · ต้องการทรัพยากร'} → ลด ${drop} คะแนน${drop>=2?' · <b>ลดหลายคะแนนพร้อมกันเพราะปลดล็อก SU</b>':''}</div></div>
         <div class="rcost">${costHtml}</div></div>`;
     }).join('');
     ladderHtml=`<div class="wf-title" style="margin-top:14px">บันไดลดคะแนน Risk (จำลอง)</div><div class="ladder">${startBadge}${rungs}</div>`;
   }
 
   // ── NI capability note (เฉพาะเมื่อ NI ยังติดลบ) ──
-  if(t.ni<0){
+  if(s.ni<0){
     const mn=monthlyNI(h.trend).slice(-6);
     const vals=mn.filter(v=>v!=null);
     const mx=Math.max(1,...vals.map(v=>Math.abs(v)));
@@ -848,14 +854,16 @@ function renderNITiers(h, s){
 
 // ── D: Survival Simulator — จำลองเส้นทางอยู่รอด (อิงสูตร SU ทางการ) ──
 let SURV=null;
-function renderSurvival(h){
+function renderSurvival(h, s){
   const box=document.getElementById('survBox'); if(!box) return;
   const t=h.trend[h.trend.length-1];
   if(!t || !t.cl || t.e33y==null){ box.innerHTML='<div class="note">งวดนี้ไม่มีข้อมูลพอสำหรับจำลอง</div>'; return; }
   const mo=t.t%100;
   const depMo=Math.max(0,(t.exp-t.e33y)/mo);   // ค่าเสื่อม/เดือน (run-rate ปัจจุบัน)
   const niRun=Math.round(t.ni/mo/100000)*100000; // NI/เดือน (ค่าเฉลี่ย YTD) ปัดแสน
-  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t};
+  // anchor เดือน 0 ที่คะแนนทางการ (badge) — base = scoreOf(GL) ใช้คำนวณ delta จำลอง (กัน boundary mismatch)
+  const base=scoreOf(t.ca,t.cl,t.qn,t.cn,t.ni,mo).risk;
+  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base};
   const niMin=Math.min(-3000000, niRun*2), niMax=Math.max(3000000, -niRun*2);
   box.innerHTML=`
     <div class="surv-ctrl">
@@ -879,35 +887,36 @@ function projSurv(){
   document.getElementById('svNiLab').textContent=(niM>0?'+':'')+fmtM(niM);
   document.getElementById('svInjLab').textContent=fmtM(inj);
   const cashMo=niM+SURV.depMo;
+  const anc=v=>Math.max(0,Math.min(7, SURV.official + (v - SURV.base)));  // จำลอง → ฐานทางการ
   let cca=SURV.ca+inj, ccn=SURV.cn+inj, cqn=SURV.qn+inj, curNi=SURV.ni, curMo=SURV.mo;
-  const s0=scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo);
-  const path=[{k:0,risk:s0.risk,cash:ccn}];
+  const r0=anc(scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo).risk);
+  const startRisk=SURV.official;   // เดือน 0 (ก่อนใส่เงินก้อน) = คะแนนทางการ
+  const path=[{k:0,risk:r0,cash:ccn}];
   const cross={}; let cashOut=null;
   const HORIZON=24;
   for(let k=1;k<=HORIZON;k++){
     if(curMo>=12){curMo=1;curNi=0;} else curMo++;   // fiscal reset ที่ ต.ค.
     curNi+=niM;
     cca+=cashMo; ccn+=cashMo; cqn+=cashMo;
-    const sc=scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo);
-    path.push({k,risk:sc.risk,cash:ccn});
-    for(let L=s0.risk-1;L>=0;L--) if(cross[L]==null && sc.risk<=L) cross[L]=k;
+    const rk=anc(scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo).risk);
+    path.push({k,risk:rk,cash:ccn});
+    for(let L=startRisk-1;L>=0;L--) if(cross[L]==null && rk<=L) cross[L]=k;
     if(ccn<=0 && cashOut==null) cashOut=k;
   }
   // สรุป
   const pills=[];
-  const targets=[6,5,4,3,2,1,0].filter(L=>L<s0.risk);
-  const firstDrop=targets.find(L=>cross[L]!=null);
-  if(s0.risk<=0){ pills.push(`<div class="surv-pill"><span class="rb" style="background:${riskColor(0)}">0</span>ผ่านทุกเกณฑ์อยู่แล้ว</div>`); }
+  const targets=[6,5,4,3,2,1,0].filter(L=>L<startRisk);
+  if(startRisk<=0){ pills.push(`<div class="surv-pill"><span class="rb" style="background:${riskColor(0)}">0</span>ผ่านทุกเกณฑ์อยู่แล้ว</div>`); }
   else {
     for(const L of targets){
       if(cross[L]!=null) pills.push(`<div class="surv-pill"><span class="rb" style="background:${riskColor(L)}">${L}</span>ในอีก <b>${cross[L]}</b> เดือน (${tLab(addMo(SURV.startT,cross[L]))})</div>`);
     }
-    if(!pills.length) pills.push(`<div class="surv-pill">คะแนนไม่ลดจาก ${s0.risk} ภายใน ${HORIZON} เดือนที่สมมติ</div>`);
+    if(!pills.length) pills.push(`<div class="surv-pill">คะแนนไม่ลดจาก ${startRisk} ภายใน ${HORIZON} เดือนที่สมมติ</div>`);
   }
   if(cashOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินสดหมดในอีก ${cashOut} เดือน (${tLab(addMo(SURV.startT,cashOut))})</div>`);
   else if(cashMo<0) pills.push(`<div class="surv-pill out">⚠️ เงินสดลดลงเรื่อยๆ (${fmtM(cashMo)}/เดือน)</div>`);
   document.getElementById('svSum').innerHTML=pills.join('');
-  drawSurvChart(path, cross, cashOut, s0.risk);
+  drawSurvChart(path, cross, cashOut, startRisk);
 }
 function addMo(t, k){ let y=Math.floor(t/100), m=t%100+k; y+=Math.floor((m-1)/12); m=((m-1)%12)+1; return y*100+m; }
 function drawSurvChart(path, cross, cashOut, startRisk){
