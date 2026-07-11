@@ -237,15 +237,23 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .nip-head{padding:14px 18px;border-bottom:1px solid var(--line);flex-shrink:0}
 .nip-head h3{font-size:15px;font-weight:700}
 .nip-head .note{margin-top:5px;font-size:11.5px;line-height:1.5}
-.nip-body{padding:12px 18px;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:2px 24px;align-content:start}
+.nip-body{padding:12px 18px;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 24px;align-content:start}
+.nip-col{min-width:0}
 @media(max-width:620px){.nip-body{grid-template-columns:1fr}}
-.nip-col h4{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin:2px 0 6px;position:sticky;top:0;background:var(--card);padding-bottom:3px;z-index:1}
+.nip-col h4{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin:2px 0 6px;position:sticky;top:0;background:var(--card);padding-bottom:3px;z-index:1}
+.nip-col h4 .nip-100{font-weight:400;text-transform:none;font-size:10.5px;letter-spacing:0}
+.nip-stack{display:flex;height:14px;border-radius:4px;overflow:hidden;margin-bottom:8px;background:var(--bg)}
+.nip-seg{height:100%;flex-shrink:0}
 .nip-row{display:flex;align-items:center;gap:6px;padding:3px 0}
-.nip-row label{flex:1 1 38%;font-size:11.5px;line-height:1.25;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nip-row .nip-sl{flex:1 1 64px;min-width:52px;accent-color:var(--blue);cursor:pointer}
+.nip-row label{flex:1 1 32%;font-size:11.5px;line-height:1.25;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nip-row .nip-sl{flex:1 1 54px;min-width:42px;accent-color:var(--blue);cursor:pointer}
 .nip-row .nip-num{width:64px;font-family:inherit;font-size:12.5px;text-align:right;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums;flex-shrink:0}
 .nip-row .nip-num:focus{outline:none;border-color:var(--blue)}
 .nip-row .u{font-size:10px;color:var(--mut);flex-shrink:0}
+.nip-row .nip-pct{width:28px;text-align:right;font-size:10.5px;color:var(--mut);font-variant-numeric:tabular-nums;flex-shrink:0}
+.nip-row .nip-mbar{width:34px;height:8px;background:var(--bg);border-radius:3px;overflow:hidden;flex-shrink:0}
+.nip-row .nip-mbar-f{display:block;height:100%;border-radius:3px}
+@media(max-width:400px){.nip-row .nip-mbar{display:none}}
 .nip-foot{padding:12px 18px;border-top:1px solid var(--line);flex-shrink:0}
 .nip-totline{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
 .nip-totline b{font-variant-numeric:tabular-nums;color:var(--ink)}
@@ -1035,18 +1043,32 @@ function drawCashChart(path, cashOut, netOut){
 // ── D+: ป็อปอัปประมาณการ NI รายหมวด (แนว Planfin) ────────────────
 // ใส่ประมาณการต่อเดือนของแต่ละหมวดรายได้/ค่าใช้จ่าย → NI = รวมรายได้ − รวมค่าใช้จ่าย
 // ค่าตั้งต้น = อัตราเฉลี่ยจริงต่อเดือน (YTD ÷ เดือนที่ผ่านมา) แล้วส่งค่า NI ไปวางบนแกนจำลองอัตโนมัติ
+// สีไล่โทนตามหมวด (rev=โทนฟ้า, exp=โทนส้ม-แดง) กระจาย hue ด้วย i*47 กันสีซ้ำติดกัน
+function segColor(i, isExp){ const hue=isExp?(5+(i*47)%40):(200+(i*47)%70), light=42+(i%4)*7; return `hsl(${hue} 62% ${light}%)`; }
+function nipStackHtml(list, isExp){
+  const total=list.reduce((s,c)=>s+c.mo,0);
+  return list.map((c,i)=>{
+    const pct=total>0?Math.max(0,c.mo/total*100):0;
+    if(pct<=0) return '';
+    return `<div class="nip-seg" style="width:${pct}%;background:${segColor(i,isExp)}" title="${c.name} ${pct.toFixed(1)}%"></div>`;
+  }).join('');
+}
 function niPlanRows(list, kind){
+  const total=list.reduce((s,c)=>s+c.mo,0);
   return list.map((c,i)=>{
     const curM=c.mo/1e6;
     const maxM=Math.max(Math.abs(curM)*2, 1);            // สเกลสไลด์ต่อหมวด (อย่างน้อย ±1 ล้าน)
     const minM=Math.min(0, curM*2);
     const step=Math.max(maxM/100, 0.01);
     const slv=Math.min(Math.max(curM,minM),maxM);
+    const pct=total>0?Math.max(0,c.mo/total*100):0;
     return `<div class="nip-row">
       <label title="${c.name}">${c.name}</label>
       <input type="range" class="nip-sl" min="${minM.toFixed(2)}" max="${maxM.toFixed(2)}" step="${step.toFixed(3)}" value="${slv.toFixed(2)}" data-kind="${kind}" data-i="${i}" oninput="niPlanSlide(this)">
       <input type="number" class="nip-num" step="0.01" inputmode="decimal" value="${curM.toFixed(2)}" data-kind="${kind}" data-i="${i}" oninput="niPlanType(this)">
-      <span class="u">ล.</span></div>`;
+      <span class="u">ล.</span>
+      <span class="nip-pct" id="nipPct-${kind}${i}">${pct.toFixed(0)}%</span>
+      <span class="nip-mbar"><span class="nip-mbar-f" id="nipMbar-${kind}${i}" style="width:${Math.min(100,pct)}%;background:${segColor(i,kind==='e')}"></span></span></div>`;
   }).join('');
 }
 // เลื่อนสไลด์ → อัปเดตช่องตัวเลข · พิมพ์ตัวเลข → อัปเดตสไลด์ (คู่กันในแถวเดียว)
@@ -1067,8 +1089,12 @@ function openNIPlan(){
       <div class="note">${SURV.planSrc==='planfin'?'หมวดตาม<b>รหัส P ของ Planfin</b> (map จากบัญชี GL จริงของ รพ. นี้ — ผลรวมตรงกับงบทดลองที่ใช้คิด Risk Score)':'หมวดจากบัญชีจริง (waterfall)'} · ปรับ<b>ต่อเดือน (ล้านบาท)</b> ได้ด้วยสไลด์บาร์หรือพิมพ์ตัวเลข · ค่าตั้งต้น = อัตราเฉลี่ยจริง/เดือน (YTD ÷ ${SURV.mo} เดือน) · <b>NI = รวมรายได้ − รวมค่าใช้จ่าย</b> ส่งไปวางบนแกนกราฟจำลองอัตโนมัติ</div>
     </div>
     <div class="nip-body">
-      <div class="nip-col"><h4>รายได้ (REV)</h4>${niPlanRows(SURV.planRev,'r')}</div>
-      <div class="nip-col"><h4>ค่าใช้จ่าย (EXP)</h4>${niPlanRows(SURV.planExp,'e')}</div>
+      <div class="nip-col"><h4>รายได้ (REV)<span class="nip-100">รวม 100%</span></h4>
+        <div class="nip-stack" id="nipStackR">${nipStackHtml(SURV.planRev,false)}</div>
+        ${niPlanRows(SURV.planRev,'r')}</div>
+      <div class="nip-col"><h4>ค่าใช้จ่าย (EXP)<span class="nip-100">รวม 100%</span></h4>
+        <div class="nip-stack" id="nipStackE">${nipStackHtml(SURV.planExp,true)}</div>
+        ${niPlanRows(SURV.planExp,'e')}</div>
     </div>
     <div class="nip-foot">
       <div class="nip-totline">
@@ -1102,6 +1128,25 @@ function niPlanRecalc(){
   const niEl=document.getElementById('nipNi');
   niEl.textContent=`NI = ${s.ni>0?'+':''}${s.ni.toFixed(2)} ล./เดือน`;
   niEl.style.color=s.ni>0?'var(--green)':s.ni<0?'var(--red)':'var(--mut)';
+  updateNipShare('r', SURV.planRev, s.rev);
+  updateNipShare('e', SURV.planExp, s.exp);
+}
+// อัปเดต % สัดส่วน + แถบ 100% stacked ตามค่าที่ผู้ใช้ปรับล่าสุด (ไม่ใช่ค่าตั้งต้นคงที่)
+function updateNipShare(kind, list, totalM){
+  const isExp=kind==='e';
+  let segHtml='';
+  list.forEach((c,i)=>{
+    const num=document.querySelector(`#niPlanOverlay .nip-num[data-kind="${kind}"][data-i="${i}"]`);
+    const v=num?parseFloat(num.value)||0:0;
+    const pct=totalM>0?Math.max(0,v/totalM*100):0;
+    const pctEl=document.getElementById(`nipPct-${kind}${i}`);
+    if(pctEl) pctEl.textContent=pct.toFixed(0)+'%';
+    const barEl=document.getElementById(`nipMbar-${kind}${i}`);
+    if(barEl) barEl.style.width=Math.min(100,pct)+'%';
+    if(pct>0) segHtml+=`<div class="nip-seg" style="width:${pct}%;background:${segColor(i,isExp)}" title="${c.name} ${pct.toFixed(1)}%"></div>`;
+  });
+  const stackEl=document.getElementById(isExp?'nipStackE':'nipStackR');
+  if(stackEl) stackEl.innerHTML=segHtml;
 }
 function niPlanReset(){
   document.querySelectorAll('#niPlanOverlay .nip-num').forEach(num=>{
