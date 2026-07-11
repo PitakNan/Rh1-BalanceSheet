@@ -327,6 +327,9 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             "ca": rnd(r["1001X"], 0), "cl": rnd(r["1001Y"], 0),
             "qn": rnd(r["1002X"], 0), "cn": rnd(r["1003X"], 0),
             "rev": rnd(r["3006Y"], 0), "exp": rnd(r["3010X"], 0),
+            # สะพานกำไร 3 ชั้นทางการ (NI Bridge): e33x=รายได้ไม่รวมงบลงทุน(3330X) e33y=ค่าใช้จ่ายไม่รวมค่าเสื่อม(3330Y)
+            # NI มีค่าเสื่อม(3007X)=rev-exp · NI ไม่มีค่าเสื่อม(3006X)=rev-e33y · EBITDA(333)=e33x-e33y (พิสูจน์ตรง 100%)
+            "e33x": rnd(r["3330X"], 0), "e33y": rnd(r["3330Y"], 0),
             "app": rnd(r["app"], 1), "acpUc": rnd(r["acpUc"], 1), "acpCs": rnd(r["acpCs"], 1),
             "acpSs": rnd(r["acpSs"], 1), "invDays": rnd(r["invDays"], 1),
             "opMargin": rnd(r["opMargin"], 1), "roa": rnd(r["roa"], 1),

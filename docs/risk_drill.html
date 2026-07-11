@@ -183,6 +183,23 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .gap-hl.flow{background:var(--good-bg);border:1px solid var(--good-bd);color:var(--good-ink)}
 .gap-hl.stock{background:var(--mid-bg);border:1px solid var(--mid-bd);color:var(--mid-ink)}
 .gap-hl.done{background:var(--good-bg);border:1px solid var(--good-bd);color:var(--good-ink)}
+/* ── NI Bridge (สะพานกำไร 3 ชั้น) ─────────────────────── */
+.ni-bridge{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:stretch;gap:8px;margin:2px 0 4px}
+.ni-tier{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center}
+.ni-tier .lbl{font-size:11.5px;font-weight:600;line-height:1.35}
+.ni-tier .lbl span{font-size:10px;color:var(--mut);font-weight:400}
+.ni-tier .val{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:4px}
+.ni-tier.pos{background:var(--good-bg);border-color:var(--good-bd)}
+.ni-tier.pos .val{color:var(--good-ink)}
+.ni-tier.neg{background:var(--bad-bg);border-color:var(--bad-bd)}
+.ni-tier.neg .val{color:var(--bad-ink)}
+.ni-op{display:flex;flex-direction:column;justify-content:center;text-align:center;font-size:11px;color:var(--mut);white-space:nowrap;padding:0 2px;font-weight:600}
+.ni-op b{color:var(--ink);font-variant-numeric:tabular-nums}
+.ni-verdict{padding:10px 13px;border-radius:9px;font-size:13px;line-height:1.55;margin-top:10px}
+.ni-verdict.good{background:var(--good-bg);border:1px solid var(--good-bd);color:var(--good-ink)}
+.ni-verdict.mid{background:var(--mid-bg);border:1px solid var(--mid-bd);color:var(--mid-ink)}
+.ni-verdict.bad{background:var(--bad-bg);border:1px solid var(--bad-bd);color:var(--bad-ink)}
+@media(max-width:640px){.ni-bridge{grid-template-columns:1fr}.ni-op{flex-direction:row;gap:6px;padding:2px 0}}
 .panel{overflow-x:auto}
 .acctbl-wrap{overflow-x:auto}
 @media(max-width:768px){
@@ -590,6 +607,12 @@ function renderDetail(hcode){
     </div>
 
     <div class="panel">
+      <h3>สะพานกำไร 3 ชั้นทางการ — ทำไม Risk Score ใช้ NI ที่เข้มที่สุด</h3>
+      <div class="src-note">📌 ที่มาข้อมูล: นิยามกำไรทางการของ<b>กองเศรษฐกิจสุขภาพและหลักประกันสุขภาพ</b> 3 ชั้น — <b>NI มีค่าเสื่อม (3007X = 3006Y−3010X)</b> คือตัวที่ป้อนเข้าเกณฑ์ Risk Score ฝั่ง ST/SU โดยตรง (เข้มสุด เพราะรวมค่าเสื่อมราคาที่ไม่ใช่เงินสด และรวมรายได้งบลงทุน), <b>NI ไม่มีค่าเสื่อม (3006X = 3006Y−3330Y)</b> บวกกลับค่าเสื่อม, และ <b>EBITDA (333 = 3330X−3330Y)</b> ตัดทั้งค่าเสื่อมและรายได้งบลงทุนออก — พิสูจน์ตรง 100% ถึงหลักบาท ทั้งสามชั้นเป็นนิยามทางการ ไม่มีการปรับแต่งเพิ่ม</div>
+      <div id="niTierBox"></div>
+    </div>
+
+    <div class="panel">
       <h3>ทำไม Ratio เปลี่ยน — แยกจากสินทรัพย์ (ตัวเศษ) หรือหนี้สิน (ตัวส่วน)</h3>
       <div id="decompBox"></div>
     </div>
@@ -617,6 +640,7 @@ function renderDetail(hcode){
   renderNIBridge(h);
   renderWaterfallPL(h);
   renderTopAccPL(h);
+  renderNITiers(h, s);
   renderDecomp(h);
   renderWaterfall(h);
   renderTopAcc(h);
@@ -754,6 +778,38 @@ function renderGapSolver(h, s){
   }
 
   box.innerHTML=hl+tbl+ladderHtml+noteHtml;
+}
+
+// ── NI Bridge: สะพานกำไร 3 ชั้นทางการ (กองเศรษฐกิจสุขภาพ) ────────
+function renderNITiers(h, s){
+  const box=document.getElementById('niTierBox'); if(!box) return;
+  const t=h.trend[h.trend.length-1];
+  if(!t || t.rev==null || t.e33y==null){ box.innerHTML='<div class="note">งวดนี้ไม่มีค่าดิบรายได้/ค่าใช้จ่ายทางการ (shard เก่า)</div>'; return; }
+  const niDep=t.rev-t.exp;        // 3007X = NI มีค่าเสื่อม (Risk ST/SU)
+  const niNoDep=t.rev-t.e33y;     // 3006X = NI ไม่มีค่าเสื่อม
+  const ebitda=t.e33x-t.e33y;     // 333  = EBITDA
+  const dep=t.exp-t.e33y;         // ค่าเสื่อม (บวกกลับ)
+  const invRev=t.rev-t.e33x;      // รายได้งบลงทุน (ตัดออก)
+  const cls=v=>v>=0?'pos':'neg';
+  const tiers=`<div class="ni-bridge">
+    <div class="ni-tier ${cls(niDep)}"><div class="lbl">NI มีค่าเสื่อม<br><span>3007X · Risk ST/SU</span></div><div class="val">${fmtM(niDep)}</div></div>
+    <div class="ni-op">+ ค่าเสื่อม<br><b>${fmtM(dep)}</b></div>
+    <div class="ni-tier ${cls(niNoDep)}"><div class="lbl">NI ไม่มีค่าเสื่อม<br><span>3006X</span></div><div class="val">${fmtM(niNoDep)}</div></div>
+    <div class="ni-op">− รายได้งบลงทุน<br><b>${fmtM(invRev)}</b></div>
+    <div class="ni-tier ${cls(ebitda)}"><div class="lbl">EBITDA<br><span>333</span></div><div class="val">${fmtM(ebitda)}</div></div>
+  </div>`;
+  let vtxt, vcls;
+  if(niDep>=0){
+    vcls='good'; vtxt=`<b>NI เป็นบวก ${fmtM(niDep)}</b> — ผ่านเกณฑ์ NI ของ ST อยู่แล้ว`;
+    if(ebitda<0) vtxt+=` แต่ EBITDA ติดลบ ${fmtM(ebitda)} (พึ่งรายได้งบลงทุน ${fmtM(invRev)}) — ควรจับตาความยั่งยืน`;
+  }else if(niNoDep>=0){
+    if(ebitda>=0){ vcls='mid'; vtxt=`<b>ขาดทุน NI ${fmtM(niDep)} เกิดจากค่าเสื่อมราคา (ไม่ใช่เงินสด) ${fmtM(dep)} เป็นหลัก</b> — ทั้ง NI ไม่มีค่าเสื่อม (+${fmtM(niNoDep)}) และ EBITDA (${fmtM(ebitda)}) เป็นบวก การดำเนินงานยังสร้างเงินสดได้ · เกณฑ์ ST ยึดชั้นบนสุด (มีค่าเสื่อม) จึงจับติดลบ`; }
+    else { vcls='mid'; vtxt=`<b>NI ${fmtM(niDep)} ติดลบเพราะค่าเสื่อม ${fmtM(dep)}</b> — NI ไม่มีค่าเสื่อมเป็นบวก (+${fmtM(niNoDep)}) แต่ EBITDA กลับติดลบ ${fmtM(ebitda)} เพราะกำไรก้อนนี้พึ่ง<b>รายได้งบลงทุน ${fmtM(invRev)}</b> ที่ไม่ประจำ — การดำเนินงานหลักเกือบเท่าทุน/ขาดทุนเล็กน้อย`; }
+  }else{
+    vcls='bad'; vtxt=`<b>ขาดทุนทุกชั้น</b> — แม้บวกกลับค่าเสื่อม (NI ไม่มีค่าเสื่อม ${fmtM(niNoDep)}) และตัดงบลงทุนเป็น EBITDA (${fmtM(ebitda)}) ก็ยังติดลบ — เป็นปัญหาการดำเนินงานจริง ไม่ใช่แค่ค่าเสื่อม/งบลงทุน`;
+  }
+  const hint = niDep<0 ? `<div class="note" style="margin-top:6px">📎 ถ้าเกณฑ์ ST ใช้ EBITDA แทน NI มีค่าเสื่อม รพ.นี้จะ${ebitda>=0?'<b style="color:var(--green)">ผ่าน</b>':'<b style="color:var(--red)">ยังไม่ผ่าน</b>'} — แต่เกณฑ์ทางการยึด NI มีค่าเสื่อม จึงยังนับเป็นความเสี่ยง</div>` : '';
+  box.innerHTML=tiers+`<div class="ni-verdict ${vcls}">${vtxt}</div>`+hint;
 }
 
 // ── 7 Plus Efficiency Score ─────────────────────────────────
