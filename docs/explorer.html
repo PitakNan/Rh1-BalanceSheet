@@ -39,6 +39,7 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font
 .seg button{font-family:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:none;background:var(--card);color:var(--mut);cursor:pointer;transition:all .1s}
 .seg button.on{background:var(--ink);color:var(--bg)}
 .seg button.dis{opacity:.4;cursor:help}
+.acc-item mark{background:rgba(245,158,11,.4);color:inherit;border-radius:2px;padding:0 1px}
 select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
 .main{display:flex;flex:1;overflow:hidden}
 /* LEFT */
@@ -197,7 +198,7 @@ select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(-
     </div>
     <div class="acc-sec">
       <h3 id="accSecTitle">ค้นหาบัญชี (13 หลัก จัดกลุ่มตามบัญชี 10 หลัก)</h3>
-      <input id="accIn" type="text" placeholder="พิมพ์รหัสบัญชี เช่น 1101 หรือ 1101010101.101" oninput="searchAccDebounced(this.value)">
+      <input id="accIn" type="text" placeholder="พิมพ์รหัสหรือชื่อบัญชี — เห็นผลทันทีทุกตัวอักษร" oninput="searchAccDebounced(this.value)">
       <div class="acc-res" id="accRes"><div class="hint">พิมพ์รหัส 4 หลักขึ้นไป</div></div>
       <div class="queue-bar" id="queueBar"></div>
     </div>
@@ -887,6 +888,14 @@ async function addAllGf(){
 // ── Acc Search — ค้นหาบัญชี 13 หลักจากแคตตาล็อกของหน่วยงานที่เลือกไว้ จัดกลุ่มตามรหัส 10 หลัก (prefix) ──
 // แถวหัวกลุ่ม (10 หลัก) ติ๊ก = รวมทั้งบัญชี 10 หลักนั้น | แถวลูก (13 หลัก) ติ๊ก = เฉพาะรหัสนั้น
 // ทั้งสองระดับ เมื่อกด "+ เพิ่มเข้ากราฟ" จะเพิ่ม 1 เส้นสำหรับหน่วยงานที่เลือกไว้ตอนนี้ (ST.unit)
+// ไฮไลต์ส่วนที่ตรงกับคำค้น (live search) ในรหัส/ชื่อบัญชี
+let _hlQ='';
+function hl(text){
+  if(!_hlQ||!text)return text;
+  const i=text.toLowerCase().indexOf(_hlQ.toLowerCase());
+  if(i<0)return text;
+  return text.slice(0,i)+'<mark>'+text.slice(i,i+_hlQ.length)+'</mark>'+text.slice(i+_hlQ.length);
+}
 function resultRow(code, gfId, kind){
   const g=META.gfMap[gfId];
   const id=`${kind}-${code}`;
@@ -894,8 +903,8 @@ function resultRow(code, gfId, kind){
   ST.rowPayload[id]={kind,code,gfId,label:code+(nm?` (${nm})`:'')};
   const isQueued=ST.queue.some(q=>q.key===id);
   return `<div class="acc-item">
-    <span class="acc-code">${code}</span>
-    <span class="acc-gfn">${nm}</span>
+    <span class="acc-code">${hl(code)}</span>
+    <span class="acc-gfn">${hl(nm)}</span>
     <input type="checkbox" class="rowchk" ${isQueued?'checked':''} onchange="toggleQueue('${id}')" title="ติ๊กเพื่อเลือก">
   </div>`;
 }
@@ -914,12 +923,22 @@ let _accT;
 function searchAccDebounced(q){clearTimeout(_accT);_accT=setTimeout(()=>searchAcc(q),160)}
 function searchAcc(q){
   const el=document.getElementById('accRes');
-  if(!q||q.length<4){el.innerHTML='<div class="hint">พิมพ์รหัส 4 หลักขึ้นไป</div>';return;}
+  q=(q||'').trim();
+  if(!q){_hlQ='';el.innerHTML='<div class="hint">พิมพ์รหัสหรือชื่อบัญชี — ผลลัพธ์ขึ้นทันทีทุกตัวอักษร เช่น 1101, เงินสด, เจ้าหนี้</div>';return;}
   const catalog=currentCatalog();
   if(!catalog){el.innerHTML='<div class="hint">กำลังโหลดรายการบัญชี...</div>';return;}
 
-  const matches=catalog.filter(([c])=>c.includes(q));
-  if(!matches.length){el.innerHTML='<div class="hint">ไม่พบรหัสนี้</div>';return;}
+  // live search ทุกตัวอักษร (AnyKey): ตัวเลข = ค้นในรหัส · ข้อความ = ค้นในชื่อบัญชีจริง/ชื่อกลุ่ม GF
+  _hlQ=q;
+  const isNum=/^[\d.]+$/.test(q);
+  const qq=q.toLowerCase();
+  const matches=catalog.filter(([c,gfId])=>{
+    if(c.includes(q))return true;
+    if(isNum)return false;
+    const nm=(realName(c)||(META.gfMap[gfId]?META.gfMap[gfId].gf:'')||'').toLowerCase();
+    return nm.includes(qq);
+  });
+  if(!matches.length){el.innerHTML=`<div class="hint">ไม่พบบัญชีที่มี "${q.replace(/</g,'&lt;')}" ${isNum?'ในรหัส':'ในรหัส/ชื่อ'}</div>`;return;}
 
   const groups=new Map();
   for(const [code,gfId] of matches){
@@ -928,9 +947,8 @@ function searchAcc(q){
     groups.get(prefix).children.push([code,gfId]);
   }
   const groupArr=[...groups.entries()].slice(0,20);
-  const shown=groupArr.reduce((s,[,g])=>s+g.children.length,0);
-  const more=groups.size>groupArr.length?`<div class="hint">…และอีก ${groups.size-groupArr.length} กลุ่มบัญชี 10 หลัก (พิมพ์ให้เจาะจงขึ้น)</div>`:'';
-  el.innerHTML=groupArr.map(([prefix,grp])=>groupRowHtml(prefix,grp)).join('')+more;
+  const summary=`<div class="hint" style="padding:4px 0">พบ <b>${matches.length}</b> บัญชี ใน <b>${groups.size}</b> กลุ่ม (10 หลัก)${groups.size>groupArr.length?` — แสดง ${groupArr.length} กลุ่มแรก พิมพ์เพิ่มเพื่อกรองให้แคบลง`:''}</div>`;
+  el.innerHTML=summary+groupArr.map(([prefix,grp])=>groupRowHtml(prefix,grp)).join('');
 }
 
 // ── Queue (ติ๊กเลือกหลายบัญชี แล้วกดเพิ่มเข้ากราฟทีเดียว — คูณกับหน่วยเปรียบเทียบทุกตัว) ──
