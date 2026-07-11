@@ -208,6 +208,18 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .mo-chip.na{color:var(--mut)}
 .pay-recon{font-size:11.5px;color:var(--mut);margin-top:8px;line-height:1.5}
 .pay-sub{font-size:12px;font-weight:700;color:var(--mut);margin:14px 0 4px;text-transform:none}
+/* ── D: Survival Simulator ─────────────────────────────── */
+.surv-ctrl{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin-bottom:12px}
+@media(max-width:560px){.surv-ctrl{grid-template-columns:1fr}}
+.surv-ctrl .fld{display:flex;flex-direction:column;gap:3px}
+.surv-ctrl label{font-size:12.5px;color:var(--mut)}
+.surv-ctrl label b{color:var(--ink);font-variant-numeric:tabular-nums}
+.surv-ctrl input[type=range]{width:100%;accent-color:var(--blue);cursor:pointer}
+.surv-sum{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.surv-pill{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:12.5px;background:var(--card)}
+.surv-pill .rb{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
+.surv-pill.out{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--bad-ink);font-weight:600}
+.surv-chartbox{position:relative;height:170px}
 .panel{overflow-x:auto}
 .acctbl-wrap{overflow-x:auto}
 @media(max-width:768px){
@@ -580,6 +592,12 @@ function renderDetail(hcode){
       <div id="gapBox"></div>
     </div>
 
+    <div class="panel">
+      <h3>จำลองเส้นทางอยู่รอด (Survival Simulator) <span class="sp"></span></h3>
+      <div class="src-note">📌 เลื่อนสมมติฐาน<b>กำไร/ขาดทุนต่อเดือน</b>และ<b>เงินก้อนเสริมสภาพคล่อง</b> → ดูว่าคะแนน Risk จะลดแต่ละขั้นเมื่อไหร่ และเงินสดจะหมดเมื่อไหร่ · อิงสูตร SU ทางการ (recovery/depletion) เดียวกับ pipeline · ⚠️ เป็นการ<b>จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</b> ดูสมมติฐานท้ายกล่อง</div>
+      <div id="survBox"></div>
+    </div>
+
     <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px">
       <span class="note">เปรียบเทียบกับงวด:</span>
       <div class="seg" style="width:160px"><button id="pdMom" class="${periodMode==='mom'?'on':''}" onclick="setPeriodMode('mom')">MoM</button><button id="pdYoy" class="${periodMode==='yoy'?'on':''}" onclick="setPeriodMode('yoy')">YoY</button></div>
@@ -650,6 +668,7 @@ function renderDetail(hcode){
   </div>`;
 
   renderGapSolver(h, s);
+  renderSurvival(h);
   renderRatioChart(h);
   renderNIBridge(h);
   renderWaterfallPL(h);
@@ -825,6 +844,89 @@ function renderNITiers(h, s){
   }
   const hint = niDep<0 ? `<div class="note" style="margin-top:6px">📎 ถ้าเกณฑ์ ST ใช้ EBITDA แทน NI มีค่าเสื่อม รพ.นี้จะ${ebitda>=0?'<b style="color:var(--green)">ผ่าน</b>':'<b style="color:var(--red)">ยังไม่ผ่าน</b>'} — แต่เกณฑ์ทางการยึด NI มีค่าเสื่อม จึงยังนับเป็นความเสี่ยง</div>` : '';
   box.innerHTML=tiers+`<div class="ni-verdict ${vcls}">${vtxt}</div>`+hint;
+}
+
+// ── D: Survival Simulator — จำลองเส้นทางอยู่รอด (อิงสูตร SU ทางการ) ──
+let SURV=null;
+function renderSurvival(h){
+  const box=document.getElementById('survBox'); if(!box) return;
+  const t=h.trend[h.trend.length-1];
+  if(!t || !t.cl || t.e33y==null){ box.innerHTML='<div class="note">งวดนี้ไม่มีข้อมูลพอสำหรับจำลอง</div>'; return; }
+  const mo=t.t%100;
+  const depMo=Math.max(0,(t.exp-t.e33y)/mo);   // ค่าเสื่อม/เดือน (run-rate ปัจจุบัน)
+  const niRun=Math.round(t.ni/mo/100000)*100000; // NI/เดือน (ค่าเฉลี่ย YTD) ปัดแสน
+  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t};
+  const niMin=Math.min(-3000000, niRun*2), niMax=Math.max(3000000, -niRun*2);
+  box.innerHTML=`
+    <div class="surv-ctrl">
+      <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b></label>
+        <input type="range" id="svNi" min="${Math.round(niMin)}" max="${Math.round(niMax)}" step="100000" value="${niRun}"></div>
+      <div class="fld"><label>เงินก้อนเสริมสภาพคล่อง (ครั้งเดียว ตอนนี้): <b id="svInjLab"></b></label>
+        <input type="range" id="svInj" min="0" max="50000000" step="500000" value="0"></div>
+    </div>
+    <div class="surv-sum" id="svSum"></div>
+    <div class="surv-chartbox"><canvas id="survChart"></canvas></div>
+    <div class="gap-note">⚙️ สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (<b>${fmtM(depMo)}/เดือน</b> คงที่ตาม run-rate) · กำไรสะสมเป็นเงินสด/สินทรัพย์หมุนเวียนเต็มจำนวน · หนี้สินคงที่ (ยกเว้นเงินก้อน) · NI สะสมรีเซ็ตทุก ต.ค. ตามปีงบ · <b>เดือน 0 = สถานะจริงปัจจุบัน</b> — จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</div>`;
+  document.getElementById('svNi').oninput=projSurv;
+  document.getElementById('svInj').oninput=projSurv;
+  projSurv();
+}
+let survChart=null;
+function projSurv(){
+  if(!SURV) return;
+  const niM=+document.getElementById('svNi').value;
+  const inj=+document.getElementById('svInj').value;
+  document.getElementById('svNiLab').textContent=(niM>0?'+':'')+fmtM(niM);
+  document.getElementById('svInjLab').textContent=fmtM(inj);
+  const cashMo=niM+SURV.depMo;
+  let cca=SURV.ca+inj, ccn=SURV.cn+inj, cqn=SURV.qn+inj, curNi=SURV.ni, curMo=SURV.mo;
+  const s0=scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo);
+  const path=[{k:0,risk:s0.risk,cash:ccn}];
+  const cross={}; let cashOut=null;
+  const HORIZON=24;
+  for(let k=1;k<=HORIZON;k++){
+    if(curMo>=12){curMo=1;curNi=0;} else curMo++;   // fiscal reset ที่ ต.ค.
+    curNi+=niM;
+    cca+=cashMo; ccn+=cashMo; cqn+=cashMo;
+    const sc=scoreOf(cca,SURV.cl,cqn,ccn,curNi,curMo);
+    path.push({k,risk:sc.risk,cash:ccn});
+    for(let L=s0.risk-1;L>=0;L--) if(cross[L]==null && sc.risk<=L) cross[L]=k;
+    if(ccn<=0 && cashOut==null) cashOut=k;
+  }
+  // สรุป
+  const pills=[];
+  const targets=[6,5,4,3,2,1,0].filter(L=>L<s0.risk);
+  const firstDrop=targets.find(L=>cross[L]!=null);
+  if(s0.risk<=0){ pills.push(`<div class="surv-pill"><span class="rb" style="background:${riskColor(0)}">0</span>ผ่านทุกเกณฑ์อยู่แล้ว</div>`); }
+  else {
+    for(const L of targets){
+      if(cross[L]!=null) pills.push(`<div class="surv-pill"><span class="rb" style="background:${riskColor(L)}">${L}</span>ในอีก <b>${cross[L]}</b> เดือน (${tLab(addMo(SURV.startT,cross[L]))})</div>`);
+    }
+    if(!pills.length) pills.push(`<div class="surv-pill">คะแนนไม่ลดจาก ${s0.risk} ภายใน ${HORIZON} เดือนที่สมมติ</div>`);
+  }
+  if(cashOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินสดหมดในอีก ${cashOut} เดือน (${tLab(addMo(SURV.startT,cashOut))})</div>`);
+  else if(cashMo<0) pills.push(`<div class="surv-pill out">⚠️ เงินสดลดลงเรื่อยๆ (${fmtM(cashMo)}/เดือน)</div>`);
+  document.getElementById('svSum').innerHTML=pills.join('');
+  drawSurvChart(path, cross, cashOut, s0.risk);
+}
+function addMo(t, k){ let y=Math.floor(t/100), m=t%100+k; y+=Math.floor((m-1)/12); m=((m-1)%12)+1; return y*100+m; }
+function drawSurvChart(path, cross, cashOut, startRisk){
+  const ctx=document.getElementById('survChart'); if(!ctx) return;
+  const ink=getCss('--ink'), blue=getCss('--blue'), mut=getCss('--mut'), line=getCss('--line'), red=getCss('--red');
+  if(survChart) survChart.destroy();
+  const labels=path.map(p=>p.k%3===0?tLab(addMo(SURV.startT,p.k)):'');
+  survChart=new Chart(ctx,{type:'line',
+    data:{labels,datasets:[{label:'Risk (จำลอง)',data:path.map(p=>p.risk),borderColor:blue,backgroundColor:blue,
+      borderWidth:2.5,pointRadius:0,stepped:true,fill:false}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{title:it=>'เดือนที่ '+it[0].dataIndex+' ('+tLab(addMo(SURV.startT,it[0].dataIndex))+')',
+          label:it=>'Risk '+it.raw+' คะแนน'}},
+        annotation:false},
+      scales:{y:{min:0,max:7,ticks:{stepSize:1,font:{size:10},color:mut},grid:{color:line},title:{display:true,text:'Risk',color:mut,font:{size:10}}},
+        x:{ticks:{font:{size:9},color:mut,maxRotation:0,autoSkip:false},grid:{color:line}}}
+    }
+  });
 }
 
 // ── C: Payables Stress — เจ้าหนี้การค้ารายหมวด + เดือนค้างจ่าย ──
