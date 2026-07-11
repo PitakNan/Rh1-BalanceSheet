@@ -899,7 +899,7 @@ function renderSurvival(h, s){
   if(!t || !t.cl || t.e33y==null){ box.innerHTML='<div class="note">งวดนี้ไม่มีข้อมูลพอสำหรับจำลอง</div>'; return; }
   const mo=t.t%100;
   const depMo=Math.max(0,(t.exp-t.e33y)/mo);   // ค่าเสื่อม/เดือน (run-rate ปัจจุบัน)
-  const niRun=Math.round(t.ni/mo/100000)*100000; // NI/เดือน (ค่าเฉลี่ย YTD) ปัดแสน
+  const niRun=Math.round(t.ni/mo/50000)*50000; // NI/เดือน (ค่าเฉลี่ย YTD) ปัดหลักห้าหมื่น
   // anchor เดือน 0 ที่คะแนนทางการ (badge) — base = scoreOf(GL) ใช้คำนวณ delta จำลอง (กัน boundary mismatch)
   const base=scoreOf(t.ca,t.cl,t.qn,t.cn,t.ni,mo).risk;
   // หมวดรายได้/ค่าใช้จ่ายจริงของงวดนี้ (YTD) → อัตราเฉลี่ยต่อเดือน ใช้เป็นค่าตั้งต้นของป็อปอัปประมาณการรายหมวด
@@ -923,10 +923,10 @@ function renderSurvival(h, s){
   box.innerHTML=`
     <div class="surv-ctrl">
       <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b>${planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
-        <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="100000" value="${clampNi(niRun)}">
+        <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="50000" value="${clampNi(niRun)}">
         <span class="surv-base">เฉลี่ยจริงตอนนี้ <b>${niRun>0?'+':''}${fmtM(niRun)}</b>/เดือน · สเกล ±${fmtM(NI_LIM)} (ระดับ ${lim.cls||'-'}) · <a href="#" onclick="svReset('ni');return false">คืนค่าเฉลี่ย</a></span></div>
       <div class="fld"><label>เงินก้อนเสริมสภาพคล่อง (ครั้งเดียว ตอนนี้): <b id="svInjLab"></b></label>
-        <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="500000" value="0">
+        <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="50000" value="0">
         <span class="surv-base">ครั้งเดียว ณ ตอนนี้ · สเกล 0–${fmtM(INJ_MAX)} · <a href="#" onclick="svReset('inj');return false">ล้างเป็น 0</a></span></div>
     </div>
     <div class="surv-sum" id="svSum"></div>
