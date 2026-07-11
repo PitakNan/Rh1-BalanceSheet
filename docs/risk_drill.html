@@ -220,6 +220,31 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .surv-pill .rb{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
 .surv-pill.out{background:var(--bad-bg);border-color:var(--bad-bd);color:var(--bad-ink);font-weight:600}
 .surv-chartbox{position:relative;height:170px}
+/* ปุ่ม + ป็อปอัปประมาณการ NI รายหมวด (แนว Planfin) */
+.planfin-btn{font-family:inherit;font-size:11px;font-weight:600;padding:2px 9px;border:1px solid var(--blue);border-radius:7px;background:var(--card);color:var(--blue);cursor:pointer;margin-left:8px;white-space:nowrap;vertical-align:middle}
+.planfin-btn:hover{background:var(--blue);color:#fff}
+.nip-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:18px}
+.nip-modal{background:var(--card);border:1px solid var(--line);border-radius:14px;width:100%;max-width:780px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.35)}
+.nip-head{padding:14px 18px;border-bottom:1px solid var(--line);flex-shrink:0}
+.nip-head h3{font-size:15px;font-weight:700}
+.nip-head .note{margin-top:5px;font-size:11.5px;line-height:1.5}
+.nip-body{padding:12px 18px;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:2px 24px;align-content:start}
+@media(max-width:620px){.nip-body{grid-template-columns:1fr}}
+.nip-col h4{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);margin:2px 0 6px;position:sticky;top:0;background:var(--card);padding-bottom:3px;z-index:1}
+.nip-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.nip-row label{flex:1;font-size:12px;line-height:1.3;min-width:0}
+.nip-row input{width:92px;font-family:inherit;font-size:13px;text-align:right;padding:4px 7px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums;flex-shrink:0}
+.nip-row input:focus{outline:none;border-color:var(--blue)}
+.nip-row .u{font-size:10.5px;color:var(--mut);width:16px;flex-shrink:0}
+.nip-foot{padding:12px 18px;border-top:1px solid var(--line);flex-shrink:0}
+.nip-totline{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--mut)}
+.nip-totline b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.nip-ni{margin-left:auto;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.nip-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:11px}
+.nip-btns button{font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 15px;border-radius:9px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.nip-btns button:hover{background:var(--hover)}
+.nip-btns .primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.nip-btns .primary:hover{filter:brightness(1.1)}
 .panel{overflow-x:auto}
 .acctbl-wrap{overflow-x:auto}
 @media(max-width:768px){
@@ -863,14 +888,20 @@ function renderSurvival(h, s){
   const niRun=Math.round(t.ni/mo/100000)*100000; // NI/เดือน (ค่าเฉลี่ย YTD) ปัดแสน
   // anchor เดือน 0 ที่คะแนนทางการ (badge) — base = scoreOf(GL) ใช้คำนวณ delta จำลอง (กัน boundary mismatch)
   const base=scoreOf(t.ca,t.cl,t.qn,t.cn,t.ni,mo).risk;
-  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base};
-  const niMin=Math.min(-3000000, niRun*2), niMax=Math.max(3000000, -niRun*2);
+  // หมวดรายได้/ค่าใช้จ่ายจริงของงวดนี้ (YTD) → อัตราเฉลี่ยต่อเดือน ใช้เป็นค่าตั้งต้นของป็อปอัปประมาณการรายหมวด
+  const wf=h.waterfall&&(h.waterfall.mom||h.waterfall.yoy);
+  const planRev=wf&&wf.rev?wf.rev.map(r=>({name:r.name,mo:r.value/mo})):null;
+  const planExp=wf&&wf.exp?wf.exp.map(r=>({name:r.name,mo:r.value/mo})):null;
+  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp};
+  // สเกลกว้าง: NI ±1,000 ล้าน/เดือน · เงินก้อนสูงสุด 1,000 ล้าน (ใส่ค่าละเอียดของ NI ผ่านปุ่มประมาณการรายหมวด)
+  const NI_LIM=1000000000, INJ_MAX=1000000000;
+  const clampNi=v=>Math.max(-NI_LIM,Math.min(NI_LIM,v));
   box.innerHTML=`
     <div class="surv-ctrl">
-      <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b></label>
-        <input type="range" id="svNi" min="${Math.round(niMin)}" max="${Math.round(niMax)}" step="100000" value="${niRun}"></div>
+      <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b>${planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
+        <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="100000" value="${clampNi(niRun)}"></div>
       <div class="fld"><label>เงินก้อนเสริมสภาพคล่อง (ครั้งเดียว ตอนนี้): <b id="svInjLab"></b></label>
-        <input type="range" id="svInj" min="0" max="50000000" step="500000" value="0"></div>
+        <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="500000" value="0"></div>
     </div>
     <div class="surv-sum" id="svSum"></div>
     <div class="surv-chartbox"><canvas id="survChart"></canvas></div>
@@ -937,6 +968,78 @@ function drawSurvChart(path, cross, cashOut, startRisk){
     }
   });
 }
+
+// ── D+: ป็อปอัปประมาณการ NI รายหมวด (แนว Planfin) ────────────────
+// ใส่ประมาณการต่อเดือนของแต่ละหมวดรายได้/ค่าใช้จ่าย → NI = รวมรายได้ − รวมค่าใช้จ่าย
+// ค่าตั้งต้น = อัตราเฉลี่ยจริงต่อเดือน (YTD ÷ เดือนที่ผ่านมา) แล้วส่งค่า NI ไปวางบนแกนจำลองอัตโนมัติ
+function niPlanRows(list, kind){
+  return list.map((c,i)=>`<div class="nip-row">
+    <label title="${c.name}">${c.name}</label>
+    <input type="number" step="0.1" inputmode="decimal" data-kind="${kind}" data-i="${i}" value="${(c.mo/1e6).toFixed(2)}" oninput="niPlanRecalc()">
+    <span class="u">ล.</span></div>`).join('');
+}
+function openNIPlan(){
+  if(!SURV || !SURV.planRev){ alert('งวดนี้ไม่มีข้อมูลรายหมวดสำหรับประมาณการ'); return; }
+  let el=document.getElementById('niPlanOverlay');
+  if(!el){ el=document.createElement('div'); el.id='niPlanOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
+  el.innerHTML=`<div class="nip-modal" onclick="event.stopPropagation()">
+    <div class="nip-head">
+      <h3>ประมาณการกำไร/ขาดทุนต่อเดือน (NI) รายหมวด</h3>
+      <div class="note">ใส่ประมาณการ<b>ต่อเดือน (ล้านบาท)</b> ของแต่ละหมวด — ค่าตั้งต้น = อัตราเฉลี่ยจริงต่อเดือน (YTD ÷ ${SURV.mo} เดือน) ของงวดปัจจุบัน · <b>NI = รวมรายได้ − รวมค่าใช้จ่าย</b> จะถูกนำไปวางบนแกน "กำไร/ขาดทุนต่อเดือน" ของกราฟจำลองให้อัตโนมัติ (หมวดอ้างอิงจากบัญชีจริง แนวเดียวกับหมวด Planfin)</div>
+    </div>
+    <div class="nip-body">
+      <div class="nip-col"><h4>รายได้ (REV)</h4>${niPlanRows(SURV.planRev,'r')}</div>
+      <div class="nip-col"><h4>ค่าใช้จ่าย (EXP)</h4>${niPlanRows(SURV.planExp,'e')}</div>
+    </div>
+    <div class="nip-foot">
+      <div class="nip-totline">
+        <span>รวมรายได้ <b id="nipRev"></b>/ด.</span>
+        <span>รวมค่าใช้จ่าย <b id="nipExp"></b>/ด.</span>
+        <span class="nip-ni" id="nipNi"></span>
+      </div>
+      <div class="nip-btns">
+        <button type="button" onclick="niPlanReset()">↺ รีเซ็ตเป็นค่าปัจจุบัน</button>
+        <button type="button" onclick="closeNIPlan()">ปิด</button>
+        <button type="button" class="primary" onclick="niPlanApply()">✓ ใช้ค่านี้กับกราฟ</button>
+      </div>
+    </div>
+  </div>`;
+  el.onclick=closeNIPlan;
+  el.style.display='flex';
+  niPlanRecalc();
+}
+function niPlanSums(){
+  let rev=0,exp=0;
+  document.querySelectorAll('#niPlanOverlay input[type=number]').forEach(inp=>{
+    const v=parseFloat(inp.value)||0;
+    if(inp.dataset.kind==='r') rev+=v; else exp+=v;
+  });
+  return {rev,exp,ni:rev-exp};   // หน่วย: ล้านบาท/เดือน
+}
+function niPlanRecalc(){
+  const s=niPlanSums();
+  document.getElementById('nipRev').textContent=s.rev.toFixed(2)+' ล.';
+  document.getElementById('nipExp').textContent=s.exp.toFixed(2)+' ล.';
+  const niEl=document.getElementById('nipNi');
+  niEl.textContent=`NI = ${s.ni>0?'+':''}${s.ni.toFixed(2)} ล./เดือน`;
+  niEl.style.color=s.ni>0?'var(--green)':s.ni<0?'var(--red)':'var(--mut)';
+}
+function niPlanReset(){
+  document.querySelectorAll('#niPlanOverlay input[type=number]').forEach(inp=>{
+    const list=inp.dataset.kind==='r'?SURV.planRev:SURV.planExp;
+    inp.value=(list[+inp.dataset.i].mo/1e6).toFixed(2);
+  });
+  niPlanRecalc();
+}
+function niPlanApply(){
+  const s=niPlanSums();
+  let ni=Math.round(s.ni*1e6/100000)*100000;         // ล้านบาท → บาท ปัดขั้นละแสน (ตรง step ของแกน)
+  ni=Math.max(-1000000000,Math.min(1000000000,ni));
+  const sl=document.getElementById('svNi');
+  if(sl){ sl.value=ni; projSurv(); }
+  closeNIPlan();
+}
+function closeNIPlan(){ const el=document.getElementById('niPlanOverlay'); if(el) el.style.display='none'; }
 
 // ── C: Payables Stress — เจ้าหนี้การค้ารายหมวด + เดือนค้างจ่าย ──
 function renderPayables(h){
