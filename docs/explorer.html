@@ -281,6 +281,7 @@ const CODE13B = {}; // cache: bId → code13_region/b<bId>.json (บัญชี
 const PROVC13B = {}; // cache: "<prov>|<bId>" → code13_prov/<prov>/b<bId>.json
 const PROVACCB = {}; // cache: "<prov>|<bId>" → acc_prov/<prov>/b<bId>.json
 const HOSPB = {}; // cache: bId → hosp/b<bId>.json (GF ระดับรายหน่วยบริการ)
+const HOSPC = {}; // cache: bId → hosp_code/b<bId>.json (บัญชี 10 หลัก รายหน่วยบริการ — ทุก รพ. ในไฟล์เดียว, ใช้กับเงา Max-Min)
 const ORGNAMES = {}; // cache: org5 → acc_names/<org5>.json (ชื่อบัญชีจริงตามที่ รพ.นั้นตั้งเอง)
 const ST = {
   metric:'bs', gran:'y', fy:null, avg:'none',
@@ -428,6 +429,10 @@ function unitSeriesType(){
   if(u.scope==='hospital') return 'gfhosp';
   return 'gf';
 }
+// รหัส รพ. ของหน่วยงานที่เลือกไว้ตอนนี้ (null = ไม่ใช่ระดับ รพ.) — ติดไปกับ series ตอนสร้าง ใช้หา peer กลุ่มเดียวกันของเงา Max-Min
+function unitOrg(){
+  return ST.unit.scope==='hospital' ? (ST.unit.id||null) : null;
+}
 // จังหวัดของหน่วยงานที่เลือกไว้ตอนนี้ (null = ทั้งเขต/ยังไม่เลือก) — ติดไปกับ series ตอนสร้าง
 function unitProv(){
   const u=ST.unit;
@@ -504,7 +509,7 @@ async function addLevelSeries(depth){
   const rows=await unitRowsForGfIds(gfIds);
   if(rows==null){ alert('กรุณาเลือกหน่วยงานให้ครบก่อน (จังหวัด/รพ.)'); return; }
   const label=levelLabel(depth)+unitSuffixLabel();
-  ST.series.push({id,label,color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),gfIds:[...gfIds],allM:allMetricsFromRows(rows,gfIds)});
+  ST.series.push({id,label,color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[...gfIds],allM:allMetricsFromRows(rows,gfIds)});
   renderChart();renderSbar();renderLevelSelects();
 }
 
@@ -918,7 +923,7 @@ async function addAllGf(){
     const rows=await gfSeriesRows(g.gfId);
     if(rows==null) continue; // หน่วยงานยังเลือกไม่ครบ (จังหวัด/รพ. ยังไม่ระบุ) — ข้าม
     const gfIds=new Set([g.gfId]);
-    ST.series.push({id,label:g.gf+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),gfIds:[g.gfId],allM:allMetricsFromRows(rows,gfIds)});
+    ST.series.push({id,label:g.gf+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[g.gfId],allM:allMetricsFromRows(rows,gfIds)});
     changed=true;
   }
   if(changed){renderChart();renderSbar();renderGF();}
@@ -1034,7 +1039,7 @@ async function addGfSeries(gfId, label){
   const rows=await gfSeriesRows(gfId);
   if(rows==null){ alert('กรุณาเลือกหน่วยงานให้ครบก่อน (จังหวัด/รพ. ที่ต้องการ)'); return; }
   const gfIds=new Set([gfId]);
-  ST.series.push({id,label:label+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),gfIds:[gfId],allM:allMetricsFromRows(rows,gfIds)});
+  ST.series.push({id,label:label+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[gfId],allM:allMetricsFromRows(rows,gfIds)});
   renderChart();renderSbar();renderGF();
 }
 
@@ -1132,7 +1137,7 @@ async function addLeafSeries(fullkey, gfId, org5){
     return;
   }
 
-  ST.series.push({id,label,color,type:'leaf',gfIds:[gfId],accPrefix:fullkey,allM});
+  ST.series.push({id,label,color,type:'leaf',gfIds:[gfId],accPrefix:fullkey,org:org5,allM});
   renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
 }
 
@@ -1168,7 +1173,7 @@ async function addLeafAccSeries(prefix, gfId, org5, orgLabel){
     return;
   }
 
-  ST.series.push({id,label,color,type:'leafacc',gfIds:[gfId],accPrefix:prefix,allM});
+  ST.series.push({id,label,color,type:'leafacc',gfIds:[gfId],accPrefix:prefix,org:org5,allM});
   renderChart();renderSbar();searchAcc(document.getElementById('accIn').value);
 }
 
@@ -1287,6 +1292,93 @@ function bVal(dataMap, bk){
   return s||null;
 }
 
+// ── เงา Max-Min (peer band แบบเดียวกับเทรนด์ Ratio ใน risk_drill) ─────────
+// scope ตามปุ่มเฉลี่ย: +เฉลี่ยเขต → ทั้งเขต · +เฉลี่ยจังหวัด → ทั้งจังหวัด
+// ไม่มีเฉลี่ย + เส้นเดียวระดับ รพ. → เทียบ รพ. กลุ่มเดียวกัน (grp เช่น รพช.F3 P<=15,000)
+// แหล่งข้อมูล: เส้น GF → hosp/b{bId}.json · เส้นรหัสบัญชี (leaf/leafacc) → hosp_code/b{bId}.json (ระดับ 10 หลัก)
+const BAND_BASE='__bandbase__'; // series ฐานล่องหนของ stack — ไม่โชว์ใน legend/tooltip
+let BAND_TT=null; // {name,min[],max[],n} ให้ tooltip แสดงค่า Max/Min จริง (ตัว stack เก็บเป็นส่วนต่าง)
+const BAND_FETCHING=new Set(); // bId ที่กำลังโหลด — กัน fetch ซ้ำ/กัน render วนลูป
+
+function bandCtx(){
+  if(!ST.series.length) return null;
+  if(ST.avg==='region'||ST.avg==='prov'){
+    // ใช้ anchor series เดียวกับเส้นเฉลี่ย (เส้น GF เส้นแรก) — เงากับเส้นเฉลี่ยจะเป็นบัญชีชุดเดียวกันเสมอ
+    let s0,orgs,scopeLabel;
+    if(ST.avg==='region'){
+      s0=ST.series.find(s=>['gf','gfprov','gfhosp'].includes(s.type));
+      if(!s0) return null;
+      orgs=META.orgs.map(o=>o.id); scopeLabel='ทั้งเขต';
+    }else{
+      const c=avgProvCtx();
+      if(!c||!PROV_DATA) return null;
+      s0=c.series; orgs=META.orgs.filter(o=>o.prov===c.prov).map(o=>o.id); scopeLabel=`จ.${c.prov}`;
+    }
+    return {kind:'gf',ids:new Set(s0.gfIds),bIds:[...new Set(s0.gfIds.map(g=>META.gfMap[g].bId))],orgs,scopeLabel};
+  }
+  if(ST.series.length!==1) return null;
+  const s=ST.series[0];
+  if(!['gfhosp','leaf','leafacc'].includes(s.type)||!s.org) return null;
+  const me=META.orgs.find(o=>o.id===s.org);
+  if(!me||!me.grp) return null;
+  const orgs=META.orgs.filter(o=>o.grp===me.grp).map(o=>o.id);
+  const scopeLabel=`กลุ่ม ${me.grp}`;
+  if(s.type==='gfhosp')
+    return {kind:'gf',ids:new Set(s.gfIds),bIds:[...new Set(s.gfIds.map(g=>META.gfMap[g].bId))],orgs,scopeLabel};
+  // เส้นรหัสบัญชีระดับ รพ. — เทียบด้วยระดับ 10 หลัก (ข้อมูลข้าม รพ. ละเอียดสุดที่มี; เลข 13 หลัก+หลังจุดเป็นของแต่ละ รพ. ตั้งเอง)
+  const p10=s.accPrefix.slice(0,10);
+  const codes=(META.codes||[]).filter(c=>c.code.startsWith(p10));
+  if(!codes.length) return null;
+  return {kind:'code',ids:new Set(codes.map(c=>c.codeId)),bIds:[...new Set(codes.map(c=>META.gfMap[c.gfId].bId))],
+    orgs,scopeLabel,note:s.type==='leaf'?' · เทียบระดับ 10 หลัก':''};
+}
+
+function bandCache(kind){ return kind==='gf'?HOSPB:HOSPC; }
+function bandReady(b){ return b.bIds.every(id=>id in bandCache(b.kind)); } // null (โหลดพลาด) = จบแล้วเหมือนกัน กันวนลูป
+
+async function loadBandShards(b){
+  const cache=bandCache(b.kind), dir=b.kind==='gf'?'hosp':'hosp_code';
+  const todo=b.bIds.filter(id=>!(id in cache)&&!BAND_FETCHING.has(dir+id));
+  if(!todo.length) return; // มีคนอื่นโหลดอยู่/เสร็จแล้ว — ปล่อยให้รอบที่โหลดจริงเป็นคน render ซ้ำ
+  todo.forEach(id=>BAND_FETCHING.add(dir+id));
+  await Promise.all(todo.map(async id=>{
+    try{ cache[id]=await fetch(`${D}${dir}/b${id}.json`).then(r=>r.json()); }
+    catch(e){ cache[id]=null; }
+    BAND_FETCHING.delete(dir+id);
+  }));
+  renderChart();
+}
+
+// สร้าง 2 series ของแถบเงา (ฐาน min ล่องหน + ส่วนต่าง max-min ระบายเทา) — เหมือนแถบ P25-P75 ใน risk_drill
+function buildBandSeries(b,bks){
+  const cache=bandCache(b.kind);
+  const perOrg=[];
+  for(const org of b.orgs){
+    let rows=[];
+    for(const bId of b.bIds){const sh=cache[bId]; if(sh&&sh[org]) rows=rows.concat(sh[org]);}
+    if(!rows.length) continue;
+    const m=allMetricsFromRows(rows,b.ids)[ST.metric];
+    if(m.size) perOrg.push(m); // นับเฉพาะ รพ. ที่มีบัญชีนี้จริง — ไม่งั้น Min จะแบนติด 0 ตลอด
+  }
+  if(perOrg.length<2) return null;
+  const minA=[],maxA=[];
+  for(const bk of bks){
+    const vals=[];
+    for(const m of perOrg){const v=bVal(m,bk); if(v!=null) vals.push(v);}
+    if(vals.length>=2){minA.push(Math.min(...vals)); maxA.push(Math.max(...vals));}
+    else{minA.push(null); maxA.push(null);}
+  }
+  if(!maxA.some(v=>v!=null)) return null;
+  const name=`ช่วง Max-Min ${b.scopeLabel} (${perOrg.length}/${b.orgs.length} แห่ง)${b.note||''}`;
+  BAND_TT={name,min:minA,max:maxA};
+  return [
+    {name:BAND_BASE,type:'line',data:minA,stack:'mmband',z:1,silent:true,symbol:'none',
+      lineStyle:{opacity:0},itemStyle:{opacity:0},connectNulls:false},
+    {name,type:'line',data:maxA.map((v,i)=>v==null?null:v-minA[i]),stack:'mmband',z:1,silent:true,symbol:'none',
+      lineStyle:{opacity:0},itemStyle:{color:'#9ca3af'},areaStyle:{color:'#9ca3af',opacity:.25},connectNulls:false},
+  ];
+}
+
 function renderChart(){
   const bks=getBuckets();
   if(!ST.series.length){
@@ -1296,14 +1388,24 @@ function renderChart(){
   }
   closeDrawer(); // เพิ่มเส้นกราฟสำเร็จ → ปิด drawer มือถือ กลับมาดูกราฟ
 
-  const series=ST.series.map(s=>({
+  const series=[];
+
+  // เงา Max-Min — วางก่อนเส้นจริงให้อยู่ชั้นหลังสุด; ถ้า shard ยังไม่มาให้โหลดเบื้องหลังแล้ว render ซ้ำเอง
+  BAND_TT=null;
+  const bctx=bandCtx();
+  if(bctx){
+    if(bandReady(bctx)){ const bs=buildBandSeries(bctx,bks); if(bs) series.push(...bs); }
+    else loadBandShards(bctx);
+  }
+
+  series.push(...ST.series.map(s=>({
     name:s.label,type:'line',
     data:bks.map(b=>bVal(s.allM[ST.metric],b)),
     lineStyle:{color:s.color,width:2},
     itemStyle:{color:s.color},
     symbol:bks.length>40?'none':'circle',symbolSize:4,
     connectNulls:false,
-  }));
+  })));
 
   // เส้นเฉลี่ย (ต่อ รพ.) — เขต: ใช้ได้ทุกเงื่อนไขที่มีเส้น GF · จังหวัด: เฉพาะเมื่อทุกเส้นมาจากจังหวัดเดียวกัน
   let avgApplied=false;
@@ -1350,9 +1452,18 @@ function renderChart(){
     graphic:[],
     tooltip:{trigger:'axis',formatter:p=>{
       const lbl=p[0].axisValueLabel;
-      return lbl+p.map(x=>`<br/><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${x.color};margin-right:4px"></span>${x.seriesName}: <b>${fmtM(x.value)}</b>`).join('');
+      return lbl+p.map(x=>{
+        if(x.seriesName===BAND_BASE) return '';
+        // แถบเงาเก็บค่าเป็นส่วนต่างของ stack — แสดง Max/Min จริงจาก BAND_TT แทน
+        if(BAND_TT&&x.seriesName===BAND_TT.name){
+          const mx=BAND_TT.max[x.dataIndex], mn=BAND_TT.min[x.dataIndex];
+          if(mx==null) return '';
+          return `<br/><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#9ca3af;margin-right:4px"></span>${x.seriesName}: <b>${fmtM(mn)}</b> ถึง <b>${fmtM(mx)}</b>`;
+        }
+        return `<br/><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${x.color};margin-right:4px"></span>${x.seriesName}: <b>${fmtM(x.value)}</b>`;
+      }).join('');
     }},
-    legend:{data:series.map(s=>s.name),bottom:0,type:'scroll',textStyle:{fontSize:11,fontFamily:'Sarabun'}},
+    legend:{data:series.map(s=>s.name).filter(n=>n!==BAND_BASE),bottom:0,type:'scroll',textStyle:{fontSize:11,fontFamily:'Sarabun'}},
     grid:{left:70,right:20,top:16,bottom:60},
     xAxis:{type:'category',data:bks.map(b=>b.label),axisLabel:{rotate:bks.length>12?45:0,fontSize:11,fontFamily:'Sarabun'}},
     yAxis:{type:'value',axisLabel:{formatter:fmtM,fontSize:11}},
