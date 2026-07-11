@@ -39,6 +39,10 @@ body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font
 .seg button{font-family:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:none;background:var(--card);color:var(--mut);cursor:pointer;transition:all .1s}
 .seg button.on{background:var(--ink);color:var(--bg)}
 .seg button.dis{opacity:.4;cursor:help}
+.reset-btn{margin-left:auto;font-family:inherit;font-size:13.5px;font-weight:700;padding:7px 18px;border:none;border-radius:9px;
+  background:var(--red);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 1px 4px var(--shadow);white-space:nowrap}
+.reset-btn:hover{filter:brightness(1.12)}
+.reset-btn:active{transform:scale(.97)}
 .acc-item mark{background:rgba(245,158,11,.4);color:inherit;border-radius:2px;padding:0 1px}
 select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
 .main{display:flex;flex:1;overflow:hidden}
@@ -140,6 +144,7 @@ select{font-family:inherit;font-size:13px;padding:4px 8px;border:1px solid var(-
     <button id="gQ" onclick="setGran('q')">รายไตรมาส</button>
     <button id="gY" class="on" onclick="setGran('y')">รายปีงบ</button>
   </div>
+  <button class="reset-btn" onclick="resetAll()" title="ล้างเส้นกราฟและตัวกรองทั้งหมด กลับสู่ค่าเริ่มต้นเหมือนเพิ่งเปิดหน้า">↺ Reset เริ่มใหม่</button>
 </div>
 
 <div class="main">
@@ -1343,6 +1348,24 @@ function setAvg(a){
     document.getElementById(id).classList.toggle('on',k===a);
   renderChart();
 }
+// Reset ทุกอย่างกลับสภาพเหมือนเพิ่งเปิดหน้า: เส้นกราฟ คิว ตัวกรองทุกชั้น หน่วยงาน ช่องค้นหา ปีงบ metric/เทรน/เฉลี่ย
+function resetAll(){
+  ST.series=[]; ST.queue=[]; ST.rowPayload={};
+  ST.fin=null; ST.accg=null; ST.sub=null; ST.budget=null;
+  ST.avg='none';
+  for(const[id,k]of[['aNone','none'],['aProv','prov'],['aReg','region']])
+    document.getElementById(id).classList.toggle('on',k==='none');
+  const fyEl=document.getElementById('fySelect');
+  if(fyEl.options.length){ST.fy=+fyEl.options[0].value; fyEl.value=ST.fy;}
+  document.getElementById('provPick').value='';
+  document.getElementById('unitSearchIn').value='';
+  document.getElementById('accIn').value='';
+  updateBC(); renderSbar(); renderQueueBar();
+  setMetric('bs'); setGran('y');
+  setScope('region'); // กลับทั้งเขต — จัดการ srcHint/ดรอปดาวน์/ผลค้นหาให้เองใน applyUnit
+  closeDrawer();
+}
+
 // สถานะปุ่มเฉลี่ยจังหวัด: จางลง + tooltip อธิบายเงื่อนไข เมื่อยังใช้ไม่ได้
 function updateAvgBtns(){
   const b=document.getElementById('aProv');
