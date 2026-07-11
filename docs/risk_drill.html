@@ -888,6 +888,7 @@ function renderNITiers(h, s){
 }
 
 // ── D: Survival Simulator — จำลองเส้นทางอยู่รอด (อิงสูตร SU ทางการ) ──
+const SHOW_NET_CASH=false;  // ซ่อนส่วนเปรียบเทียบ "เงินบำรุงสุทธิหลังหักหนี้" ไว้ก่อน — ปรับเป็น true เพื่อเปิดกลับ
 let SURV=null;
 // สเกลแกน NI (±ล้าน/เดือน) และเงินก้อน (ล้าน) ตามระดับหน่วยบริการ — ค่าเป็นล้านบาท
 function survLimits(h){
@@ -933,12 +934,12 @@ function renderSurvival(h, s){
         <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="50000" value="0">
         <span class="surv-base">ครั้งเดียว ณ ตอนนี้ · สเกล 0–${fmtM(INJ_MAX)} · <a href="#" onclick="svReset('inj');return false">ล้างเป็น 0</a></span></div>
     </div>
-    <div class="surv-now">สถานะตอนนี้: เงินสด+เงินฝาก <b>${fmtM(t.cn)}</b> − หนี้สินหมุนเวียน <b>${fmtM(t.cl)}</b> = เงินบำรุงสุทธิ (หลังหักหนี้) <b class="${t.cn-t.cl<0?'neg':'pos'}">${fmtM(t.cn-t.cl)}</b></div>
+    ${SHOW_NET_CASH?`<div class="surv-now">สถานะตอนนี้: เงินสด+เงินฝาก <b>${fmtM(t.cn)}</b> − หนี้สินหมุนเวียน <b>${fmtM(t.cl)}</b> = เงินบำรุงสุทธิ (หลังหักหนี้) <b class="${t.cn-t.cl<0?'neg':'pos'}">${fmtM(t.cn-t.cl)}</b></div>`:''}
     <div class="surv-sum" id="svSum"></div>
     <div class="surv-chartbox"><canvas id="survChart"></canvas></div>
-    <div class="surv-cash-cap">เทียบเงินสด+เงินฝาก (gross) กับ เงินบำรุงสุทธิหลังหักหนี้สินหมุนเวียน (net) ตลอด 24 เดือนที่จำลอง</div>
-    <div class="surv-chartbox"><canvas id="cashChart"></canvas></div>
-    <div class="gap-note">⚙️ สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (<b>${fmtM(depMo)}/เดือน</b> คงที่ตาม run-rate) · กำไรสะสมเป็นเงินสด/สินทรัพย์หมุนเวียนเต็มจำนวน · หนี้สินคงที่ (ยกเว้นเงินก้อน) — <b>เงินบำรุงสุทธิ</b> = เงินสด+เงินฝาก หักหนี้สินหมุนเวียนทั้งหมดที่ค้างอยู่ ณ ตอนนี้ (ไม่ได้หักเงินต้นที่ผ่อนคืนรายเดือน เพราะสมมติหนี้คงที่) · NI สะสมรีเซ็ตทุก ต.ค. ตามปีงบ · <b>เดือน 0 = สถานะจริงปัจจุบัน</b> — จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</div>`;
+    ${SHOW_NET_CASH?`<div class="surv-cash-cap">เทียบเงินสด+เงินฝาก (gross) กับ เงินบำรุงสุทธิหลังหักหนี้สินหมุนเวียน (net) ตลอด 24 เดือนที่จำลอง</div>
+    <div class="surv-chartbox"><canvas id="cashChart"></canvas></div>`:''}
+    <div class="gap-note">⚙️ สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (<b>${fmtM(depMo)}/เดือน</b> คงที่ตาม run-rate) · กำไรสะสมเป็นเงินสด/สินทรัพย์หมุนเวียนเต็มจำนวน · หนี้สินคงที่ (ยกเว้นเงินก้อน) · NI สะสมรีเซ็ตทุก ต.ค. ตามปีงบ · <b>เดือน 0 = สถานะจริงปัจจุบัน</b> — จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</div>`;
   document.getElementById('svNi').oninput=projSurv;
   document.getElementById('svInj').oninput=projSurv;
   projSurv();
@@ -982,12 +983,14 @@ function projSurv(){
   if(!pills.length) pills.push(`<div class="surv-pill">คะแนนคงที่ที่ ${startRisk} ตลอด ${HORIZON} เดือนที่จำลอง</div>`);
   if(cashOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินสด+เงินฝากหมดในอีก ${cashOut} เดือน (${at(cashOut)})</div>`);
   else if(cashMo<0) pills.push(`<div class="surv-pill out">⚠️ เงินสด+เงินฝากลดลงเรื่อยๆ (${fmtM(cashMo)}/เดือน)</div>`);
-  if(netOut===0) pills.push(`<div class="surv-pill out">🔴 เงินบำรุงสุทธิ (หลังหักหนี้) ติดลบอยู่แล้วตอนนี้ (${fmtM(net0)})</div>`);
-  else if(netOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินบำรุงสุทธิ (หลังหักหนี้) จะติดลบในอีก ${netOut} เดือน (${at(netOut)})</div>`);
-  else if(cashMo<0) pills.push(`<div class="surv-pill out">⚠️ เงินบำรุงสุทธิลดลงเรื่อยๆ แต่ยังเป็นบวกตลอด ${HORIZON} เดือนที่จำลอง</div>`);
+  if(SHOW_NET_CASH){
+    if(netOut===0) pills.push(`<div class="surv-pill out">🔴 เงินบำรุงสุทธิ (หลังหักหนี้) ติดลบอยู่แล้วตอนนี้ (${fmtM(net0)})</div>`);
+    else if(netOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินบำรุงสุทธิ (หลังหักหนี้) จะติดลบในอีก ${netOut} เดือน (${at(netOut)})</div>`);
+    else if(cashMo<0) pills.push(`<div class="surv-pill out">⚠️ เงินบำรุงสุทธิลดลงเรื่อยๆ แต่ยังเป็นบวกตลอด ${HORIZON} เดือนที่จำลอง</div>`);
+  }
   document.getElementById('svSum').innerHTML=pills.join('');
   drawSurvChart(path, crossDown, cashOut, startRisk);
-  drawCashChart(path, cashOut, netOut);
+  if(SHOW_NET_CASH) drawCashChart(path, cashOut, netOut);
 }
 function addMo(t, k){ let y=Math.floor(t/100), m=t%100+k; y+=Math.floor((m-1)/12); m=((m-1)%12)+1; return y*100+m; }
 function drawSurvChart(path, cross, cashOut, startRisk){
