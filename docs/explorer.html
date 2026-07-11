@@ -368,7 +368,8 @@ function fmtM(v){
 function tLab(t){
   const fy=Math.floor(t/100),m=t%100;
   const MN=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
-  return MN[m-1]+' '+(fy+(m<=3?1:0));
+  // ต.ค.–ธ.ค. (เดือนงบ 1-3) เป็นปีปฏิทินก่อนหน้าปีงบ (พ.ศ.) จึงต้องลบ 1 ไม่ใช่บวก
+  return MN[m-1]+' '+(fy-(m<=3?1:0));
 }
 
 function filteredGroups(){
@@ -1448,6 +1449,11 @@ function renderChart(){
   document.getElementById('chartTitle').textContent=`เทรน${ML[ST.metric]}${hasLeaf?' (มีเส้นระดับหน่วยบริการปนอยู่)':' (ระดับเขต)'}`+avgHint;
   updateAvgBtns();
 
+  // เก็บช่วงวันที่ (%) ที่ผู้ใช้เลื่อนไว้ ไม่ให้รีเซ็ตทุกครั้งที่ render ใหม่ (สลับธีม/metric/เทรน)
+  let dzStart=0,dzEnd=100;
+  try{const o=trendChart.getOption(); if(o&&o.dataZoom&&o.dataZoom.length){dzStart=o.dataZoom[0].start??0;dzEnd=o.dataZoom[0].end??100;}}catch(e){}
+  const dark=isDarkNow();
+
   trendChart.setOption({
     graphic:[],
     tooltip:{trigger:'axis',formatter:p=>{
@@ -1464,9 +1470,21 @@ function renderChart(){
       }).join('');
     }},
     legend:{data:series.map(s=>s.name).filter(n=>n!==BAND_BASE),bottom:0,type:'scroll',textStyle:{fontSize:11,fontFamily:'Sarabun'}},
-    grid:{left:70,right:20,top:16,bottom:60},
+    grid:{left:70,right:20,top:16,bottom:92},
     xAxis:{type:'category',data:bks.map(b=>b.label),axisLabel:{rotate:bks.length>12?45:0,fontSize:11,fontFamily:'Sarabun'}},
     yAxis:{type:'value',axisLabel:{formatter:fmtM,fontSize:11}},
+    // ตัวเลื่อนช่วงวันที่ — ขนาดกราฟคงเดิม เลื่อน/ย่อดูเฉพาะช่วงเวลาที่สนใจได้
+    dataZoom:[
+      {type:'inside',xAxisIndex:0,start:dzStart,end:dzEnd},
+      {type:'slider',xAxisIndex:0,start:dzStart,end:dzEnd,bottom:34,height:20,
+        borderColor:dark?'#2a2f3a':'#e5e7eb',
+        fillerColor:dark?'rgba(91,157,255,.18)':'rgba(37,99,235,.12)',
+        handleStyle:{color:dark?'#5b9dff':'#2563eb'},
+        moveHandleStyle:{color:dark?'#5b9dff':'#2563eb'},
+        dataBackground:{lineStyle:{color:dark?'#3a4150':'#cbd5e1'},areaStyle:{color:dark?'#232833':'#eef2f7'}},
+        selectedDataBackground:{lineStyle:{color:dark?'#5b9dff':'#2563eb'},areaStyle:{color:dark?'rgba(91,157,255,.25)':'rgba(37,99,235,.18)'}},
+        textStyle:{fontSize:10,fontFamily:'Sarabun',color:dark?'#8b93a3':'#6b7280'}},
+    ],
     series,
   },true);
 }
