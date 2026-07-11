@@ -114,7 +114,9 @@ def main():
     run([sys.executable, "import_month_mdb.py"], BS_PIPE)
     run([sys.executable, "build_from_mysql.py"], BS_PIPE)
     run([sys.executable, "export_json.py"], BS_PIPE)
-    for opt in ("export_anomaly.py", "export_ratio_check.py", "export_acc.py", "export_risk_link.py"):
+    # export_planfin.py ต้องรัน "หลัง" export_risk_link.py เพราะ merge คีย์ planfin เข้าไฟล์ h/*.json ที่มันสร้าง
+    for opt in ("export_anomaly.py", "export_ratio_check.py", "export_acc.py",
+                "export_risk_link.py", "export_planfin.py"):
         if (BS_PIPE / opt).exists():
             run([sys.executable, opt], BS_PIPE)
 
