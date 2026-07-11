@@ -266,7 +266,9 @@ syncThemeBtn();
 // ── Config ──────────────────────────────────────────────
 const D = 'data/';
 const ACCB = {}; // cache: bId → acc_region/b<bId>.json (ชั้น 6 static, แทน Supabase)
-const PAL = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#be123c','#065f46','#92400e','#1e40af'];
+// จานสี — เรียงให้เส้นที่เพิ่มติดกันมีสีต่างกันมากที่สุด และอ่านออกได้ทั้งธีมสว่าง/มืด
+const PAL = ['#2563eb','#dc2626','#16a34a','#d97706','#7c3aed','#0891b2','#db2777','#65a30d',
+  '#ea580c','#0d9488','#9333ea','#ca8a04','#0284c7','#be123c','#4d7c0f','#4f46e5'];
 const MI  = {bs:2,inc:3,dec:4,endDr:5,endCr:6};
 const MC  = {bs:'bs',inc:'inc',dec:'dec',endDr:'EndDr',endCr:'EndCr'};
 const ML  = {bs:'ยอดสุทธิ',endDr:'EndDr',endCr:'EndCr',inc:'Dr เพิ่ม',dec:'Cr ลด'};
@@ -363,6 +365,18 @@ function fmtM(v){
   if(a>=1e6) return (v/1e6).toFixed(1)+'M';
   if(a>=1e3) return (v/1e3).toFixed(0)+'K';
   return v.toLocaleString();
+}
+
+// เลือกสีถัดไปแบบ "ไม่ซ้ำกับเส้นที่มีอยู่" — กันสีซ้ำเมื่อเพิ่ม/ลบสลับกัน หรือเลือกหมวดเดียวกันคนละหน่วยงาน
+// (เดิมอิงจำนวนเส้น ทำให้ชนกันหลังลบเส้นกลางๆ หรือเมื่อเกินจำนวนสีในจาน)
+function nextColor(){
+  const used=new Set(ST.series.map(s=>s.color));
+  for(const c of PAL) if(!used.has(c)) return c;
+  // จานสีหลักถูกใช้ครบแล้ว — สร้างสีเสริมแบบกระจายมุมสี (golden angle) ให้ต่างกันมากที่สุด
+  for(let k=0;;k++){
+    const c=`hsl(${Math.round((k*137.508)%360)},68%,${isDarkNow()?'62%':'44%'})`;
+    if(!used.has(c)) return c;
+  }
 }
 
 function tLab(t){
@@ -510,7 +524,7 @@ async function addLevelSeries(depth){
   const rows=await unitRowsForGfIds(gfIds);
   if(rows==null){ alert('กรุณาเลือกหน่วยงานให้ครบก่อน (จังหวัด/รพ.)'); return; }
   const label=levelLabel(depth)+unitSuffixLabel();
-  ST.series.push({id,label,color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[...gfIds],allM:allMetricsFromRows(rows,gfIds)});
+  ST.series.push({id,label,color:nextColor(),type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[...gfIds],allM:allMetricsFromRows(rows,gfIds)});
   renderChart();renderSbar();renderLevelSelects();
 }
 
@@ -924,7 +938,7 @@ async function addAllGf(){
     const rows=await gfSeriesRows(g.gfId);
     if(rows==null) continue; // หน่วยงานยังเลือกไม่ครบ (จังหวัด/รพ. ยังไม่ระบุ) — ข้าม
     const gfIds=new Set([g.gfId]);
-    ST.series.push({id,label:g.gf+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[g.gfId],allM:allMetricsFromRows(rows,gfIds)});
+    ST.series.push({id,label:g.gf+unitSuffixLabel(),color:nextColor(),type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[g.gfId],allM:allMetricsFromRows(rows,gfIds)});
     changed=true;
   }
   if(changed){renderChart();renderSbar();renderGF();}
@@ -1040,7 +1054,7 @@ async function addGfSeries(gfId, label){
   const rows=await gfSeriesRows(gfId);
   if(rows==null){ alert('กรุณาเลือกหน่วยงานให้ครบก่อน (จังหวัด/รพ. ที่ต้องการ)'); return; }
   const gfIds=new Set([gfId]);
-  ST.series.push({id,label:label+unitSuffixLabel(),color:PAL[ST.series.length%PAL.length],type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[gfId],allM:allMetricsFromRows(rows,gfIds)});
+  ST.series.push({id,label:label+unitSuffixLabel(),color:nextColor(),type:unitSeriesType(),prov:unitProv(),org:unitOrg(),gfIds:[gfId],allM:allMetricsFromRows(rows,gfIds)});
   renderChart();renderSbar();renderGF();
 }
 
@@ -1049,7 +1063,7 @@ async function addAccSeries(prefix, gfId){
   if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
   const g=META.gfMap[gfId];
   const label=`${prefix}${g?` (${g.gf})`:''}`;
-  const color=PAL[ST.series.length%PAL.length];
+  const color=nextColor();
   const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
 
   try{
@@ -1083,7 +1097,7 @@ async function addCode13Series(code, gfId){
   const g=META.gfMap[gfId];
   const nm=realName(code)||(g?g.gf:'');
   const label=`${code}${nm?` (${nm})`:''}`;
-  const color=PAL[ST.series.length%PAL.length];
+  const color=nextColor();
   const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
 
   try{
@@ -1118,7 +1132,7 @@ async function addLeafSeries(fullkey, gfId, org5){
   await ensureOrgNames(org5);
   const nm=realName(fullkey)||(g?g.gf:'');
   const label=`${fullkey} — ${hospName}${nm?` (${nm})`:''}`;
-  const color=PAL[ST.series.length%PAL.length];
+  const color=nextColor();
   const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
 
   try{
@@ -1149,7 +1163,7 @@ async function addLeafAccSeries(prefix, gfId, org5, orgLabel){
   const g=META.gfMap[gfId];
   const hospName=orgLabel||(META.orgs.find(o=>o.id===org5)||{}).name||org5;
   const label=`${prefix} — ${hospName}${g?` (${g.gf})`:''}`;
-  const color=PAL[ST.series.length%PAL.length];
+  const color=nextColor();
   const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
 
   try{
@@ -1185,7 +1199,7 @@ async function addProvCode13Series(code, gfId, prov){
   const g=META.gfMap[gfId];
   const nm=realName(code)||(g?g.gf:'');
   const label=`${code} — ${prov}${nm?` (${nm})`:''}`;
-  const color=PAL[ST.series.length%PAL.length];
+  const color=nextColor();
   const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
 
   try{
@@ -1218,7 +1232,7 @@ async function addProvAccSeries(prefix, gfId, prov){
   if(ST.series.find(s=>s.id===id)){removeSeries(id);return;}
   const g=META.gfMap[gfId];
   const label=`${prefix} — ${prov}${g?` (${g.gf})`:''}`;
-  const color=PAL[ST.series.length%PAL.length];
+  const color=nextColor();
   const allM={bs:new Map(),inc:new Map(),dec:new Map(),endDr:new Map(),endCr:new Map()};
 
   try{
