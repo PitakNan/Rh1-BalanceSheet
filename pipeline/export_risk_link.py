@@ -321,6 +321,12 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             "nwc": rnd(r["nwc"], 0), "ni": rnd(r["ni"], 0), "ebitda": rnd(r["ebitda"], 0),
             "reserve": rnd(r["reserve"], 0), "li": rnd(r["li"], 0), "st": rnd(r["st"], 0),
             "su": rnd(r["su"], 0), "risk": rnd(r["risk"], 0), "source": r["src_risk"],
+            # ค่าดิบตัวเศษ/ตัวส่วนตามผัง (GL) — ใช้ให้ Gap-to-Target Solver คำนวณช่องว่างเชิงบาทแม่นระดับบาท
+            # ca=สินทรัพย์หมุนเวียน(1001X) cl=หนี้สินหมุนเวียน(1001Y, ตัวส่วนทุก ratio)
+            # qn=ตัวเศษ Quick(1002X) cn=ตัวเศษ Cash(1003X) rev=รายได้รวม(3006Y) exp=ค่าใช้จ่ายรวม(3010X)
+            "ca": rnd(r["1001X"], 0), "cl": rnd(r["1001Y"], 0),
+            "qn": rnd(r["1002X"], 0), "cn": rnd(r["1003X"], 0),
+            "rev": rnd(r["3006Y"], 0), "exp": rnd(r["3010X"], 0),
             "app": rnd(r["app"], 1), "acpUc": rnd(r["acpUc"], 1), "acpCs": rnd(r["acpCs"], 1),
             "acpSs": rnd(r["acpSs"], 1), "invDays": rnd(r["invDays"], 1),
             "opMargin": rnd(r["opMargin"], 1), "roa": rnd(r["roa"], 1),
