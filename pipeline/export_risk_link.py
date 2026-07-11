@@ -304,6 +304,62 @@ def top_accounts(org_df, t_cur, t_base, bucket, cls_label):
                      "value": round(float(v1), 0), "delta": round(float(d), 0)})
     return out
 
+# ── C: Payables Stress — เจ้าหนี้การค้ารายหมวด + "ค้างจ่ายเท่ากับการใช้กี่เดือน" ──
+# เสริมการแสดง APP ทางการ (RatioID 260) โดยแตกรายหมวดเจ้าหนี้ — ไม่สร้างตัวชี้ทางการใหม่
+# ⚠️ กันข้อผิดพลาด (ดู WORKLOG): (1) แยก supplier trade (.1xx) จาก claim/settlement (.2xx-.7xx)
+#    ที่ไม่มี usage-flow — ไม่คำนวณ ratio ให้ claim  (2) แปลง usage สะสม YTD → ต่อเดือน (÷ เดือนที่ผ่าน)
+#    (3) กันหารด้วยศูนย์/เล็กเกิน → null  (4) cap >60 เดือน  (5) reconcile ผลรวม  (6) โชว์บัญชีคู่ที่จับให้ตรวจได้
+PAYABLE_USAGE = {   # เจ้าหนี้การค้า (supplier) → บัญชีการใช้/ค่าจ้าง หมวด 5 ที่จับคู่ (รหัสมาตรฐาน สธ.)
+    "2101020199.134": "5104030205.101",  # ยา → ยาใช้ไป
+    "2101020199.143": "5104030205.102",  # วัสดุเภสัชกรรม
+    "2101020199.135": "5104030205.103",  # วัสดุการแพทย์ทั่วไป
+    "2101020199.136": "5104030205.104",  # วัสดุวิทยาศาสตร์และการแพทย์
+    "2101020199.144": "5104030205.117",  # วัสดุทันตกรรม
+    "2101020199.145": "5104030205.118",  # วัสดุเอกซเรย์
+    "2101020199.147": "5104010112.114",  # ค่าจ้างตรวจ LAB
+    "2101020199.148": "5104010112.115",  # ค่าตรวจ X-Ray
+    "2101020199.146": "5104010112.112",  # ค่าจ้างเหมาบริการทางการแพทย์
+    "2101020199.137": "5104010104.108",  # วัสดุอื่น
+}
+TRADE_PREFIX = "2101020199."
+
+def payables_stress(org_df, t_cur, t_prev, months_elapsed):
+    cur = org_df[org_df["t"] == t_cur]
+    prev = org_df[org_df["t"] == t_prev] if t_prev is not None else None
+    if cur.empty:
+        return None
+    bal = cur.groupby("root")["bs"].sum()
+    balp = prev.groupby("root")["bs"].sum() if prev is not None and not prev.empty else None
+    supplier, claims = [], []
+    for root, b in bal.items():
+        rs = str(root)
+        if not rs.startswith(TRADE_PREFIX) or abs(b) < 1:
+            continue
+        d = float(b - (balp.get(root, 0.0) if balp is not None else 0.0))
+        suffix = rs.split(".")[-1]
+        rec = {"acc": rs, "name": account_name(root), "value": round(float(b), 0), "delta": round(d, 0)}
+        if suffix[:1] in ("2", "3", "5", "7"):   # เจ้าหนี้ตามจ่าย/เคลม — ไม่มี usage-flow
+            claims.append(rec); continue
+        uroot = PAYABLE_USAGE.get(rs)
+        rec["usageAcct"] = None; rec["monthlyRate"] = None; rec["monthsOut"] = None; rec["capped"] = False
+        if uroot and months_elapsed > 0:
+            u = float(bal.get(uroot, 0.0))          # usage สะสม YTD (bs)
+            if u > 0:
+                rate = u / months_elapsed            # → ต่อเดือน
+                if rate >= 1000:                     # floor กันหารด้วยค่าน้อยจนพุ่ง
+                    mo = float(b) / rate
+                    rec["usageAcct"] = account_name(uroot)
+                    rec["monthlyRate"] = round(rate, 0)
+                    rec["monthsOut"] = round(min(mo, 60.0), 1)
+                    rec["capped"] = mo > 60
+        supplier.append(rec)
+    supplier.sort(key=lambda r: -r["value"]); claims.sort(key=lambda r: -r["value"])
+    tot_sup = round(sum(r["value"] for r in supplier), 0)
+    tot_clm = round(sum(r["value"] for r in claims), 0)
+    return {"asof": int(t_cur), "monthsElapsed": int(months_elapsed),
+            "supplier": supplier, "claims": claims,
+            "totalSupplier": tot_sup, "totalClaims": tot_clm, "totalTrade": round(tot_sup + tot_clm, 0)}
+
 periods_all = sorted(j["t"].unique().tolist())
 empty_org_df = m_buckets.iloc[0:0]
 
@@ -402,13 +458,15 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             "rev": {"name": rev_n, "delta": rev_d}, "exp": {"name": exp_n, "delta": exp_d},
         }
 
+    payables = payables_stress(org_df, tcur, tmom, tcur % 100)
+
     out = {
         "hcode": org5, "name": org.get("name"), "prov": org.get("prov"),
         "grp": org.get("grp"), "level": org.get("level"),
         "bed": org.get("bed"), "typeSer": org.get("typeSer"),
         "period": int(tcur), "periodLabel": tlab(int(tcur)),
         "trend": trend, "peer": peer, "decomp": decomp, "waterfall": wf,
-        "topAccounts": topacc, "topAccountsPL": topaccPL,
+        "topAccounts": topacc, "topAccountsPL": topaccPL, "payables": payables,
     }
     path = os.path.join(OUT_H, f"{org5}.json")
     with open(path, "w", encoding="utf-8") as f:

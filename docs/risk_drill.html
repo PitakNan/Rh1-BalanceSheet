@@ -200,6 +200,14 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .ni-verdict.mid{background:var(--mid-bg);border:1px solid var(--mid-bd);color:var(--mid-ink)}
 .ni-verdict.bad{background:var(--bad-bg);border:1px solid var(--bad-bd);color:var(--bad-ink)}
 @media(max-width:640px){.ni-bridge{grid-template-columns:1fr}.ni-op{flex-direction:row;gap:6px;padding:2px 0}}
+/* ── Payables Stress (เจ้าหนี้การค้ารายหมวด) ───────────── */
+.mo-chip{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mo-chip.hi{background:var(--bad-bg);color:var(--bad-ink)}
+.mo-chip.warn{background:var(--th-bg);color:var(--gold)}
+.mo-chip.ok{background:var(--good-bg);color:var(--good-ink)}
+.mo-chip.na{color:var(--mut)}
+.pay-recon{font-size:11.5px;color:var(--mut);margin-top:8px;line-height:1.5}
+.pay-sub{font-size:12px;font-weight:700;color:var(--mut);margin:14px 0 4px;text-transform:none}
 .panel{overflow-x:auto}
 .acctbl-wrap{overflow-x:auto}
 @media(max-width:768px){
@@ -629,6 +637,12 @@ function renderDetail(hcode){
     </div>
 
     <div class="panel">
+      <h3>เจ้าหนี้การค้ารายหมวด — ค้างจ่ายเท่ากับการใช้กี่เดือน</h3>
+      <div class="src-note">📌 <b>เสริมมุมมองของ APP (Average Payment Period, RatioID 260) ทางการ</b> โดยแตกเจ้าหนี้การค้ารายหมวด — <b>ไม่ใช่ aging จริงจากใบแจ้งหนี้</b> แต่เป็นค่าประมาณจากงบทดลอง: <code>ยอดเจ้าหนี้คงเหลือ ÷ อัตราการใช้/ค่าจ้างต่อเดือน</code> (แปลงยอดใช้สะสมทั้งปีงบ ÷ จำนวนเดือนที่ผ่าน) = "ค้างจ่ายเทียบเท่าการใช้กี่เดือน" · ⚠️ คำนวณเฉพาะ<b>เจ้าหนี้การค้าที่มีบัญชีการใช้จับคู่ชัดเจน</b> — ส่วน<b>เจ้าหนี้ตามจ่าย/เคลม</b> (UC นอก CUP, ประกันสังคม, ต่างด้าว) เป็นการชำระระหว่างหน่วยบริการ ไม่มีรอบการใช้ จึงแสดงเฉพาะยอด · cap ที่ 60 เดือน</div>
+      <div id="payablesBox"></div>
+    </div>
+
+    <div class="panel">
       <h3>ประสิทธิภาพการดำเนินงาน (7 Plus Efficiency Score)</h3>
       <div class="src-note">📌 ที่มาข้อมูล: งบทดลอง ตามผัง RatioItemID ของกองเศรษฐกิจสุขภาพ — APP/ACP/Inventory ใช้ยอดคงเหลือเฉลี่ยต้น-ปลายงวด × จำนวนวันในเดือน (RatioID 260/261/262/263/264), Operating Margin/ROA ใช้ EBITDA และ NI ที่พิสูจน์ตรง 100% แล้วหารด้วยรายได้ค่ารักษา/สินทรัพย์รวม (RatioID 320/321) — เกณฑ์เป้าหมายจากชีท "7 Plus Efficiency Score"</div>
       <div id="effBox"></div>
@@ -644,6 +658,7 @@ function renderDetail(hcode){
   renderDecomp(h);
   renderWaterfall(h);
   renderTopAcc(h);
+  renderPayables(h);
   renderEfficiency(h, s);
 }
 
@@ -810,6 +825,41 @@ function renderNITiers(h, s){
   }
   const hint = niDep<0 ? `<div class="note" style="margin-top:6px">📎 ถ้าเกณฑ์ ST ใช้ EBITDA แทน NI มีค่าเสื่อม รพ.นี้จะ${ebitda>=0?'<b style="color:var(--green)">ผ่าน</b>':'<b style="color:var(--red)">ยังไม่ผ่าน</b>'} — แต่เกณฑ์ทางการยึด NI มีค่าเสื่อม จึงยังนับเป็นความเสี่ยง</div>` : '';
   box.innerHTML=tiers+`<div class="ni-verdict ${vcls}">${vtxt}</div>`+hint;
+}
+
+// ── C: Payables Stress — เจ้าหนี้การค้ารายหมวด + เดือนค้างจ่าย ──
+function renderPayables(h){
+  const box=document.getElementById('payablesBox'); if(!box) return;
+  const p=h.payables;
+  if(!p || (!(p.supplier||[]).length && !(p.claims||[]).length)){ box.innerHTML='<div class="note">งวดนี้ไม่มีข้อมูลเจ้าหนี้การค้า</div>'; return; }
+  const moChip=r=>{
+    if(r.monthsOut==null) return '<span class="mo-chip na">—</span>';
+    const v=r.monthsOut, cls=v>12?'hi':v>6?'warn':'ok';
+    return `<span class="mo-chip ${cls}">${v}${r.capped?'+':''} เดือน</span>`;
+  };
+  const supTbl=`<table class="acctbl">
+    <tr><th>หมวดเจ้าหนี้การค้า</th><th>คงเหลือ</th><th>อัตราใช้/เดือน</th><th style="text-align:center">ค้างจ่าย≈</th></tr>
+    ${p.supplier.map(r=>`<tr>
+      <td>${r.name}${r.usageAcct?`<div class="note" style="font-size:10.5px">คู่กับ: ${r.usageAcct}</div>`:''}</td>
+      <td>${fmtM(r.value)}</td>
+      <td>${r.monthlyRate!=null?fmtM(r.monthlyRate):'<span class="note">—</span>'}</td>
+      <td style="text-align:center">${moChip(r)}</td>
+    </tr>`).join('')}
+  </table>`;
+  let claimsTbl='';
+  if((p.claims||[]).length){
+    claimsTbl=`<div class="pay-sub">เจ้าหนี้ตามจ่าย/เคลม (ชำระระหว่างหน่วยบริการ — ไม่มีรอบการใช้ จึงไม่คำนวณเดือนค้างจ่าย)</div>
+    <div class="acctbl-wrap" style="max-height:none"><table class="acctbl">
+      <tr><th>รายการ</th><th>คงเหลือ</th><th>Δ เทียบเดือนก่อน</th></tr>
+      ${p.claims.map(r=>`<tr><td>${r.name}</td><td>${fmtM(r.value)}</td>
+        <td style="color:${deltaColor(r.delta,'CL')};font-weight:700">${r.delta>0?'+':''}${fmtM(r.delta)}</td></tr>`).join('')}
+    </table></div>`;
+  }
+  const t=h.trend[h.trend.length-1];
+  const clTotal=t?t.cl:null;
+  const recon=`<div class="pay-recon">รวมเจ้าหนี้การค้า <b>${fmtM(p.totalTrade)}</b> (ซื้อเชื่อการค้า ${fmtM(p.totalSupplier)} + ตามจ่าย/เคลม ${fmtM(p.totalClaims)})${clTotal?` · คิดเป็น ${(p.totalTrade/clTotal*100).toFixed(0)}% ของหนี้สินหมุนเวียนทั้งหมด ${fmtM(clTotal)}`:''}<br>
+  🔗 เทียบ APP ทางการ (RatioID 260 · ยา/เวชภัณฑ์): <b>${t&&t.app!=null?fmtR(t.app)+' วัน ≈ '+(t.app/30.4).toFixed(1)+' เดือน':'—'}</b> — สูตรทางการใช้ยอดซื้อรายเดือน (ตัวเดียว) จึงแกว่งกว่าค่าเฉลี่ยรายหมวดด้านบนที่ใช้อัตราใช้เฉลี่ยทั้งปีงบ</div>`;
+  box.innerHTML=`<div class="acctbl-wrap" style="max-height:none">${supTbl}</div>${claimsTbl}${recon}`;
 }
 
 // ── 7 Plus Efficiency Score ─────────────────────────────────
