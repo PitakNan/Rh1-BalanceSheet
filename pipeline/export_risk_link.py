@@ -77,7 +77,7 @@ def acc_root(acc):
     digits = rest.replace(".", "")
     return p + "." + digits[:3] if digits else acc
 
-m = pd.read_parquet(MASTER, columns=["org5", "t", "acc", "bs", "inc"])
+m = pd.read_parquet(MASTER, columns=["org5", "t", "acc", "bs", "inc", "dec"])
 m = m[m["org5"].isin(orgs.keys())].copy()
 m["root"] = m["acc"].map(acc_root)
 
@@ -360,6 +360,55 @@ def payables_stress(org_df, t_cur, t_prev, months_elapsed):
             "supplier": supplier, "claims": claims,
             "totalSupplier": tot_sup, "totalClaims": tot_clm, "totalTrade": round(tot_sup + tot_clm, 0)}
 
+# ── หนี้สินหมุนเวียนรายหมวดย่อย (Name2) + ค่าเฉลี่ยจ่ายชำระ/ก่อหนี้ใหม่ ต่อเดือน ──
+# ใช้ 'dec' (ด้านเดบิตของเจ้าหนี้ = การจ่ายชำระจริงรายเดือน) และ 'inc' (ด้านเครดิต = ก่อหนี้ใหม่รายเดือน)
+# เฉลี่ยจากงวดล่าสุดสูงสุด 6 เดือน → "จ่ายชำระเฉลี่ยเดือนละเท่าไหร่ต่อหมวด" ใช้ตั้งต้นตัวปรับแผนจ่ายหนี้
+PAY_AVG_N = 6
+def cl_breakdown(org_df, t_cur, hist_ts):
+    cl = org_df[org_df["bucket"] == "CL"]
+    if cl.empty:
+        return None
+    cur = cl[cl["t"] == t_cur]
+    cur_g = cur.groupby(cur["root"].map(subgroup_name))["bs"].sum()
+    recent = sorted(t for t in hist_ts if t <= t_cur)[-PAY_AVG_N:]
+    mv = cl[cl["t"].isin(recent)]
+    nmo = int(mv["t"].nunique()) or 1
+    key = mv["root"].map(subgroup_name)
+    pay_g = mv.groupby(key)["dec"].sum().abs() / nmo   # จ่ายชำระเฉลี่ย/เดือน (|เดบิต|)
+    inc_g = mv.groupby(key)["inc"].sum() / nmo         # ก่อหนี้ใหม่เฉลี่ย/เดือน (เครดิต)
+    rows = []
+    for k in cur_g.index:
+        v = float(cur_g.get(k, 0.0))
+        if abs(v) < 1:
+            continue
+        rows.append({"name": k, "value": round(v, 0),
+                     "payMo": round(float(pay_g.get(k, 0.0)), 0),
+                     "incMo": round(float(inc_g.get(k, 0.0)), 0)})
+    rows.sort(key=lambda r: -r["value"])
+    if not rows:
+        return None
+    return {"asof": int(t_cur), "months": nmo, "rows": rows,
+            "total": round(sum(r["value"] for r in rows), 0),
+            "totalPay": round(sum(r["payMo"] for r in rows), 0),
+            "totalInc": round(sum(r["incMo"] for r in rows), 0)}
+
+# ── ลูกหนี้ค่ารักษารายกองทุน + ACP (วัน) — ใช้จำลอง "เร่งเก็บลูกหนี้ → ปลดเงินสด" ใน Survival ──
+# ar = ยอดลูกหนี้คงเหลือปัจจุบัน (X-side), acp = ระยะเวลาเก็บเฉลี่ย (วัน) จาก 7 Plus Efficiency
+def receivables(cur_row):
+    out = []
+    for name, ark, acpk, note in [
+        ("ลูกหนี้ค่ารักษา UC (นอก CUP)", "2610X", "acpUc", "เป้า ≤ 60 วัน"),
+        ("ลูกหนี้กรมบัญชีกลาง (เบิกจ่ายตรง)", "2620X", "acpCs", "เป้า ≤ 60 วัน"),
+        ("ลูกหนี้ประกันสังคม", "2630X", "acpSs", "เป้า ≤ 90 วัน"),
+    ]:
+        ar = float(cur_row.get(ark, 0.0) or 0.0)
+        acp = cur_row.get(acpk)
+        acp = round(float(acp), 1) if pd.notna(acp) else None
+        if ar < 1 and acp is None:
+            continue
+        out.append({"name": name, "ar": round(ar, 0), "acp": acp, "note": note})
+    return out or None
+
 periods_all = sorted(j["t"].unique().tolist())
 empty_org_df = m_buckets.iloc[0:0]
 
@@ -459,6 +508,8 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
         }
 
     payables = payables_stress(org_df, tcur, tmom, tcur % 100)
+    clbd = cl_breakdown(org_df, tcur, hperiods)
+    recv = receivables(cur_row)
 
     out = {
         "hcode": org5, "name": org.get("name"), "prov": org.get("prov"),
@@ -467,6 +518,7 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
         "period": int(tcur), "periodLabel": tlab(int(tcur)),
         "trend": trend, "peer": peer, "decomp": decomp, "waterfall": wf,
         "topAccounts": topacc, "topAccountsPL": topaccPL, "payables": payables,
+        "clBreakdown": clbd, "recv": recv,
     }
     path = os.path.join(OUT_H, f"{org5}.json")
     with open(path, "w", encoding="utf-8") as f:
