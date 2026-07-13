@@ -1033,7 +1033,7 @@ function renderSurvival(h, s){
         <input type="range" id="svDebt" min="-${DEBT_LIM}" max="${DEBT_LIM}" step="50000" value="0">
         <span class="surv-base">+ = เร่งจ่าย (เงินสด↓ หนี้↓) · − = ยืดจ่าย (เงินสด↑ หนี้↑) · หนี้คงเหลือ <b>${fmtM(clbd.total)}</b> · ปกติจ่าย ~<b>${fmtM(clbd.totalPay)}</b>/ก่อใหม่ ~<b>${fmtM(clbd.totalInc)}</b> ต่อเดือน · <a href="#" onclick="svReset('debt');return false">ล้างเป็น 0</a></span></div>` : '';
   const acpCtrl = (recv&&totalAR>0) ? `
-      <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (เงินสดเข้าตามเดือนที่ตั้งเป้า): <b id="svAcpLab"></b> ${tip('**คืออะไร**: ตั้งเป้าจำนวนเงินที่จะเก็บลูกหนี้ได้เร็วขึ้น + เดือนที่คาดว่าจะได้รับเป็นเงินสด\n**สูตร**: เงินสดเข้าเป็นก้อนเดียว ณ เดือนที่ตั้งเป้า (ไม่ใช่ทันที) — CA/QN/NWC รวมไม่เปลี่ยน (ลูกหนี้ในนั้นอยู่แล้ว) เปลี่ยนเฉพาะเงินสด/Cash Ratio\n**ข้อมูลจาก**: ลูกหนี้ UC/กรมบัญชีกลาง/ประกันสังคม (2610X/2620X/2630X) + ACP ที่คำนวณไว้')}
+      <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (เงินสดเข้าตามเดือนที่ตั้งเป้า): <b id="svAcpLab"></b> ${tip('**คืออะไร**: ตั้งเป้าจำนวนเงินที่จะเก็บลูกหนี้ได้เร็วขึ้น + เดือนที่คาดว่าจะได้รับเป็นเงินสด\n**สูตร**: เงินสดเข้าเป็นก้อนเดียว ณ เดือนที่ตั้งเป้า (ไม่ใช่ทันที) — CA/QN/NWC รวมไม่เปลี่ยน (ลูกหนี้ในนั้นอยู่แล้ว) เปลี่ยนเฉพาะเงินสด/Cash Ratio\n**ข้อมูลจาก**: ลูกหนี้สิทธิ UC/CSMBS/SSS (2610X/2620X/2630X) + ACP ที่คำนวณไว้')}
         <button type="button" class="planfin-btn" onclick="openAcpPlan()">✎ ตั้งเป้าจำนวนเงิน+เดือน รายกองทุน</button></label>
         <input type="range" id="svAcp" min="0" max="${Math.round(totalAR/50000)*50000}" step="50000" value="0">
         <span class="surv-base">ลูกหนี้ค้างรับรวม <b>${fmtM(totalAR)}</b> · เก็บได้เร็วขึ้น = เงินสด+Cash Ratio ดีขึ้น (CA/QN/NWC เท่าเดิม) — เข้าเดือนที่ ${SURV.acpMonth} เป็นค่าเริ่มต้น ปรับได้ในป็อปอัป · <a href="#" onclick="svReset('acp');return false">ล้างเป็น 0</a></span></div>` : '';
@@ -1654,10 +1654,10 @@ function renderEfficiency(h, s){
      tt:'**สูตร**: เจ้าหนี้การค้าเฉลี่ยต้น-ปลายงวด (2600X) ÷ ยอดซื้อยา/เวชภัณฑ์ (2600Y ด้าน Cr) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 260'},
     {label:'Average Collection Period — UC', val:t.acpUc, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpUc!=null && t.acpUc<=60,
      tt:'**สูตร**: ลูกหนี้ UC เฉลี่ยต้น-ปลายงวด (2610X) ÷ รายได้ UC (2610Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 261'},
-    {label:'Average Collection Period — กรมบัญชีกลาง', val:t.acpCs, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpCs!=null && t.acpCs<=60,
-     tt:'**สูตร**: ลูกหนี้กรมบัญชีกลางเฉลี่ยต้น-ปลายงวด (2620X) ÷ รายได้เบิกจ่ายตรง (2620Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 262'},
-    {label:'Average Collection Period — ประกันสังคม', val:t.acpSs, unit:'วัน', thLabel:'≤ 90 วัน', pass: t.acpSs!=null && t.acpSs<=90,
-     tt:'**สูตร**: ลูกหนี้ประกันสังคมเฉลี่ยต้น-ปลายงวด (2630X) ÷ รายได้ประกันสังคม (2630Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 263'},
+    {label:'Average Collection Period — CSMBS (กรมบัญชีกลาง)', val:t.acpCs, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpCs!=null && t.acpCs<=60,
+     tt:'**สูตร**: ลูกหนี้ CSMBS เฉลี่ยต้น-ปลายงวด (2620X) ÷ รายได้ CSMBS สุทธิ (2620Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 262 — ชื่อทางการตาม ratio_items คือ CSMBS (Civil Servant Medical Benefit Scheme)'},
+    {label:'Average Collection Period — SSS (ประกันสังคม)', val:t.acpSs, unit:'วัน', thLabel:'≤ 90 วัน', pass: t.acpSs!=null && t.acpSs<=90,
+     tt:'**สูตร**: ลูกหนี้ SSS เฉลี่ยต้น-ปลายงวด (2630X) ÷ รายได้สิทธิ SSS สุทธิ (2630Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 263 — ชื่อทางการตาม ratio_items คือ SSS (Social Security Scheme)'},
     {label:'Inventory Management (ยา/เวชภัณฑ์)', val:t.invDays, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.invDays!=null && t.invDays<=60,
      tt:'**สูตร**: สินค้าคงเหลือเฉลี่ยต้น-ปลายงวด (2640X) ÷ ยอดใช้ยา/เวชภัณฑ์ (2640Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 264'},
   ];
