@@ -229,6 +229,31 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .surv-now b{color:var(--ink);font-variant-numeric:tabular-nums}
 .surv-now b.neg{color:var(--red)}.surv-now b.pos{color:var(--green)}
 .surv-cash-cap{font-size:11px;color:var(--mut);margin:10px 0 4px}
+/* เป้าหมายระดับวิกฤตภายใน ก.ย. (Target Solver — แก้สมการย้อนกลับ) */
+.tgt-box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px;background:var(--bg)}
+.tgt-title{font-size:12.5px;font-weight:700;margin-bottom:10px}
+.tgt-title b{color:var(--blue)}
+.lvlbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:18px}
+.lvlbtn{width:36px;height:36px;border-radius:10px;border:none;color:#fff;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer;opacity:.45;transition:opacity .12s,transform .12s;position:relative}
+.lvlbtn:hover{opacity:.85}
+.lvlbtn.cur{opacity:1;outline:2.5px solid var(--ink);outline-offset:2px}
+.lvlbtn.cur::after{content:'ปัจจุบัน';position:absolute;top:100%;left:50%;transform:translateX(-50%);font-size:8.5px;font-weight:600;color:var(--mut);margin-top:5px;white-space:nowrap}
+.lvlbtn.on{opacity:1;transform:scale(1.12);box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.tgt-legend{font-size:10.5px;color:var(--mut);margin-bottom:8px;line-height:1.5}
+.tgt-card{border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px 12px}
+.tgt-card h4{font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.tgt-rb{display:inline-flex;width:24px;height:24px;border-radius:7px;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
+.tgt-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px dashed var(--line);font-size:12.5px;flex-wrap:wrap;line-height:1.55}
+.tgt-row:first-of-type{border-top:none}
+.tgt-row b{font-variant-numeric:tabular-nums}
+.tgt-delta{font-weight:700;font-variant-numeric:tabular-nums;border-radius:6px;padding:1px 8px;font-size:11.5px;white-space:nowrap}
+.tgt-delta.pos{background:var(--good-bg);color:var(--good-ink)}
+.tgt-delta.neg{background:var(--bad-bg);color:var(--bad-ink)}
+.tgt-apply{margin-left:auto;font-family:inherit;font-size:11px;font-weight:600;padding:4px 11px;border:1px solid var(--blue);border-radius:7px;background:var(--card);color:var(--blue);cursor:pointer;white-space:nowrap;flex-shrink:0}
+.tgt-apply:hover{background:var(--blue);color:#fff}
+.tgt-live{margin-top:8px;padding:8px 11px;border-radius:8px;background:var(--bg);font-size:12px;border:1px dashed var(--line);line-height:1.55}
+.tgt-note{font-size:10.5px;color:var(--mut)}
+.tgt-warn{color:var(--bad-ink);font-weight:600}
 /* ปุ่ม + ป็อปอัปประมาณการ NI รายหมวด (แนว Planfin) */
 .planfin-btn{font-family:inherit;font-size:11px;font-weight:600;padding:2px 9px;border:1px solid var(--blue);border-radius:7px;background:var(--card);color:var(--blue);cursor:pointer;margin-left:8px;white-space:nowrap;vertical-align:middle}
 .planfin-btn:hover{background:var(--blue);color:#fff}
@@ -932,8 +957,15 @@ function renderSurvival(h, s){
   const lim=survLimits(h);
   const NI_LIM=lim.niLim, INJ_MAX=lim.injMax;
   const clampNi=v=>Math.max(-NI_LIM,Math.min(NI_LIM,v));
-  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp,planSrc,niLim:NI_LIM,injMax:INJ_MAX,niRun};
+  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp,planSrc,niLim:NI_LIM,injMax:INJ_MAX,niRun,tgt:null};
+  const curL=SURV.official, sepLab=svSepLabel(), moLeft=12-mo;
   box.innerHTML=`
+    <div class="tgt-box">
+      <div class="tgt-title">🎯 ตั้งเป้าระดับวิกฤตภายใน <b>${sepLab}</b> (สิ้นปีงบ${moLeft>0?` · เหลือ ${moLeft} เดือน`:' · งวดนี้คือ ก.ย. แล้ว'}) — กดเลขระดับที่ต้องการ</div>
+      <div class="lvlbtns">${[0,1,2,3,4,5,6,7].map(L=>`<button type="button" class="lvlbtn${L===curL?' cur':''}" data-l="${L}" style="background:${riskColor(L)}" onclick="svTarget(${L})">${L}</button>`).join('')}</div>
+      <div class="tgt-legend">เลข<b>ต่ำกว่า</b>ปัจจุบัน = ต้องทำกำไร/เติมเงินก้อนเท่าไหร่ถึงจะลดลงไปถึงภายใน ${sepLab} · เลข<b>สูงกว่า</b> = เพดานขาดทุนเดือนละเท่าไหร่ก่อนจะตกลงไปถึง (รวม รพ.ระดับ 0 ที่อยากรู้ระยะปลอดภัย)</div>
+      <div id="tgtCard"></div>
+    </div>
     <div class="surv-ctrl">
       <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b>${planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
         <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="50000" value="${clampNi(niRun)}">
@@ -997,8 +1029,159 @@ function projSurv(){
     else if(cashMo<0) pills.push(`<div class="surv-pill out">⚠️ เงินบำรุงสุทธิลดลงเรื่อยๆ แต่ยังเป็นบวกตลอด ${HORIZON} เดือนที่จำลอง</div>`);
   }
   document.getElementById('svSum').innerHTML=pills.join('');
+  svTgtLive(niM, inj);
   drawSurvChart(path, crossDown, cashOut, startRisk);
   if(SHOW_NET_CASH) drawCashChart(path, cashOut, netOut);
+}
+
+// ── D++: Target Solver — เลือกระดับเป้าหมาย 0–7 → แก้สมการย้อนกลับหา NI/เงินก้อน ──
+// เส้นตาย = งวด ก.ย. (เดือนงบที่ 12) ของปีงบปัจจุบัน ก่อน NI สะสมรีเซ็ตรอบ ต.ค.
+const SV_STEP=50000;
+function svSepLabel(){ return tLab(Math.floor(SURV.startT/100)*100+12); }
+function sgnM(v){ return (v>0?'+':'')+fmtM(v); }
+function svChip(v){ return `<span class="tgt-delta ${v>=0?'pos':'neg'}">(${sgnM(v)}/เดือน จากปัจจุบัน)</span>`; }
+// จำลองด้วยสมมติฐานเดียวกับ projSurv แต่หยุดที่ ก.ย. — คืนคะแนน ณ ก.ย. + คะแนนแย่สุดระหว่างทาง
+function svEvalSep(niM, inj){
+  const anc=v=>Math.max(0,Math.min(7, SURV.official+(v-SURV.base)));
+  const cashMo=niM+SURV.depMo;
+  let ca=SURV.ca+inj, cn=SURV.cn+inj, qn=SURV.qn+inj, ni=SURV.ni;
+  let r=anc(scoreOf(ca,SURV.cl,qn,cn,ni,SURV.mo).risk), worst=r;
+  for(let m=SURV.mo+1;m<=12;m++){
+    ni+=niM; ca+=cashMo; cn+=cashMo; qn+=cashMo;
+    r=anc(scoreOf(ca,SURV.cl,qn,cn,ni,m).risk);
+    if(r>worst) worst=r;
+  }
+  return {sep:r, worst};
+}
+// binary search บนฟังก์ชัน monotone: lo ไม่ผ่าน, hi ผ่าน → ค่าต่ำสุด (step 50k) ที่ผ่าน
+function svBin(passFn, lo, hi){
+  while(hi-lo>SV_STEP){
+    const mid=Math.round((lo+hi)/2/SV_STEP)*SV_STEP;
+    if(mid<=lo||mid>=hi) break;
+    if(passFn(mid)) hi=mid; else lo=mid;
+  }
+  return hi;
+}
+// NI/เดือนต่ำสุดที่ทำให้คะแนน ณ ก.ย. ≤ เป้า (เงินก้อนคงที่) — null = ไม่ทันแม้กำไรสูงมาก
+function svSolveNI(L, inj){
+  const HI=SURV.niLim*20, LO=-SURV.niLim*20;
+  const pass=v=>svEvalSep(v,inj).sep<=L;
+  if(!pass(HI)) return null;
+  if(pass(LO)) return LO;
+  return svBin(pass, LO, HI);
+}
+// เงินก้อนต่ำสุด ณ ตอนนี้ (NI/เดือนคงที่) — null = เติมเท่าไหร่ก็ไม่ถึง (เกณฑ์ NI สะสมแก้ด้วยเงินก้อนไม่ได้)
+function svSolveInj(L, niM){
+  const HI=1.6*SURV.cl+SURV.injMax*2;
+  const pass=v=>svEvalSep(niM,v).sep<=L;
+  if(!pass(HI)) return null;
+  if(pass(0)) return 0;
+  return svBin(pass, 0, HI);
+}
+// ฝั่งขาลง: NI/เดือนต่ำสุดที่ "ยังไม่ตก" ถึงระดับ L ภายใน ก.ย. — null = ขาดทุนหนักแค่ไหนก็ยังไม่ตกทัน
+function svSolveDown(L){
+  const HI=SURV.niLim*20, LO=-SURV.niLim*20;
+  const pass=v=>svEvalSep(v,0).worst<L;
+  if(pass(LO)) return null;
+  if(!pass(HI)) return HI;
+  return svBin(pass, LO, HI);
+}
+function svTarget(L){
+  if(!SURV) return;
+  SURV.tgt=(SURV.tgt===L?null:L);
+  document.querySelectorAll('.lvlbtn').forEach(b=>b.classList.toggle('on', SURV.tgt===+b.dataset.l));
+  renderTgtCard();
+  projSurv();
+}
+function svApply(niM, inj){
+  const ni=Math.max(-SURV.niLim,Math.min(SURV.niLim,Math.round(niM/SV_STEP)*SV_STEP));
+  const ij=Math.max(0,Math.min(SURV.injMax,Math.round(inj/SV_STEP)*SV_STEP));
+  document.getElementById('svNi').value=ni;
+  document.getElementById('svInj').value=ij;
+  projSurv();
+  const c=document.getElementById('survChart');
+  if(c) c.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function renderTgtCard(){
+  const el=document.getElementById('tgtCard'); if(!el) return;
+  const L=SURV.tgt;
+  if(L==null){ el.innerHTML=''; return; }
+  const cur=SURV.official, sep=svSepLabel(), left=12-SURV.mo, run=SURV.niRun;
+  const rb=`<span class="tgt-rb" style="background:${riskColor(L)}">${L}</span>`;
+  if(L===cur){
+    el.innerHTML=`<div class="tgt-card"><span class="tgt-note">ระดับ ${L} คือระดับปัจจุบัน — กดเลข<b>ต่ำกว่า</b>เพื่อดูเส้นทางลดวิกฤต หรือเลข<b>สูงกว่า</b>เพื่อดูเพดานขาดทุนก่อนตกระดับ</span></div>`;
+    return;
+  }
+  // ── ฝั่งขาลง (เป้าสูงกว่าปัจจุบัน) = เพดานขาดทุน ──
+  if(L>cur){
+    const floor=svSolveDown(L);
+    let body;
+    if(floor==null){
+      body=`<div class="tgt-row">🛡️ ภายใน ${sep} นี้ <b>ยังไม่ตกถึงระดับ ${L}</b> แม้ขาดทุนหนักสุดในสเกลที่จำลอง (−${fmtM(SURV.niLim*20)}/เดือน) — เกณฑ์ฝั่งโครงสร้าง (CR/QR/Cash/NWC) ใช้เวลากัดกร่อนนานกว่าเวลาที่เหลือ${left===0?' (งวดนี้คือ ก.ย. แล้ว)':''}</div>`;
+    } else if(floor>run){
+      body=`<div class="tgt-row">⚠️ อัตราปัจจุบัน <b>${sgnM(run)}</b>/เดือน <span class="tgt-warn">จะพาไปแตะระดับ ${L} ภายใน ${sep}</span> — ต้องทำให้ได้อย่างน้อย <b>${sgnM(floor)}</b>/เดือน ${svChip(floor-run)} เพื่อไม่ตก
+        <button type="button" class="tgt-apply" onclick="svApply(${floor},0)">▶ วางค่ากันตกลงกราฟ</button></div>`;
+    } else {
+      body=`<div class="tgt-row">🛡️ เพดานขาดทุน: ถ้า NI ต่ำกว่า <b>${sgnM(floor)}</b>/เดือน ${svChip(floor-run)} จะตกไประดับ ${L} ภายใน ${sep} · ตอนนี้เฉลี่ย <b>${sgnM(run)}</b>/เดือน ยังมีระยะห่าง <b>${fmtM(run-floor)}</b>/เดือน
+        <button type="button" class="tgt-apply" onclick="svApply(${floor-SV_STEP},0)">▶ ดูภาพถ้าหลุดเพดาน</button></div>`;
+    }
+    el.innerHTML=`<div class="tgt-card"><h4>${rb} เพดานก่อนตกไประดับ ${L} ภายใน ${sep}</h4>${body}
+      <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">สมมติฐานเดียวกับกราฟจำลองด้านล่าง · เส้นตาย = งวด ก.ย. (เดือนงบที่ 12) ก่อน NI สะสมรีเซ็ตรอบปีงบใหม่</div></div>`;
+    return;
+  }
+  // ── ฝั่งขาขึ้น (เป้าต่ำกว่าปัจจุบัน) = ต้องทำเท่าไหร่ ──
+  const alreadyOk=svEvalSep(run,0).sep<=L;
+  const niReq=svSolveNI(L,0);
+  const injOnly=svSolveInj(L,run);
+  const rows=[];
+  if(alreadyOk){
+    const floor=svSolveNI(L,0);
+    rows.push(`<div class="tgt-row">✅ อัตรากำไรเฉลี่ยปัจจุบัน <b>${sgnM(run)}</b>/เดือน <b style="color:var(--green)">ถึงระดับ ${L} ภายใน ${sep} อยู่แล้ว</b>${floor!=null&&floor>-SURV.niLim*20?` · แต่ห้ามต่ำกว่า <b>${sgnM(floor)}</b>/เดือน ${svChip(floor-run)}`:''}</div>`);
+  } else {
+    // 1) กำไรอย่างเดียว — โชว์ตัวเลขจริงเสมอ แม้เกินสเกล/เว่อร์ ให้เห็นภาพว่าห่างแค่ไหน
+    if(niReq==null){
+      rows.push(`<div class="tgt-row">💪 กำไรอย่างเดียว: <span class="tgt-warn">ไม่ทันภายใน ${sep}</span>${left===0?' (งวดนี้คือ ก.ย. แล้ว — NI รายเดือนไม่มีผลทัน)':' — เกณฑ์ฝั่งเงินก้อน/โครงสร้างลึกเกินกว่ากำไรสะสมในเวลาที่เหลือ'} → ใช้เงินก้อนตามแถวถัดไป</div>`);
+    } else {
+      rows.push(`<div class="tgt-row">💪 กำไรอย่างเดียว: ต้องทำ ≥ <b>${sgnM(niReq)}</b>/เดือน ${svChip(niReq-run)}${Math.abs(niReq)>SURV.niLim?' <span class="tgt-note">· เกินสเกลสไลด์บาร์ (แสดงตัวเลขจริง)</span>':''}
+        <button type="button" class="tgt-apply" onclick="svApply(${niReq},0)">▶ วางลงกราฟ</button></div>`);
+    }
+    // 2) เงินก้อนอย่างเดียว (คงกำไรเฉลี่ยปัจจุบัน)
+    if(injOnly==null){
+      rows.push(`<div class="tgt-row">💰 เติมเงินก้อนอย่างเดียว (คงกำไรเฉลี่ย ${sgnM(run)}/เดือน): <span class="tgt-warn">เติมเท่าไหร่ก็ไม่ถึง</span> — เกณฑ์กำไร/ขาดทุนสะสม (NI) แก้ด้วยเงินก้อนไม่ได้ ต้องเพิ่มกำไรร่วมด้วย</div>`);
+    } else {
+      rows.push(`<div class="tgt-row">💰 เติมเงินก้อนอย่างเดียว (คงกำไรเฉลี่ย ${sgnM(run)}/เดือน): เติม ≥ <b>${fmtM(injOnly)}</b> ตอนนี้${injOnly>SURV.injMax?' <span class="tgt-note">· เกินสเกลสไลด์บาร์ (แสดงตัวเลขจริง)</span>':''}
+        <button type="button" class="tgt-apply" onclick="svApply(${run},${injOnly})">▶ วางลงกราฟ</button></div>`);
+    }
+    // 3) ทางสายกลาง — กำไรครึ่งทาง + เงินก้อนเท่าที่ยังขาด
+    const niHigh=niReq!=null?niReq:run+SURV.niLim;
+    const niMid=Math.round((run+niHigh)/2/SV_STEP)*SV_STEP;
+    if(niMid>run){
+      const injMid=svSolveInj(L,niMid);
+      if(injMid!=null&&injMid>0){
+        rows.push(`<div class="tgt-row">⚖️ ทางสายกลาง: กำไร <b>${sgnM(niMid)}</b>/เดือน ${svChip(niMid-run)} <b>+</b> เติมเงินก้อน <b>${fmtM(injMid)}</b> ตอนนี้
+          <button type="button" class="tgt-apply" onclick="svApply(${niMid},${injMid})">▶ วางลงกราฟ</button></div>`);
+      }
+    }
+  }
+  el.innerHTML=`<div class="tgt-card"><h4>${rb} เป้าหมาย: ลดจากระดับ ${cur} → ${L} ภายใน ${sep}${left>0?` (เหลือ ${left} เดือน)`:''}</h4>
+    ${rows.join('')}
+    <div class="tgt-live" id="tgtLive"></div>
+    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">สมมติฐานเดียวกับกราฟจำลองด้านล่าง (กระแสเงินสด = NI + ค่าเสื่อม, หนี้คงที่) · เส้นตาย = งวด ก.ย. (เดือนงบที่ 12) ก่อน NI สะสมรีเซ็ตรอบปีงบใหม่</div></div>`;
+  svTgtLive(+document.getElementById('svNi').value, +document.getElementById('svInj').value);
+}
+// แถบสด: ขยับสไลด์ NI แล้วบอกทันทีว่าต้องเติมเงินก้อนอีกเท่าไหร่ถึงจะถึงเป้าที่เลือก
+function svTgtLive(niM, inj){
+  const el=document.getElementById('tgtLive'); if(!el||!SURV) return;
+  const L=SURV.tgt;
+  if(L==null||L>=SURV.official){ el.style.display='none'; return; }
+  el.style.display='';
+  const sep=svSepLabel();
+  const niTxt=`🎚️ NI ตามสไลด์บาร์ <b>${sgnM(niM)}</b>/เดือน`;
+  const need=svSolveInj(L,niM);
+  if(need==null) el.innerHTML=`${niTxt} → <span class="tgt-warn">เติมเงินก้อนเท่าไหร่ก็ไม่ถึงระดับ ${L} ภายใน ${sep}</span> — เลื่อนกำไรขึ้นก่อน`;
+  else if(need===0&&inj===0) el.innerHTML=`${niTxt} → <b style="color:var(--green)">ถึงระดับ ${L} ภายใน ${sep} โดยไม่ต้องเติมเงินก้อน ✓</b>`;
+  else if(need<=inj) el.innerHTML=`${niTxt} + เงินก้อนที่ตั้งไว้ <b>${fmtM(inj)}</b> → <b style="color:var(--green)">ถึงระดับ ${L} ภายใน ${sep} ✓</b>${need<inj?` <span class="tgt-note">(ขั้นต่ำจริงๆ แค่ ${fmtM(need)})</span>`:''}`;
+  else el.innerHTML=`${niTxt} → ต้องเติมเงินก้อน ≥ <b>${fmtM(need)}</b> ตอนนี้ <span class="tgt-note">(ตั้งไว้ ${fmtM(inj)} · ขาดอีก ${fmtM(need-inj)})</span>`;
 }
 function addMo(t, k){ let y=Math.floor(t/100), m=t%100+k; y+=Math.floor((m-1)/12); m=((m-1)%12)+1; return y*100+m; }
 function drawSurvChart(path, cross, cashOut, startRisk){
