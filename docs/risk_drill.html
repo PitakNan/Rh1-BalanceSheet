@@ -88,6 +88,13 @@ header .sub{font-size:11.5px;color:#cbd5e1}
 .panel h3{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .panel h3::before{content:'';width:4px;height:16px;border-radius:99px;background:linear-gradient(180deg,#f59e0b,#d97706)}
 .panel h3 .sp{flex:1}
+.tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--line);color:var(--mut);font-size:10px;font-weight:700;font-family:Georgia,serif;cursor:help;flex-shrink:0;vertical-align:middle}
+.tip:hover,.tip:focus,.tip.show{background:var(--blue);color:#fff;outline:none}
+.tip .tip-box{display:none;position:absolute;z-index:90;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);width:max-content;max-width:min(300px,80vw);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:11.5px;font-weight:400;line-height:1.6;color:var(--ink);white-space:pre-line;text-align:left;box-shadow:0 10px 28px var(--shadow);cursor:auto}
+.tip:hover .tip-box,.tip:focus .tip-box,.tip.show .tip-box{display:block}
+.tip .tip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--card)}
+.tip .tip-box b{color:var(--blue)}
+h3 .tip{margin:0 2px}
 .metric-tabs{display:flex;gap:4px}
 .mtab{font-family:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;border:1px solid var(--line);border-radius:99px;background:var(--card);color:var(--mut);cursor:pointer}
 .mtab.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -428,6 +435,9 @@ const TH_M=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.'
 function tLab(t){return TH_M[t%100-1]+String(t).slice(2,4)}
 function fmtM(v){if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()}
 function fmtR(v){return v==null?'—':v.toFixed(2)}
+// ── ไอคอน ⓘ tooltip: ความหมาย/สูตร/ที่มาข้อมูล — hover (desktop) หรือแตะ (มือถือ ผ่าน tabindex+click toggle) ──
+function tip(text){ return `<span class="tip" tabindex="0" onclick="event.stopPropagation();this.classList.toggle('show')">ⓘ<span class="tip-box">${text}</span></span>`; }
+document.addEventListener('click', ()=>document.querySelectorAll('.tip.show').forEach(el=>el.classList.remove('show')));
 function riskColor(r){
   if(r==null)return '#94a3b8';
   if(r<=1)return getCss('--green'); if(r<=3)return getCss('--gold'); if(r<=5)return getCss('--orange'); return getCss('--red');
@@ -647,12 +657,12 @@ function renderDetail(hcode){
   const s=summaryOf(hcode), h=HDATA;
   const nar=narrative(s,h);
   const TRIGGERS=[
-    {k:'cr',label:`CR < 1.5 (${fmtR(s.cr)})`},
-    {k:'qr',label:`QR < 1.0 (${fmtR(s.qr)})`},
-    {k:'cash',label:`Cash < 0.8 (${fmtR(s.cash)})`},
-    {k:'nwc',label:`NWC ติดลบ (${fmtM(s.nwc)})`},
-    {k:'ni',label:`ขาดทุนสะสม (${fmtM(s.ni)})`},
-    {k:'survival',label:`อยู่รอด < 6 เดือน`},
+    {k:'cr',label:`CR < 1.5 (${fmtR(s.cr)})`,tt:'**Current Ratio**: สินทรัพย์หมุนเวียนรองรับหนี้สินหมุนเวียนได้กี่เท่า\n**สูตร**: CR = สินทรัพย์หมุนเวียน (1001X) ÷ หนี้สินหมุนเวียน (1001Y)\n**เกณฑ์**: ต้อง ≥ 1.5'},
+    {k:'qr',label:`QR < 1.0 (${fmtR(s.qr)})`,tt:'**Quick Ratio**: สภาพคล่องไม่รวมสินค้าคงเหลือ (เข้มกว่า CR)\n**สูตร**: QR = สินทรัพย์เร็ว (1002X) ÷ หนี้สินหมุนเวียน (1001Y)\n**เกณฑ์**: ต้อง ≥ 1.0'},
+    {k:'cash',label:`Cash < 0.8 (${fmtR(s.cash)})`,tt:'**Cash Ratio**: มีเงินสด/เงินฝากพร้อมจ่ายหนี้ทันทีกี่เท่า\n**สูตร**: Cash = เงินสด+เงินฝาก (1003X) ÷ หนี้สินหมุนเวียน (1001Y)\n**เกณฑ์**: ต้อง ≥ 0.8'},
+    {k:'nwc',label:`NWC ติดลบ (${fmtM(s.nwc)})`,tt:'**เงินทุนหมุนเวียนสุทธิ**: กันชนสภาพคล่องระยะสั้น\n**สูตร**: NWC = สินทรัพย์หมุนเวียน (1001X) − หนี้สินหมุนเวียน (1001Y)\n**เกณฑ์**: ต้อง ≥ 0 — ถ้าติดลบเข้าเกณฑ์ SU ด้วย'},
+    {k:'ni',label:`ขาดทุนสะสม (${fmtM(s.ni)})`,tt:'**NI กำไร/ขาดทุนสะสม**: ผลดำเนินงานสุทธิตั้งแต่ต้นปีงบ (มีค่าเสื่อม)\n**สูตร**: NI = รายได้รวม (3006Y) − ค่าใช้จ่ายรวม (3010X)\n**เกณฑ์**: ต้อง ≥ 0 — ตัวเดียวที่แก้ได้จากกำไรรายเดือน (FLOW)'},
+    {k:'survival',label:`อยู่รอด < 6 เดือน`,tt:'**SU ระยะเวลาอยู่รอด**: ผสม NWC และ NI ดูว่าจะหมดตัว/ฟื้นตัวเร็วแค่ไหน\n**สูตร**: ถ้า NWC≥0&NI<0 → เดือนที่ NWC จะหมด = NWC÷(|NI|/เดือน) <6ด.=เข้าเกณฑ์ · ถ้า NWC<0&NI≥0 → เดือนที่กำไรดัน NWC กลับบวก\n**เกณฑ์**: ต้อง < 6 เดือนถึงจะปลอดภัย (SU=0)'},
   ];
   const trig=new Set(s.triggers||[]);
 
@@ -667,16 +677,16 @@ function renderDetail(hcode){
 
     <div id="headline" class="${nar.cls}">${nar.text}</div>
 
-    <div class="chips" id="chips">${TRIGGERS.map(t=>`<span class="chip${trig.has(t.k)?' on':''}">${trig.has(t.k)?'✗':'✓'} ${t.label}</span>`).join('')}</div>
+    <div class="chips" id="chips">${TRIGGERS.map(t=>`<span class="chip${trig.has(t.k)?' on':''}">${trig.has(t.k)?'✗':'✓'} ${t.label} ${tip(t.tt)}</span>`).join('')}</div>
 
     <div class="panel">
-      <h3>🎯 ต้องทำเท่าไหร่ถึงหลุดเกณฑ์ (Gap-to-Target) <span class="sp"></span></h3>
+      <h3>🎯 ต้องทำเท่าไหร่ถึงหลุดเกณฑ์ (Gap-to-Target) ${tip('**คืออะไร**: แปลงเกณฑ์ Risk Score 6 ตัวเป็นช่องว่างเชิงบาทที่ต้องปิด\n**สูตร**: จำลองคะแนนด้วย scoreOf() (LI/ST/SU 4-quadrant) สูตรเดียวกับ pipeline\n**ข้อมูลจาก**: งบทดลองหมวด1/2 (1001X สินทรัพย์หมุนเวียน, 1001Y หนี้สินหมุนเวียน, 1002X/1003X) + รายได้-ค่าใช้จ่ายรวม (3006Y/3010X) งวดล่าสุด')}<span class="sp"></span></h3>
       <div class="src-note">📌 แปลงเกณฑ์ Risk Score ทั้ง 6 ตัวเป็น "ช่องว่างเชิงบาท" จากค่าดิบงบทดลองงวดล่าสุด (ตัวเศษ/ตัวส่วนตามผัง RatioItemID 1001X/1001Y/1002X/1003X และรายได้-ค่าใช้จ่ายรวม 3006Y/3010X) — แล้วจำลอง (simulate) ว่าถ้าปิดช่องว่างแต่ละก้อน คะแนน Risk จะลดเหลือเท่าไหร่ พร้อมแยก <b>FLOW</b> (กำไรรายเดือน—อยู่ในมือ รพ.) จาก <b>STOCK</b> (ต้องใช้เงินก้อน/ปรับโครงสร้างหนี้) · SU จำลองด้วยสูตร 4 quadrant เดียวกับ pipeline</div>
       <div id="gapBox"></div>
     </div>
 
     <div class="panel">
-      <h3>จำลองอัตราความอยู่รอด (Survival Simulator) <span class="sp"></span></h3>
+      <h3>จำลองอัตราความอยู่รอด (Survival Simulator) ${tip('**คืออะไร**: จำลองคะแนน Risk ล่วงหน้า 24 เดือน ถ้าปรับ กำไร/เดือน · เงินก้อน · แผนจ่ายหนี้ · เร่งเก็บลูกหนี้\n**สูตร**: ทุกเดือนคำนวณ scoreOf() ใหม่จากค่าคาดการณ์ (NI สะสมรีเซ็ต ต.ค., กระแสเงินสด=NI+ค่าเสื่อม)\n**ข้อมูลจาก**: ค่าดิบงบดุล/P&L งวดล่าสุด (1001X/1001Y/1002X/1003X/3006Y/3010X/3330Y) — เป็นการจำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์')}<span class="sp"></span></h3>
       <div class="src-note">📌 เลื่อนสมมติฐาน<b>กำไร/ขาดทุนต่อเดือน</b>และ<b>เงินก้อนเสริมสภาพคล่อง</b> → ดูว่าคะแนน Risk จะลดแต่ละขั้นเมื่อไหร่ และเงินสดจะหมดเมื่อไหร่ · อิงสูตร SU ทางการ (recovery/depletion) เดียวกับ pipeline · ⚠️ เป็นการ<b>จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</b> ดูสมมติฐานท้ายกล่อง</div>
       <div id="survBox"></div>
     </div>
@@ -687,14 +697,15 @@ function renderDetail(hcode){
     </div>
 
     <div class="panel">
-      <h3>เทรนด์ Ratio เทียบกลุ่มเปรียบเทียบ <span class="sp"></span>
+      <h3>เทรนด์ Ratio เทียบกลุ่มเปรียบเทียบ ${tip('**คืออะไร**: เทรนด์ 3 อัตราส่วนสภาพคล่อง เทียบแถบ P25-P75+median ของกลุ่มเปรียบเทียบ\n**สูตร**: CR=สินทรัพย์หมุนเวียน÷หนี้สินหมุนเวียน · QR=สินทรัพย์เร็ว÷หนี้สินหมุนเวียน · Cash=เงินสด+เงินฝาก÷หนี้สินหมุนเวียน\n**ข้อมูลจาก**: ค่ารายงานจริงตาราง risk_scores หรืองบทดลอง RatioItemID 1001X/1001Y/1002X/1003X ถ้าไม่มีรายงาน')}<span class="sp"></span>
         <div class="metric-tabs">
           <button class="mtab${ratioMetric==='cr'?' on':''}" onclick="setRatioMetric('cr')">Current Ratio</button>
           <button class="mtab${ratioMetric==='qr'?' on':''}" onclick="setRatioMetric('qr')">Quick Ratio</button>
           <button class="mtab${ratioMetric==='cash'?' on':''}" onclick="setRatioMetric('cash')">Cash Ratio</button>
         </div>
       </h3>
-      <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px">
+        ${tip('**คืออะไร**: กลุ่มเปรียบเทียบ (peer) 3 มิติ ใช้หาแถบ P25-P75/median ในกราฟด้านบน\n**สูตร**: กลุ่ม = ระดับ+ลักษณะบริการ (พี่ตาล) · ระดับ = A/S/M1/M2/F1/F2/F3 · จังหวัด = สังกัดจริง\n**ข้อมูลจาก**: meta.json (org.grp/level/prov) — percentile คำนวณต่องวดจากทุก รพ.ในกลุ่มเดียวกัน')}
         <div class="peer-tabs">
           <button class="mtab${peerDim==='grp'?' on':''}" onclick="setPeerDim('grp')">กลุ่ม ${h.grp||''}</button>
           <button class="mtab${peerDim==='level'?' on':''}" onclick="setPeerDim('level')">ระดับ ${h.level||''}</button>
@@ -707,7 +718,7 @@ function renderDetail(hcode){
     </div>
 
     <div class="panel">
-      <h3>รายได้และค่าใช้จ่าย — สาเหตุที่ทำให้กำไร/เงินสดเปลี่ยน</h3>
+      <h3>รายได้และค่าใช้จ่าย — สาเหตุที่ทำให้กำไร/เงินสดเปลี่ยน ${tip('**คืออะไร**: สะพานกำไร (NI Bridge) + waterfall หมวดย่อยรายได้/ค่าใช้จ่าย เทียบ MoM/YoY\n**สูตร**: ΔNI = Δรายได้ − Δค่าใช้จ่าย (ไม่ใช่ ratio จึงไม่หาร)\n**ข้อมูลจาก**: งบทดลองหมวด 4/5 (บัญชีรายได้/ค่าใช้จ่าย) ยอดสะสมตั้งแต่ต้นปีงบ ตามผัง RatioItemID 3006Y (รายได้รวม)/3010X (ค่าใช้จ่ายรวม) — จัดหมวดย่อยด้วย acc_hierarchy.Name2')}</h3>
       <div class="src-note">📌 ที่มาข้อมูล: งบทดลองหมวด 4 (บัญชีรายได้) และหมวด 5 (บัญชีค่าใช้จ่าย) เป็น<b>ยอดสะสมตั้งแต่ต้นปีงบ</b> (ต่างจากงบดุลด้านบนที่เป็นยอดคงเหลือปลายงวด) จับคู่บัญชีด้วยผัง RatioItemID <b>3006Y</b> (รายได้รวม, 168 บัญชี) และ <b>3010X</b> (ค่าใช้จ่ายรวม, 276 บัญชี) — ตัวเลขชุดเดียวกับที่ใช้คำนวณ <b>NI (Net Income)</b> ที่ป้อนเข้าเกณฑ์ Risk Score ฝั่ง ST (NI ติดลบ) และ SU (ระยะเวลาอยู่รอด) โดยตรง · จัดกลุ่มหมวดย่อยด้วย <code>acc_hierarchy.Name2</code> เช่นเดียวกับฝั่งงบดุล</div>
       <div id="niBridgeBox"></div>
       <div class="wf-cols" id="wfPLBox"></div>
@@ -716,41 +727,41 @@ function renderDetail(hcode){
     </div>
 
     <div class="panel">
-      <h3>สะพานกำไร 3 ชั้นทางการ — ทำไม Risk Score ใช้ NI ที่เข้มที่สุด</h3>
+      <h3>สะพานกำไร 3 ชั้นทางการ — ทำไม Risk Score ใช้ NI ที่เข้มที่สุด ${tip('**คืออะไร**: นิยามกำไรทางการ 3 ชั้นของกองเศรษฐกิจสุขภาพ ไล่จากเข้มสุดไปหลวมสุด\n**สูตร**: NI มีค่าเสื่อม (3007X=3006Y−3010X, ตัวที่ Risk Score ใช้) → +ค่าเสื่อม → NI ไม่มีค่าเสื่อม (3006X=3006Y−3330Y) → −รายได้งบลงทุน → EBITDA (333=3330X−3330Y)\n**ข้อมูลจาก**: งบทดลอง RatioItemID 3006Y/3010X/3330X/3330Y — พิสูจน์ตรง 100% ถึงหลักบาท ไม่มีการปรับแต่งเพิ่ม')}</h3>
       <div class="src-note">📌 ที่มาข้อมูล: นิยามกำไรทางการของ<b>กองเศรษฐกิจสุขภาพและหลักประกันสุขภาพ</b> 3 ชั้น — <b>NI มีค่าเสื่อม (3007X = 3006Y−3010X)</b> คือตัวที่ป้อนเข้าเกณฑ์ Risk Score ฝั่ง ST/SU โดยตรง (เข้มสุด เพราะรวมค่าเสื่อมราคาที่ไม่ใช่เงินสด และรวมรายได้งบลงทุน), <b>NI ไม่มีค่าเสื่อม (3006X = 3006Y−3330Y)</b> บวกกลับค่าเสื่อม, และ <b>EBITDA (333 = 3330X−3330Y)</b> ตัดทั้งค่าเสื่อมและรายได้งบลงทุนออก — พิสูจน์ตรง 100% ถึงหลักบาท ทั้งสามชั้นเป็นนิยามทางการ ไม่มีการปรับแต่งเพิ่ม</div>
       <div id="niTierBox"></div>
     </div>
 
     <div class="panel">
-      <h3>ทำไม Ratio เปลี่ยน — แยกจากสินทรัพย์ (ตัวเศษ) หรือหนี้สิน (ตัวส่วน)</h3>
+      <h3>ทำไม Ratio เปลี่ยน — แยกจากสินทรัพย์ (ตัวเศษ) หรือหนี้สิน (ตัวส่วน) ${tip('**คืออะไร**: แยก ΔRatio (CR/QR/Cash) ว่ามาจากตัวเศษ (สินทรัพย์) หรือตัวส่วน (หนี้สินหมุนเวียน) เปลี่ยน\n**สูตร**: fromNumerator=(x1−x0)÷y0 · fromDenominator=x0×(1÷y1−1÷y0) — ใช้ y ของงวดฐานคุมตัวเศษ\n**ข้อมูลจาก**: ค่าดิบงบทดลอง 1001X/1001Y/1002X/1003X เทียบงวด MoM/YoY')}</h3>
       <div id="decompBox"></div>
     </div>
 
     <div class="panel">
-      <h3>หนี้สิน/สินทรัพย์ เปลี่ยนจากหมวดย่อยไหน (Waterfall)</h3>
+      <h3>หนี้สิน/สินทรัพย์ เปลี่ยนจากหมวดย่อยไหน (Waterfall) ${tip('**คืออะไร**: Δ มูลค่าตามหมวดย่อยของสินทรัพย์หมุนเวียน (CA) และหนี้สินหมุนเวียน (CL) เทียบงวดก่อน\n**สูตร**: Δ = ยอดคงเหลืองวดนี้ − งวดฐาน ต่อหมวดย่อย เรียงจากขยับแรงสุด\n**ข้อมูลจาก**: งบทดลองหมวด 1/2 ยอดคงเหลือปลายงวด (1001X/1001Y) จัดกลุ่มด้วย acc_hierarchy.Name2')}</h3>
       <div class="src-note">📌 ที่มาข้อมูล: งบทดลองหมวด 1 (สินทรัพย์) และหมวด 2 (หนี้สิน) ยอดคงเหลือปลายงวด ตามผัง RatioItemID 1001X (สินทรัพย์หมุนเวียน) / 1001Y (หนี้สินหมุนเวียน) — จัดกลุ่มหมวดย่อยด้วย <code>acc_hierarchy.Name2</code></div>
       <div id="wfBox"></div>
     </div>
 
     <div class="panel">
-      <h3>หนี้สินหมุนเวียนรายหมวดย่อย — ยอดคงเหลือ + จ่ายชำระ/ก่อหนี้ใหม่ ต่อเดือน</h3>
+      <h3>หนี้สินหมุนเวียนรายหมวดย่อย — ยอดคงเหลือ + จ่ายชำระ/ก่อหนี้ใหม่ ต่อเดือน ${tip('**คืออะไร**: หนี้สินหมุนเวียน (CL) คือตัวส่วนร่วมของทุก Ratio (CR/QR/Cash) และตัวหักของ NWC — แตกรายหมวดย่อย\n**สูตร**: จ่ายชำระ/เดือน = เฉลี่ย|ด้านเดบิต(dec)| · ก่อหนี้ใหม่/เดือน = เฉลี่ยด้านเครดิต(inc) ย้อนหลัง 6 เดือน\n**ข้อมูลจาก**: งบทดลองหมวด 2 (1001Y) จัดกลุ่มด้วย acc_hierarchy.Name2 — ใช้ตั้งต้นตัวปรับแผนจ่ายหนี้ใน Survival')}</h3>
       <div class="src-note">📌 หนี้สินหมุนเวียน (RatioItemID 1001Y) คือ<b>ตัวส่วนร่วมของทุก Ratio</b> (CR/QR/Cash) และตัวหักของ NWC — แตกรายหมวดย่อยด้วย <code>acc_hierarchy.Name2</code> · <b>จ่ายชำระ/เดือน</b> = เฉลี่ยด้านเดบิต (<code>dec</code>) และ <b>ก่อหนี้ใหม่/เดือน</b> = เฉลี่ยด้านเครดิต (<code>inc</code>) จากงบทดลองย้อนหลังสูงสุด 6 เดือน · ใช้ตั้งต้นตัวปรับ "แผนชำระหนี้" ในกล่องจำลองด้านบน</div>
       <div id="clbdBox"></div>
     </div>
 
     <div class="panel">
-      <h3>บัญชีที่ขยับแรงสุด (Top 20)</h3>
+      <h3>บัญชีที่ขยับแรงสุด (Top 20) ${tip('**คืออะไร**: บัญชี CodeL1 ระดับละเอียดสุด (10 หลัก) ที่ Δ มากที่สุด ทั้งฝั่งสินทรัพย์และหนี้สินหมุนเวียน\n**สูตร**: Δ = ยอดคงเหลืองวดนี้ − งวดฐาน เรียงจาก |Δ| มากไปน้อย\n**ข้อมูลจาก**: งบทดลองหมวด 1/2 รายบัญชี เทียบงวด MoM/YoY')}</h3>
       <div class="acctbl-wrap"><table class="acctbl" id="acctbl"></table></div>
     </div>
 
     <div class="panel">
-      <h3>เจ้าหนี้การค้ารายหมวด — ค้างจ่ายเท่ากับการใช้กี่เดือน</h3>
+      <h3>เจ้าหนี้การค้ารายหมวด — ค้างจ่ายเท่ากับการใช้กี่เดือน ${tip('**คืออะไร**: เสริมมุมมองของ APP ทางการ (RatioID 260) โดยแตกเจ้าหนี้การค้ารายหมวด — ไม่ใช่ aging จริงจากใบแจ้งหนี้\n**สูตร**: ค้างจ่าย(เดือน) = ยอดเจ้าหนี้คงเหลือ ÷ อัตราการใช้/ค่าจ้างต่อเดือน (ยอดใช้สะสมทั้งปีงบ÷เดือนที่ผ่าน) · cap 60 เดือน\n**ข้อมูลจาก**: เจ้าหนี้การค้า 2101020199.1xx จับคู่บัญชีใช้จ่ายหมวด 5 ที่เกี่ยวข้อง (PAYABLE_USAGE map)')}</h3>
       <div class="src-note">📌 <b>เสริมมุมมองของ APP (Average Payment Period, RatioID 260) ทางการ</b> โดยแตกเจ้าหนี้การค้ารายหมวด — <b>ไม่ใช่ aging จริงจากใบแจ้งหนี้</b> แต่เป็นค่าประมาณจากงบทดลอง: <code>ยอดเจ้าหนี้คงเหลือ ÷ อัตราการใช้/ค่าจ้างต่อเดือน</code> (แปลงยอดใช้สะสมทั้งปีงบ ÷ จำนวนเดือนที่ผ่าน) = "ค้างจ่ายเทียบเท่าการใช้กี่เดือน" · ⚠️ คำนวณเฉพาะ<b>เจ้าหนี้การค้าที่มีบัญชีการใช้จับคู่ชัดเจน</b> — ส่วน<b>เจ้าหนี้ตามจ่าย/เคลม</b> (UC นอก CUP, ประกันสังคม, ต่างด้าว) เป็นการชำระระหว่างหน่วยบริการ ไม่มีรอบการใช้ จึงแสดงเฉพาะยอด · cap ที่ 60 เดือน</div>
       <div id="payablesBox"></div>
     </div>
 
     <div class="panel">
-      <h3>ประสิทธิภาพการดำเนินงาน (7 Plus Efficiency Score)</h3>
+      <h3>ประสิทธิภาพการดำเนินงาน (7 Plus Efficiency Score) ${tip('**คืออะไร**: ตัวชี้ประสิทธิภาพเสริม 7 ตัว (ไม่ผูกกับ Risk Score โดยตรง) เทียบเกณฑ์ทางการ\n**สูตร**: APP/ACP/Inventory = ยอดคงเหลือเฉลี่ยต้น-ปลายงวด × จำนวนวันในเดือน ÷ ยอดใช้ · Operating Margin/ROA = EBITDA หรือ NI ÷ รายได้/สินทรัพย์รวม\n**ข้อมูลจาก**: งบทดลอง RatioItemID ของกองเศรษฐกิจสุขภาพ (26xx/32xx)')}</h3>
       <div class="src-note">📌 ที่มาข้อมูล: งบทดลอง ตามผัง RatioItemID ของกองเศรษฐกิจสุขภาพ — APP/ACP/Inventory ใช้ยอดคงเหลือเฉลี่ยต้น-ปลายงวด × จำนวนวันในเดือน (RatioID 260/261/262/263/264), Operating Margin/ROA ใช้ EBITDA และ NI ที่พิสูจน์ตรง 100% แล้วหารด้วยรายได้ค่ารักษา/สินทรัพย์รวม (RatioID 320/321) — เกณฑ์เป้าหมายจากชีท "7 Plus Efficiency Score"</div>
       <div id="effBox"></div>
     </div>
@@ -858,27 +869,27 @@ function renderGapSolver(h, s){
   const rows=[
     {name:'Current Ratio',val:fmtR(s.cr),th:'≥ 1.5',fail:trig.has('cr'),type:'STOCK',
      opt:`เพิ่มสินทรัพย์หมุนเวียน <b>+${fmtM(CR_T*t.cl-t.ca)}</b> หรือ ลดหนี้หมุนเวียน <b>−${fmtM(t.cl-t.ca/CR_T)}</b>`,
-     head:`เกิน ${fmtR((s.cr||0)-CR_T)}`},
+     head:`เกิน ${fmtR((s.cr||0)-CR_T)}`,tt:'**สูตร**: CR = สินทรัพย์หมุนเวียน (1001X) ÷ หนี้สินหมุนเวียน (1001Y)\n**ข้อมูลจาก**: งบทดลองหมวด 1/2 ยอดคงเหลือปลายงวด'},
     {name:'Quick Ratio',val:fmtR(s.qr),th:'≥ 1.0',fail:trig.has('qr'),type:'STOCK',
      opt:`เพิ่มสินทรัพย์เร็ว <b>+${fmtM(QR_T*t.cl-t.qn)}</b> หรือ ลดหนี้หมุนเวียน <b>−${fmtM(t.cl-t.qn/QR_T)}</b>`,
-     head:`เกิน ${fmtR((s.qr||0)-QR_T)}`},
+     head:`เกิน ${fmtR((s.qr||0)-QR_T)}`,tt:'**สูตร**: QR = สินทรัพย์เร็ว (1002X, ไม่รวมสินค้าคงเหลือ) ÷ หนี้สินหมุนเวียน (1001Y)\n**ข้อมูลจาก**: งบทดลองหมวด 1/2'},
     {name:'Cash Ratio',val:fmtR(s.cash),th:'≥ 0.8',fail:trig.has('cash'),type:'STOCK',
      opt:`เพิ่มเงินสด+เงินฝาก <b>+${fmtM(CASH_T*t.cl-t.cn)}</b> หรือ ลดหนี้หมุนเวียน <b>−${fmtM(t.cl-t.cn/CASH_T)}</b>`,
-     head:`เกิน ${fmtR((s.cash||0)-CASH_T)}`},
+     head:`เกิน ${fmtR((s.cash||0)-CASH_T)}`,tt:'**สูตร**: Cash = เงินสด+เงินฝาก (1003X) ÷ หนี้สินหมุนเวียน (1001Y)\n**ข้อมูลจาก**: งบทดลองหมวด 1/2'},
     {name:'NWC เงินทุนหมุนเวียนสุทธิ',val:fmtM(s.nwc),th:'≥ 0',fail:trig.has('nwc'),type:'STOCK',
      opt:`ปิดช่องว่าง <b>+${fmtM(Math.max(0,-s.nwc))}</b> (เพิ่มสินทรัพย์ฯ หรือลดหนี้ฯ)`,
-     head:`บวกอยู่ ${fmtM(s.nwc)}`},
+     head:`บวกอยู่ ${fmtM(s.nwc)}`,tt:'**สูตร**: NWC = สินทรัพย์หมุนเวียน (1001X) − หนี้สินหมุนเวียน (1001Y)\n**ข้อมูลจาก**: งบทดลองหมวด 1/2 — ติดลบ = เข้าเกณฑ์ ST ด้วย'},
     {name:'NI กำไร/ขาดทุนสะสม',val:fmtM(s.ni),th:'≥ 0',fail:trig.has('ni'),type:'FLOW',
      opt:`กำไรสะสมต้องเพิ่มรวม <b>+${fmtM(Math.max(0,-s.ni))}</b> ภายใน ${sepLab} <span class="note">= <b>+${fmtM(Math.max(0,-s.ni)/monthsLeft)}/เดือน</b> อีก ${monthsLeft} เดือน (ตรงกับสไลด์ NI ใน Survival)</span>`,
-     head:`กำไรอยู่ ${fmtM(s.ni)}`},
+     head:`กำไรอยู่ ${fmtM(s.ni)}`,tt:'**สูตร**: NI = รายได้รวม (3006Y) − ค่าใช้จ่ายรวม (3010X) สะสมตั้งแต่ต้นปีงบ\n**ข้อมูลจาก**: งบทดลองหมวด 4/5 — ตัวเดียวที่เป็น FLOW แก้ได้จากกำไรรายเดือน'},
     {name:'SU คะแนนอยู่รอด',val:s.su,th:'= 0',fail:(s.su||0)>0,type:'STOCK',
      opt:`ต้องมี <b>NWC ≥ 0 และ NI ≥ 0 พร้อมกัน</b> (SU จะลดทันทีเมื่อพ้น 2 เงื่อนไขนี้)`,
-     head:`ปลอดภัย`},
+     head:`ปลอดภัย`,tt:'**สูตร**: SU 4-quadrant — NWC≥0&NI≥0→0(ปลอดภัย) · ทั้งคู่ติดลบ→2(แย่สุด) · ผสมกัน→ดูจำนวนเดือนที่จะหมด/ฟื้น\n**ข้อมูลจาก**: คำนวณจาก NWC และ NI ด้านบน'},
   ];
   const tbl=`<table class="gaptbl">
     <tr><th class="l">เกณฑ์</th><th>ค่าปัจจุบัน</th><th>เกณฑ์ผ่าน</th><th class="l">ต้องทำเท่าไหร่ถึงผ่าน</th><th>ชนิด</th><th>สถานะ</th></tr>
     ${rows.map(r=>`<tr class="${r.fail?'':'pass-row'}">
-      <td class="l">${r.name}</td>
+      <td class="l">${r.name} ${tip(r.tt)}</td>
       <td class="${r.fail?'gp-fail':'gp-pass'}">${r.val}</td>
       <td>${r.th}</td>
       <td class="opt">${r.fail?r.opt:'<span class="gp-pass">✓ '+r.head+'</span>'}</td>
@@ -951,11 +962,11 @@ function renderNITiers(h, s){
   const invRev=t.rev-t.e33x;      // รายได้งบลงทุน (ตัดออก)
   const cls=v=>v>=0?'pos':'neg';
   const tiers=`<div class="ni-bridge">
-    <div class="ni-tier ${cls(niDep)}"><div class="lbl">NI มีค่าเสื่อม<br><span>3007X · Risk ST/SU</span></div><div class="val">${fmtM(niDep)}</div></div>
+    <div class="ni-tier ${cls(niDep)}"><div class="lbl">NI มีค่าเสื่อม ${tip('**สูตร**: 3007X = รายได้รวม (3006Y) − ค่าใช้จ่ายรวม (3010X)\n**ใช้ที่ไหน**: ตัวที่ป้อนเข้าเกณฑ์ Risk Score ฝั่ง ST/SU โดยตรง (เข้มสุด)')}<br><span>3007X · Risk ST/SU</span></div><div class="val">${fmtM(niDep)}</div></div>
     <div class="ni-op">+ ค่าเสื่อม<br><b>${fmtM(dep)}</b></div>
-    <div class="ni-tier ${cls(niNoDep)}"><div class="lbl">NI ไม่มีค่าเสื่อม<br><span>3006X</span></div><div class="val">${fmtM(niNoDep)}</div></div>
+    <div class="ni-tier ${cls(niNoDep)}"><div class="lbl">NI ไม่มีค่าเสื่อม ${tip('**สูตร**: 3006X = รายได้รวม (3006Y) − ค่าใช้จ่ายไม่รวมค่าเสื่อม (3330Y)\n**ใช้ที่ไหน**: บวกค่าเสื่อม (ไม่ใช่เงินสด) กลับเข้าไป — ไม่ใช่เกณฑ์ Risk Score')}<br><span>3006X</span></div><div class="val">${fmtM(niNoDep)}</div></div>
     <div class="ni-op">− รายได้งบลงทุน<br><b>${fmtM(invRev)}</b></div>
-    <div class="ni-tier ${cls(ebitda)}"><div class="lbl">EBITDA<br><span>333</span></div><div class="val">${fmtM(ebitda)}</div></div>
+    <div class="ni-tier ${cls(ebitda)}"><div class="lbl">EBITDA ${tip('**สูตร**: 333 = รายได้ไม่รวมงบลงทุน (3330X) − ค่าใช้จ่ายไม่รวมค่าเสื่อม (3330Y)\n**ใช้ที่ไหน**: ตัดทั้งค่าเสื่อมและรายได้งบลงทุนออก — วัดการดำเนินงานล้วนๆ')}<br><span>333</span></div><div class="val">${fmtM(ebitda)}</div></div>
   </div>`;
   let vtxt, vcls;
   if(niDep>=0){
@@ -1017,12 +1028,12 @@ function renderSurvival(h, s){
         clbd,recv,totalAR,debtLim:DEBT_LIM,debtNetMo:0,acpFreed:0};
   const curL=SURV.official, sepLab=svSepLabel(), moLeft=12-mo;
   const debtCtrl = clbd ? `
-      <div class="fld"><label>เร่งชำระหนี้สินหมุนเวียนสุทธิ/เดือน (เกินกว่าที่ก่อหนี้ใหม่): <b id="svDebtLab"></b>
+      <div class="fld"><label>เร่งชำระหนี้สินหมุนเวียนสุทธิ/เดือน (เกินกว่าที่ก่อหนี้ใหม่): <b id="svDebtLab"></b> ${tip('**คืออะไร**: จ่ายชำระหนี้มากกว่าที่ก่อใหม่ต่อเดือน\n**สูตร**: จ่ายเท่ากับก่อใหม่ถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ นับเฉพาะส่วนสุทธิ — ทำให้เงินสด↓และ CL↓เท่ากัน (NWC คงที่)\n**ข้อมูลจาก**: ตั้งต้นจากค่าเฉลี่ยจ่ายชำระ/ก่อหนี้ใหม่จริงในตาราง "หนี้สินหมุนเวียนรายหมวดย่อย"')}
         <button type="button" class="planfin-btn" onclick="openDebtPlan()">✎ แผนชำระหนี้รายหมวด</button></label>
         <input type="range" id="svDebt" min="-${DEBT_LIM}" max="${DEBT_LIM}" step="50000" value="0">
         <span class="surv-base">+ = เร่งจ่าย (เงินสด↓ หนี้↓) · − = ยืดจ่าย (เงินสด↑ หนี้↑) · หนี้คงเหลือ <b>${fmtM(clbd.total)}</b> · ปกติจ่าย ~<b>${fmtM(clbd.totalPay)}</b>/ก่อใหม่ ~<b>${fmtM(clbd.totalInc)}</b> ต่อเดือน · <a href="#" onclick="svReset('debt');return false">ล้างเป็น 0</a></span></div>` : '';
   const acpCtrl = (recv&&totalAR>0) ? `
-      <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (ปลดเป็นเงินสดครั้งเดียว): <b id="svAcpLab"></b>
+      <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (ปลดเป็นเงินสดครั้งเดียว): <b id="svAcpLab"></b> ${tip('**คืออะไร**: เร่งเก็บลูกหนี้ค่ารักษาให้เร็วขึ้น (ACP น้อยลง) → ปลดเป็นเงินสดครั้งเดียว\n**สูตร**: เงินสดที่ปลด ≈ ลูกหนี้ × (ACP ปัจจุบัน−เป้า) ÷ ACP ปัจจุบัน — CA/NWC รวมไม่เปลี่ยน (แค่ย้ายจากลูกหนี้เป็นเงินสด)\n**ข้อมูลจาก**: ลูกหนี้ UC/กรมบัญชีกลาง/ประกันสังคม (2610X/2620X/2630X) + ACP ที่คำนวณไว้')}
         <button type="button" class="planfin-btn" onclick="openAcpPlan()">✎ ตั้งเป้า ACP รายกองทุน</button></label>
         <input type="range" id="svAcp" min="0" max="${Math.round(totalAR/50000)*50000}" step="50000" value="0">
         <span class="surv-base">ลูกหนี้ค้างรับรวม <b>${fmtM(totalAR)}</b> · เก็บได้เร็วขึ้น = เงินสด+Cash Ratio ดีขึ้น (CA/NWC เท่าเดิม) · <a href="#" onclick="svReset('acp');return false">ล้างเป็น 0</a></span></div>` : '';
@@ -1035,10 +1046,10 @@ function renderSurvival(h, s){
       <div id="tgtCard"></div>
     </div>
     <div class="surv-ctrl">
-      <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b>${planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
+      <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b> ${tip('**คืออะไร**: สมมติฐานกำไร/ขาดทุนสุทธิต่อเดือน — ตั้งต้น = ค่าเฉลี่ยจริง YTD÷เดือนที่ผ่าน\n**สูตร**: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (run-rate คงที่) · NI สะสมรีเซ็ตทุก ต.ค.\n**ข้อมูลจาก**: รายได้รวม−ค่าใช้จ่ายรวม (3006Y−3010X) งวดล่าสุด')}${planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
         <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="50000" value="${clampNi(niRun)}">
         <span class="surv-base">เฉลี่ยจริงตอนนี้ <b>${niRun>0?'+':''}${fmtM(niRun)}</b>/เดือน · สเกล ±${fmtM(NI_LIM)} (ระดับ ${lim.cls||'-'}) · <a href="#" onclick="svReset('ni');return false">คืนค่าเฉลี่ย</a></span></div>
-      <div class="fld"><label>เงินก้อนเสริมสภาพคล่องจากภายนอก (ครั้งเดียว ตอนนี้): <b id="svInjLab"></b></label>
+      <div class="fld"><label>เงินก้อนเสริมสภาพคล่องจากภายนอก (ครั้งเดียว ตอนนี้): <b id="svInjLab"></b> ${tip('**คืออะไร**: เงินก้อนจากภายนอก (เช่น เขต/สปสช. ช่วยพยุง) ไม่ใช่เงินที่ รพ. หาเองจากกำไร/เก็บลูกหนี้\n**สูตร**: เพิ่มสินทรัพย์หมุนเวียน+สินทรัพย์เร็ว+เงินสด (CA/QN/CN) เท่ากันทันทีในเดือน 0\n**ข้อมูลจาก**: ค่าสมมติ ผู้ใช้กำหนดเอง ไม่มีที่มาจากงบทดลอง')}</label>
         <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="50000" value="0">
         <span class="surv-base">ครั้งเดียว ณ ตอนนี้ · สเกล 0–${fmtM(INJ_MAX)} · <a href="#" onclick="svReset('inj');return false">ล้างเป็น 0</a></span></div>
       ${debtCtrl}
@@ -1601,21 +1612,28 @@ function renderEfficiency(h, s){
   const cashLow = s && s.cash!=null && s.cash<0.8;
   const rows=[
     {label:'Operating Margin %', val:t.opMargin, unit:'%', thLabel:`≥ ค่ากลางกลุ่ม (${fmtR(peerGrp.opMargin_med)}%)`,
-     pass: t.opMargin!=null && peerGrp.opMargin_med!=null && t.opMargin>=peerGrp.opMargin_med},
+     pass: t.opMargin!=null && peerGrp.opMargin_med!=null && t.opMargin>=peerGrp.opMargin_med,
+     tt:'**สูตร**: EBITDA (3330X−3330Y) ÷ รายได้ค่ารักษา (RatioID 320) × 100\n**ข้อมูลจาก**: งบทดลองหมวด 3/4'},
     {label:'Return on Asset (ROA) %', val:t.roa, unit:'%', thLabel:`≥ ค่ากลางกลุ่ม (${fmtR(peerGrp.roa_med)}%)`,
-     pass: t.roa!=null && peerGrp.roa_med!=null && t.roa>=peerGrp.roa_med},
+     pass: t.roa!=null && peerGrp.roa_med!=null && t.roa>=peerGrp.roa_med,
+     tt:'**สูตร**: NI (3006Y−3010X) ÷ สินทรัพย์รวม (RatioID 321) × 100\n**ข้อมูลจาก**: งบทดลองหมวด 1/4/5'},
     {label:'Average Payment Period (ยา/เวชภัณฑ์)', val:t.app, unit:'วัน',
      thLabel: cashLow?'≤ 180 วัน (สภาพคล่องต่ำ)':'≤ 90 วัน',
-     pass: t.app!=null && t.app<=(cashLow?180:90)},
-    {label:'Average Collection Period — UC', val:t.acpUc, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpUc!=null && t.acpUc<=60},
-    {label:'Average Collection Period — กรมบัญชีกลาง', val:t.acpCs, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpCs!=null && t.acpCs<=60},
-    {label:'Average Collection Period — ประกันสังคม', val:t.acpSs, unit:'วัน', thLabel:'≤ 90 วัน', pass: t.acpSs!=null && t.acpSs<=90},
-    {label:'Inventory Management (ยา/เวชภัณฑ์)', val:t.invDays, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.invDays!=null && t.invDays<=60},
+     pass: t.app!=null && t.app<=(cashLow?180:90),
+     tt:'**สูตร**: เจ้าหนี้การค้าเฉลี่ยต้น-ปลายงวด (2600X) ÷ ยอดซื้อยา/เวชภัณฑ์ (2600Y ด้าน Cr) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 260'},
+    {label:'Average Collection Period — UC', val:t.acpUc, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpUc!=null && t.acpUc<=60,
+     tt:'**สูตร**: ลูกหนี้ UC เฉลี่ยต้น-ปลายงวด (2610X) ÷ รายได้ UC (2610Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 261'},
+    {label:'Average Collection Period — กรมบัญชีกลาง', val:t.acpCs, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.acpCs!=null && t.acpCs<=60,
+     tt:'**สูตร**: ลูกหนี้กรมบัญชีกลางเฉลี่ยต้น-ปลายงวด (2620X) ÷ รายได้เบิกจ่ายตรง (2620Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 262'},
+    {label:'Average Collection Period — ประกันสังคม', val:t.acpSs, unit:'วัน', thLabel:'≤ 90 วัน', pass: t.acpSs!=null && t.acpSs<=90,
+     tt:'**สูตร**: ลูกหนี้ประกันสังคมเฉลี่ยต้น-ปลายงวด (2630X) ÷ รายได้ประกันสังคม (2630Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 263'},
+    {label:'Inventory Management (ยา/เวชภัณฑ์)', val:t.invDays, unit:'วัน', thLabel:'≤ 60 วัน', pass: t.invDays!=null && t.invDays<=60,
+     tt:'**สูตร**: สินค้าคงเหลือเฉลี่ยต้น-ปลายงวด (2640X) ÷ ยอดใช้ยา/เวชภัณฑ์ (2640Y) × จำนวนวันในเดือน\n**ข้อมูลจาก**: งบทดลอง RatioID 264'},
   ];
   box.innerHTML=`<table class="eff-tbl">
     <tr><th>ตัวชี้วัด</th><th>ค่าปัจจุบัน</th><th>เกณฑ์เป้าหมาย</th><th>ผล</th></tr>
     ${rows.map(r=>`<tr>
-      <td>${r.label}</td>
+      <td>${r.label} ${tip(r.tt)}</td>
       <td>${r.val==null?'—':fmtR(r.val)+' '+r.unit}</td>
       <td class="note">${r.thLabel}</td>
       <td class="${r.val==null?'':(r.pass?'eff-pass':'eff-fail')}">${r.val==null?'—':(r.pass?'✓ ผ่าน':'✗ ไม่ผ่าน')}</td>
@@ -1670,15 +1688,16 @@ function renderDecomp(h){
   const box=document.getElementById('decompBox');
   const d=(h.decomp[periodMode])||null;
   if(!d){box.innerHTML='<div class="note">ไม่มีข้อมูลงวดเปรียบเทียบ</div>';return}
-  const items=[['cr','Current Ratio'],['qr','Quick Ratio'],['cash','Cash Ratio']];
+  const items=[['cr','Current Ratio','สินทรัพย์หมุนเวียน (1001X) ÷ หนี้สินหมุนเวียน (1001Y)'],['qr','Quick Ratio','สินทรัพย์เร็ว (1002X) ÷ หนี้สินหมุนเวียน (1001Y)'],['cash','Cash Ratio','เงินสด+เงินฝาก (1003X) ÷ หนี้สินหมุนเวียน (1001Y)']];
   box.innerHTML=`<div class="note" style="margin-bottom:8px">เทียบกับงวด ${tLab(d.baseT)} ${d.baseT}</div>
-  <div class="decomp-row">${items.map(([k,label])=>{
+  <div class="decomp-row">${items.map(([k,label,formula])=>{
     const v=d[k];
-    if(!v)return `<div class="dcard"><div class="lbl">${label}</div><div class="note">ไม่มีข้อมูล</div></div>`;
+    const tt=`**สูตร**: ${formula}\n**การแยก**: fromNumerator=(x1−x0)÷y0 (ผลจากตัวเศษ) · fromDenominator=x0×(1÷y1−1÷y0) (ผลจากตัวส่วน)`;
+    if(!v)return `<div class="dcard"><div class="lbl">${label} ${tip(tt)}</div><div class="note">ไม่มีข้อมูล</div></div>`;
     const sign=x=>x>0?'+':'';
     const col=x=>x>0?'var(--green)':x<0?'var(--red)':'var(--mut)';
     return `<div class="dcard">
-      <div class="lbl">${label}</div>
+      <div class="lbl">${label} ${tip(tt)}</div>
       <div class="tot" style="color:${col(v.total)}">${sign(v.total)}${v.total.toFixed(3)}</div>
       <div class="brk">
         <span>จากสินทรัพย์: <b style="color:${col(v.fromNumerator)}">${sign(v.fromNumerator)}${v.fromNumerator.toFixed(3)}</b></span>
@@ -1744,9 +1763,9 @@ function renderNIBridge(h){
   const rawExpDelta=-v.fromExpense; // = ค่าใช้จ่ายงวดนี้ − งวดฐาน (บวก=ค่าใช้จ่ายเพิ่ม)
   box.innerHTML=`<div class="note" style="margin-bottom:8px">เทียบกับงวด ${tLab(baseT)} ${baseT}</div>
   <div class="nibridge-row">
-    <div class="dcard"><div class="lbl">รายได้เปลี่ยน</div><div class="tot" style="color:${deltaColor(v.fromRevenue,'REV')}">${sign(v.fromRevenue)}${fmtM(v.fromRevenue)}</div></div>
-    <div class="dcard"><div class="lbl">ค่าใช้จ่ายเปลี่ยน</div><div class="tot" style="color:${deltaColor(rawExpDelta,'EXP')}">${sign(rawExpDelta)}${fmtM(rawExpDelta)}</div></div>
-    <div class="dcard"><div class="lbl">ผลสุทธิ (NI เปลี่ยน)</div><div class="tot" style="color:${v.total>0?'var(--green)':v.total<0?'var(--red)':'var(--mut)'}">${sign(v.total)}${fmtM(v.total)}</div></div>
+    <div class="dcard"><div class="lbl">รายได้เปลี่ยน ${tip('**สูตร**: รายได้รวม (3006Y) งวดนี้ − งวดฐาน\n**ข้อมูลจาก**: งบทดลองหมวด 4 สะสมตั้งแต่ต้นปีงบ')}</div><div class="tot" style="color:${deltaColor(v.fromRevenue,'REV')}">${sign(v.fromRevenue)}${fmtM(v.fromRevenue)}</div></div>
+    <div class="dcard"><div class="lbl">ค่าใช้จ่ายเปลี่ยน ${tip('**สูตร**: ค่าใช้จ่ายรวม (3010X) งวดนี้ − งวดฐาน (บวก = ค่าใช้จ่ายเพิ่มขึ้น)\n**ข้อมูลจาก**: งบทดลองหมวด 5 สะสมตั้งแต่ต้นปีงบ')}</div><div class="tot" style="color:${deltaColor(rawExpDelta,'EXP')}">${sign(rawExpDelta)}${fmtM(rawExpDelta)}</div></div>
+    <div class="dcard"><div class="lbl">ผลสุทธิ (NI เปลี่ยน) ${tip('**สูตร**: ΔNI = Δรายได้ − Δค่าใช้จ่าย\n**ข้อมูลจาก**: คำนวณจาก 2 การ์ดด้านซ้าย — NI นี้ป้อนเข้าเกณฑ์ Risk Score ฝั่ง ST/SU โดยตรง')}</div><div class="tot" style="color:${v.total>0?'var(--green)':v.total<0?'var(--red)':'var(--mut)'}">${sign(v.total)}${fmtM(v.total)}</div></div>
   </div>`;
 }
 function renderWaterfallPL(h){
