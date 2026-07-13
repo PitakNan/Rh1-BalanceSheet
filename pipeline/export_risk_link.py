@@ -81,14 +81,17 @@ m = pd.read_parquet(MASTER, columns=["org5", "t", "acc", "bs", "inc", "dec"])
 m = m[m["org5"].isin(orgs.keys())].copy()
 m["root"] = m["acc"].map(acc_root)
 
-# HowTo='Sum,Cr' หรือเทียบเท่า — ตัวส่วน "อัตราไหล/เดือน" ของสูตร APP/ACP/Inventory Days
-# (2600Y เจ้าหนี้การค้ารวม, 2610Y/2620Y/2630Y รายได้สุทธิรายกองทุน UC/CSMBS/SSS, 2640Y ยอดใช้ไป)
-# ต้องรวม "อัตราไหลรายเดือน" (คอลัมน์ inc = ด้านเพิ่มตามธรรมชาติบัญชี) ไม่ใช่ยอดสะสม YTD (bs)
-# ⚠️ พบบั๊ก 2026-07-13: เดิมมีแค่ 2600Y ในเซตนี้ ทำให้ 2610Y/2620Y/2630Y/2640Y ใช้ bs (สะสม YTD)
-# หารด้วย days ของเดือนเดียว → ACP/Inventory Days ต่ำกว่าจริงราว "จำนวนเดือนที่ผ่านมา" เท่า
-# (พิสูจน์: bs สะสมโตทุกเดือน ไม่ reset, inc ตรงกับ Δ รายเดือนจริง — เทียบกับ TPS(rh1-tps-v-3-1.vercel.app)
-# พบ ACP เราต่ำกว่า TPS ~8-10 เท่า ตรงกับ months_elapsed ของงวดที่ตรวจ 256908 พอดี)
-SUM_CR_IDS = {"2600Y", "2610Y", "2620Y", "2630Y", "2640Y"}
+# HowTo='Sum,Cr' (เฉพาะ 2600Y เจ้าหนี้การค้ารวม ตามผัง ratio_items จริง) ต้องรวมยอดด้าน Cr ดิบ
+# ("อัตราไหลรายเดือน" คอลัมน์ inc) ไม่ใช่ยอดสุทธิ (bs) — 2610Y/2620Y/2630Y/2640Y มี HowTo='Net,End'
+# ต่างจาก 2600Y (ตรวจ ratio_items แล้ว 2026-07-13) จึงต้องใช้ bs (ยอดสุทธิสะสม ณ สิ้นงวด) เหมือนเดิม
+# ⚠️ 2026-07-13 เคยเข้าใจผิดว่าต้องย้ายทั้ง 4 ตัวมาใช้ inc เหมือน 2600Y (ดูประวัติ commit ก่อนหน้า)
+# — ผิด! รายได้/ยอดใช้พวกนี้มีทั้งด้าน Cr และ Dr ปนกันมาก (ส่วนต่างปรับปรุง/เคลม/settlement)
+# sum(inc)รายเดือน (ฝั่ง Cr อย่างเดียว) จึงมากกว่ายอดสุทธิจริงมาก ทำให้ ACP ต่ำกว่าจริง — บั๊กที่แท้จริง
+# คือตัวคูณ `days` (แค่เดือนเดียว) ต้องเป็น days สะสมตั้งแต่ต้นปีงบ (ดู days_elapsed_ytd) เพราะ bs
+# เป็นยอดสะสม ไม่ใช่ตัวคูณ — พิสูจน์ด้วยเทียบ TPS(rh1-tps-v-3-1.vercel.app) ทั้งเขต ~100 รพ.:
+# สูตร bs/days_elapsed_ytd ได้ ratio เทียบ TPS median UC=1.04 CSMBS=1.06 SSS=1.19 (ใกล้ 1.0 มาก)
+# ส่วนสูตร inc/days_in_period(เดือนเดียว) ที่เคย "แก้" ไปกลับได้ median ผิดเพี้ยนกว่ามาก (~0.66-1.4)
+SUM_CR_IDS = {"2600Y"}
 # HowTo='Avg' (X-side ของ AP/AR/Inventory) ต้องเฉลี่ยยอดคงเหลือต้นงวด-ปลายงวด
 AVG_END_IDS = {"2600X", "2610X", "2620X", "2630X", "2640X"}
 
@@ -118,12 +121,20 @@ def days_in_period(t):
     cal_month = m_ + 9 if m_ <= 3 else m_ - 3   # 1(ต.ค.)->10, ... 4(ม.ค.)->1, ... 12(ก.ย.)->9
     return [31, 30, 31, 31, 28, 31, 30, 31, 30, 31, 31, 30][cal_month - 1]
 
+def days_elapsed_ytd(t):
+    """จำนวนวันสะสมตั้งแต่ต้นปีงบ (ต.ค.) ถึงสิ้นงวดนี้ — ใช้คู่กับตัวส่วนที่เป็นยอดสะสม YTD (bs, HowTo='Net,End')"""
+    return sum(days_in_period(mm) for mm in range(1, t % 100 + 1))
+
 days = gl["t"].map(days_in_period)
+days_ytd = gl["t"].map(days_elapsed_ytd)
 gl["app_gl"]    = (gl["2600X_avg"] / gl["2600Y"].where(gl["2600Y"] != 0)) * days
-gl["acpUc_gl"]  = (gl["2610X_avg"] / gl["2610Y"].where(gl["2610Y"] != 0)) * days
-gl["acpCs_gl"]  = (gl["2620X_avg"] / gl["2620Y"].where(gl["2620Y"] != 0)) * days
-gl["acpSs_gl"]  = (gl["2630X_avg"] / gl["2630Y"].where(gl["2630Y"] != 0)) * days
-gl["invDays_gl"] = (gl["2640X_avg"] / gl["2640Y"].where(gl["2640Y"] != 0)) * days
+# acpUc/acpCs/acpSs/invDays: ตัวส่วน (2610Y/2620Y/2630Y/2640Y) เป็นยอดสุทธิสะสม YTD (HowTo='Net,End')
+# จึงต้องคูณด้วยจำนวนวันสะสมตั้งแต่ต้นปีงบ (days_ytd) ไม่ใช่วันของเดือนเดียว (days) — ต่างจาก app ข้างบน
+# ที่ตัวส่วนเป็นอัตราไหลรายเดือนอยู่แล้ว (HowTo='Sum,Cr')
+gl["acpUc_gl"]  = (gl["2610X_avg"] / gl["2610Y"].where(gl["2610Y"] != 0)) * days_ytd
+gl["acpCs_gl"]  = (gl["2620X_avg"] / gl["2620Y"].where(gl["2620Y"] != 0)) * days_ytd
+gl["acpSs_gl"]  = (gl["2630X_avg"] / gl["2630Y"].where(gl["2630Y"] != 0)) * days_ytd
+gl["invDays_gl"] = (gl["2640X_avg"] / gl["2640Y"].where(gl["2640Y"] != 0)) * days_ytd
 # หมายเหตุ: 3200X/3210X ใน ratio_items รวมบัญชีรายได้(หมวด4)+ค่าใช้จ่าย(หมวด5) ปนกันเป็น
 # RatioItemID เดียว (Rate=1 ทั้งคู่ ไม่มีตัวคูณแยกส่วน) หาก sum ตรงๆ จะเป็นการ "บวก" ไม่ใช่ "ลบ"
 # ทำให้ EBITDA/NI เพี้ยน — ใช้ ebitda_gl/ni_gl ที่คำนวณแยกฝั่งแล้วพิสูจน์ตรง 100% แทน
