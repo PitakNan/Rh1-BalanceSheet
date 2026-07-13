@@ -360,20 +360,32 @@ def payables_stress(org_df, t_cur, t_prev, months_elapsed):
             "supplier": supplier, "claims": claims,
             "totalSupplier": tot_sup, "totalClaims": tot_clm, "totalTrade": round(tot_sup + tot_clm, 0)}
 
-# ── หนี้สินหมุนเวียนรายหมวดย่อย (Name2) + ค่าเฉลี่ยจ่ายชำระ/ก่อหนี้ใหม่ ต่อเดือน ──
+# ── หนี้สินหมุนเวียนรายหมวดย่อย + ค่าเฉลี่ยจ่ายชำระ/ก่อหนี้ใหม่ ต่อเดือน ──
 # ใช้ 'dec' (ด้านเดบิตของเจ้าหนี้ = การจ่ายชำระจริงรายเดือน) และ 'inc' (ด้านเครดิต = ก่อหนี้ใหม่รายเดือน)
 # เฉลี่ยจากงวดล่าสุดสูงสุด 6 เดือน → "จ่ายชำระเฉลี่ยเดือนละเท่าไหร่ต่อหมวด" ใช้ตั้งต้นตัวปรับแผนจ่ายหนี้
 PAY_AVG_N = 6
+# ⚠️ acc_hierarchy.Name2 รวมทุกบัญชีใต้ CodeL2='2101020000.200' เป็น "เจ้าหนี้อื่น เงินนอกงบประมาณฝากธนาคารพาณิชย์"
+# ก้อนเดียว (พิสูจน์แล้ว: เจ้าหนี้ยา/เวชภัณฑ์/lab/xray และเจ้าหนี้ค่ารักษา OP-UC ต่างสังกัด ได้ Name2 เดียวกันหมด
+# — ไม่แยกเจ้าหนี้การค้ากับเจ้าหนี้ตามจ่าย/เคลม) จึงต้องแยกเองด้วยตรรกะเดียวกับ payables_stress (suffix digit)
+# ก่อน fallback ไป subgroup_name(Name2) สำหรับ CL โค้ดอื่นที่ Name2 แยกหมวดได้ดีอยู่แล้ว
+def cl_category(root):
+    rs = str(root)
+    if rs.startswith(TRADE_PREFIX):
+        suffix = rs.split(".")[-1]
+        if suffix[:1] in ("2", "3", "5", "7"):
+            return "เจ้าหนี้ค่าบริการหน่วยงานภาครัฐ/เคลม"
+        return "เจ้าหนี้การค้า"
+    return subgroup_name(root)
 def cl_breakdown(org_df, t_cur, hist_ts):
     cl = org_df[org_df["bucket"] == "CL"]
     if cl.empty:
         return None
     cur = cl[cl["t"] == t_cur]
-    cur_g = cur.groupby(cur["root"].map(subgroup_name))["bs"].sum()
+    cur_g = cur.groupby(cur["root"].map(cl_category))["bs"].sum()
     recent = sorted(t for t in hist_ts if t <= t_cur)[-PAY_AVG_N:]
     mv = cl[cl["t"].isin(recent)]
     nmo = int(mv["t"].nunique()) or 1
-    key = mv["root"].map(subgroup_name)
+    key = mv["root"].map(cl_category)
     pay_g = mv.groupby(key)["dec"].sum().abs() / nmo   # จ่ายชำระเฉลี่ย/เดือน (|เดบิต|)
     inc_g = mv.groupby(key)["inc"].sum() / nmo         # ก่อหนี้ใหม่เฉลี่ย/เดือน (เครดิต)
     rows = []

@@ -744,8 +744,8 @@ function renderDetail(hcode){
     </div>
 
     <div class="panel">
-      <h3>หนี้สินหมุนเวียนรายหมวดย่อย — ยอดคงเหลือ + จ่ายชำระ/ก่อหนี้ใหม่ ต่อเดือน ${tip('**คืออะไร**: หนี้สินหมุนเวียน (CL) คือตัวส่วนร่วมของทุก Ratio (CR/QR/Cash) และตัวหักของ NWC — แตกรายหมวดย่อย\n**สูตร**: จ่ายชำระ/เดือน = เฉลี่ย|ด้านเดบิต(dec)| · ก่อหนี้ใหม่/เดือน = เฉลี่ยด้านเครดิต(inc) ย้อนหลัง 6 เดือน\n**ข้อมูลจาก**: งบทดลองหมวด 2 (1001Y) จัดกลุ่มด้วย acc_hierarchy.Name2 — ใช้ตั้งต้นตัวปรับแผนจ่ายหนี้ใน Survival')}</h3>
-      <div class="src-note">📌 หนี้สินหมุนเวียน (RatioItemID 1001Y) คือ<b>ตัวส่วนร่วมของทุก Ratio</b> (CR/QR/Cash) และตัวหักของ NWC — แตกรายหมวดย่อยด้วย <code>acc_hierarchy.Name2</code> · <b>จ่ายชำระ/เดือน</b> = เฉลี่ยด้านเดบิต (<code>dec</code>) และ <b>ก่อหนี้ใหม่/เดือน</b> = เฉลี่ยด้านเครดิต (<code>inc</code>) จากงบทดลองย้อนหลังสูงสุด 6 เดือน · ใช้ตั้งต้นตัวปรับ "แผนชำระหนี้" ในกล่องจำลองด้านบน</div>
+      <h3>หนี้สินหมุนเวียนรายหมวดย่อย — ยอดคงเหลือ + จ่ายชำระ/ก่อหนี้ใหม่ ต่อเดือน ${tip('**คืออะไร**: หนี้สินหมุนเวียน (CL) คือตัวส่วนร่วมของทุก Ratio (CR/QR/Cash) และตัวหักของ NWC — แตกรายหมวดย่อย\n**สูตร**: จ่ายชำระ/เดือน = เฉลี่ย|ด้านเดบิต(dec)| · ก่อหนี้ใหม่/เดือน = เฉลี่ยด้านเครดิต(inc) ย้อนหลัง 6 เดือน\n**ข้อมูลจาก**: งบทดลองหมวด 2 (1001Y) — เจ้าหนี้การค้า/เจ้าหนี้ค่าบริการหน่วยงานภาครัฐ แยกด้วย suffix บัญชี (ตรรกะเดียวกับตารางเจ้าหนี้การค้าด้านล่าง) หมวดอื่นจัดด้วย acc_hierarchy.Name2 — ใช้ตั้งต้นตัวปรับแผนจ่ายหนี้ใน Survival')}</h3>
+      <div class="src-note">📌 หนี้สินหมุนเวียน (RatioItemID 1001Y) คือ<b>ตัวส่วนร่วมของทุก Ratio</b> (CR/QR/Cash) และตัวหักของ NWC · <b>เจ้าหนี้การค้า</b> (ยา/เวชภัณฑ์/lab/x-ray ฯลฯ) และ<b>เจ้าหนี้ค่าบริการหน่วยงานภาครัฐ/เคลม</b> (OP-UC ต่างสังกัด ฯลฯ) แยกด้วยรหัสบัญชีต่อท้าย (suffix) เพราะ <code>acc_hierarchy.Name2</code> รวมทั้งสองแบบเป็นก้อนเดียวกัน ("เจ้าหนี้อื่น เงินนอกงบประมาณฝากธนาคารพาณิชย์") ไม่แยกให้ — หมวดอื่นนอกเหนือจากนี้จัดด้วย <code>Name2</code> ตามปกติ · <b>จ่ายชำระ/เดือน</b> = เฉลี่ยด้านเดบิต (<code>dec</code>) และ <b>ก่อหนี้ใหม่/เดือน</b> = เฉลี่ยด้านเครดิต (<code>inc</code>) จากงบทดลองย้อนหลังสูงสุด 6 เดือน · ใช้ตั้งต้นตัวปรับ "แผนชำระหนี้" ในกล่องจำลองด้านบน</div>
       <div id="clbdBox"></div>
     </div>
 
@@ -1025,7 +1025,7 @@ function renderSurvival(h, s){
   // สเกลสไลด์ "จ่ายหนี้สุทธิ/เดือน": ±ความสามารถจ่ายรวม (Σ payMo) หรือ fallback ตามระดับ
   const DEBT_LIM=Math.max(clbd?Math.round((clbd.totalPay||0)/50000)*50000:0, INJ_MAX);
   SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp,planSrc,niLim:NI_LIM,injMax:INJ_MAX,niRun,tgt:null,
-        clbd,recv,totalAR,debtLim:DEBT_LIM,debtNetMo:0,acpFreed:0};
+        clbd,recv,totalAR,debtLim:DEBT_LIM,debtNetMo:0,acpFreed:0,acpMonth:1};
   const curL=SURV.official, sepLab=svSepLabel(), moLeft=12-mo;
   const debtCtrl = clbd ? `
       <div class="fld"><label>เร่งชำระหนี้สินหมุนเวียนสุทธิ/เดือน (เกินกว่าที่ก่อหนี้ใหม่): <b id="svDebtLab"></b> ${tip('**คืออะไร**: จ่ายชำระหนี้มากกว่าที่ก่อใหม่ต่อเดือน\n**สูตร**: จ่ายเท่ากับก่อใหม่ถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ นับเฉพาะส่วนสุทธิ — ทำให้เงินสด↓และ CL↓เท่ากัน (NWC คงที่)\n**ข้อมูลจาก**: ตั้งต้นจากค่าเฉลี่ยจ่ายชำระ/ก่อหนี้ใหม่จริงในตาราง "หนี้สินหมุนเวียนรายหมวดย่อย"')}
@@ -1033,10 +1033,10 @@ function renderSurvival(h, s){
         <input type="range" id="svDebt" min="-${DEBT_LIM}" max="${DEBT_LIM}" step="50000" value="0">
         <span class="surv-base">+ = เร่งจ่าย (เงินสด↓ หนี้↓) · − = ยืดจ่าย (เงินสด↑ หนี้↑) · หนี้คงเหลือ <b>${fmtM(clbd.total)}</b> · ปกติจ่าย ~<b>${fmtM(clbd.totalPay)}</b>/ก่อใหม่ ~<b>${fmtM(clbd.totalInc)}</b> ต่อเดือน · <a href="#" onclick="svReset('debt');return false">ล้างเป็น 0</a></span></div>` : '';
   const acpCtrl = (recv&&totalAR>0) ? `
-      <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (ปลดเป็นเงินสดครั้งเดียว): <b id="svAcpLab"></b> ${tip('**คืออะไร**: เร่งเก็บลูกหนี้ค่ารักษาให้เร็วขึ้น (ACP น้อยลง) → ปลดเป็นเงินสดครั้งเดียว\n**สูตร**: เงินสดที่ปลด ≈ ลูกหนี้ × (ACP ปัจจุบัน−เป้า) ÷ ACP ปัจจุบัน — CA/NWC รวมไม่เปลี่ยน (แค่ย้ายจากลูกหนี้เป็นเงินสด)\n**ข้อมูลจาก**: ลูกหนี้ UC/กรมบัญชีกลาง/ประกันสังคม (2610X/2620X/2630X) + ACP ที่คำนวณไว้')}
-        <button type="button" class="planfin-btn" onclick="openAcpPlan()">✎ ตั้งเป้า ACP รายกองทุน</button></label>
+      <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (เงินสดเข้าตามเดือนที่ตั้งเป้า): <b id="svAcpLab"></b> ${tip('**คืออะไร**: ตั้งเป้าจำนวนเงินที่จะเก็บลูกหนี้ได้เร็วขึ้น + เดือนที่คาดว่าจะได้รับเป็นเงินสด\n**สูตร**: เงินสดเข้าเป็นก้อนเดียว ณ เดือนที่ตั้งเป้า (ไม่ใช่ทันที) — CA/QN/NWC รวมไม่เปลี่ยน (ลูกหนี้ในนั้นอยู่แล้ว) เปลี่ยนเฉพาะเงินสด/Cash Ratio\n**ข้อมูลจาก**: ลูกหนี้ UC/กรมบัญชีกลาง/ประกันสังคม (2610X/2620X/2630X) + ACP ที่คำนวณไว้')}
+        <button type="button" class="planfin-btn" onclick="openAcpPlan()">✎ ตั้งเป้าจำนวนเงิน+เดือน รายกองทุน</button></label>
         <input type="range" id="svAcp" min="0" max="${Math.round(totalAR/50000)*50000}" step="50000" value="0">
-        <span class="surv-base">ลูกหนี้ค้างรับรวม <b>${fmtM(totalAR)}</b> · เก็บได้เร็วขึ้น = เงินสด+Cash Ratio ดีขึ้น (CA/NWC เท่าเดิม) · <a href="#" onclick="svReset('acp');return false">ล้างเป็น 0</a></span></div>` : '';
+        <span class="surv-base">ลูกหนี้ค้างรับรวม <b>${fmtM(totalAR)}</b> · เก็บได้เร็วขึ้น = เงินสด+Cash Ratio ดีขึ้น (CA/QN/NWC เท่าเดิม) — เข้าเดือนที่ ${SURV.acpMonth} เป็นค่าเริ่มต้น ปรับได้ในป็อปอัป · <a href="#" onclick="svReset('acp');return false">ล้างเป็น 0</a></span></div>` : '';
   box.innerHTML=`
     <div class="tgt-box">
       <div class="tgt-title">🎯 ตั้งเป้าระดับวิกฤตภายใน <b>${sepLab}</b> (สิ้นปีงบ${moLeft>0?` · เหลือ ${moLeft} เดือน`:' · งวดนี้คือ ก.ย. แล้ว'}) — กดเลขระดับที่ต้องการ</div>
@@ -1060,7 +1060,7 @@ function renderSurvival(h, s){
     <div class="surv-chartbox"><canvas id="survChart"></canvas></div>
     ${SHOW_NET_CASH?`<div class="surv-cash-cap">เทียบเงินสด+เงินฝาก (gross) กับ เงินบำรุงสุทธิหลังหักหนี้สินหมุนเวียน (net) ตลอด 24 เดือนที่จำลอง</div>
     <div class="surv-chartbox"><canvas id="cashChart"></canvas></div>`:''}
-    <div class="gap-note">⚙️ สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (<b>${fmtM(depMo)}/เดือน</b> คงที่ตาม run-rate) − เร่งชำระหนี้สุทธิ · <b>เร่งชำระหนี้สุทธิ</b> ทำให้เงินสดและหนี้สินหมุนเวียนลดลงเท่ากัน (NWC คงที่, CR ดีขึ้น, Cash Ratio แย่ลง) — การจ่าย=ก่อหนี้ใหม่ปกติถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ · <b>เร่งเก็บลูกหนี้</b> เปลี่ยนลูกหนี้เป็นเงินสด (CA/NWC คงที่ ดีเฉพาะเงินสด+Cash Ratio) · NI สะสมรีเซ็ตทุก ต.ค. ตามปีงบ · <b>เดือน 0 = สถานะจริงปัจจุบัน</b> — จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</div>`;
+    <div class="gap-note">⚙️ สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (<b>${fmtM(depMo)}/เดือน</b> คงที่ตาม run-rate) − เร่งชำระหนี้สุทธิ · <b>เร่งชำระหนี้สุทธิ</b> ลดเงินสดและหนี้สินหมุนเวียนเท่ากัน (NWC/ST/SU ไม่เปลี่ยนเลย) — ${debtDirNote(true)} — เป็นการลดขนาดงบดุล (deleverage) ไม่ใช่การเพิ่มสภาพคล่องเสมอไป · การจ่าย=ก่อหนี้ใหม่ปกติถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ · <b>เร่งเก็บลูกหนี้</b> เปลี่ยนลูกหนี้เป็นเงินสด (CA/QN/NWC เท่าเดิม ดีเฉพาะเงินสด+Cash Ratio) · NI สะสมรีเซ็ตทุก ต.ค. ตามปีงบ · <b>เดือน 0 = สถานะจริงปัจจุบัน</b> — จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</div>`;
   document.getElementById('svNi').oninput=projSurv;
   document.getElementById('svInj').oninput=projSurv;
   const dEl=document.getElementById('svDebt'); if(dEl) dEl.oninput=()=>{SURV.debtNetMo=+dEl.value;projSurv();};
@@ -1071,16 +1071,25 @@ let survChart=null;
 // ── sim core: ใช้ร่วมทั้งกราฟจำลองและ Target Solver — พารามิเตอร์ (niM, inj, debtNetMo, acpFreed) ──
 // inj = เงินก้อนภายนอก (เพิ่ม CA/QN/CN) · acpFreed = เร่งเก็บลูกหนี้ (เพิ่มเฉพาะเงินสด CN, CA คงที่)
 // debtNetMo = เร่งชำระหนี้สุทธิ/เดือน (เงินสดและ CL ลดลงเท่ากัน — NWC คงที่)
-function simState(inj, acpFreed){
-  return {cca:SURV.ca+inj, ccn:SURV.cn+inj+acpFreed, cqn:SURV.qn+inj, ccl:SURV.cl, ni:SURV.ni, mo:SURV.mo};
+// acpFreed ไม่ได้ฝังในสถานะเริ่มต้นอีกต่อไป — ฉีดเป็นก้อนเดียวตอนถึงเดือนที่ตั้งเป้า (ผ่าน simStep's acpAt)
+function simState(inj){
+  return {cca:SURV.ca+inj, ccn:SURV.cn+inj, cqn:SURV.qn+inj, ccl:SURV.cl, ni:SURV.ni, mo:SURV.mo};
 }
-function simStep(st, niM, debtNetMo){
+// ทิศทางผลของการจ่าย/ยืดหนี้ต่อ CR/QR/Cash — พิสูจน์ทางคณิตศาสตร์: ลด(หรือเพิ่ม) เงินสด+CL เท่ากัน
+// ⇒ ทิศทาง Δratio = sign(ตัวเศษ − CL) เมื่อเร่งจ่าย (กลับเครื่องหมายเมื่อยืดจ่าย) — ไม่ใช่ "CR ดีขึ้นเสมอ" ตามที่เคยเข้าใจผิด
+// (รพ.วิกฤตส่วนใหญ่ CA/QN/CN < CL อยู่แล้ว ⇒ เร่งจ่ายหนี้กลับทำให้ CR/QR/Cash แย่ลงทั้งหมด แม้หนี้จะลดจริง)
+function debtDirNote(accelerating){
+  const dir=(x,cl)=>{ const up = accelerating ? x>cl : x<cl; return x===cl?'ไม่เปลี่ยน':(up?'ดีขึ้น':'แย่ลง'); };
+  return `CR จะ<b>${dir(SURV.ca,SURV.cl)}</b> · QR จะ<b>${dir(SURV.qn,SURV.cl)}</b> · Cash Ratio จะ<b>${dir(SURV.cn,SURV.cl)}</b> (NWC/ST/SU ไม่เปลี่ยนเสมอ)`;
+}
+function simStep(st, niM, debtNetMo, acpAt){
   if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;   // fiscal reset ที่ ต.ค.
   st.ni+=niM;
   const pay = debtNetMo>=0 ? Math.min(debtNetMo, st.ccl) : debtNetMo;  // เร่งจ่ายเกินยอดหนี้คงเหลือไม่ได้
   const cashMo = niM + SURV.depMo - pay;
   st.cca+=cashMo; st.ccn+=cashMo; st.cqn+=cashMo;
   st.ccl=Math.max(0, st.ccl - pay);
+  if(acpAt) st.ccn += acpAt;   // เงินสดเข้าเป็นก้อนเดียวตอนถึงเดือนที่ตั้งเป้าเก็บลูกหนี้ (ไม่ใช่ทุกเดือน)
   return st;
 }
 // CL อาจถูกเร่งจ่ายจนเหลือ 0 → กันตัวส่วน 0 (ไม่มีหนี้ = ทุก ratio ผ่าน ไม่ใช่ข้อมูลหาย) ด้วย epsilon 1 บาท
@@ -1090,19 +1099,21 @@ function projSurv(){
   const niM=+document.getElementById('svNi').value;
   const inj=+document.getElementById('svInj').value;
   const debtNetMo=SURV.debtNetMo||0, acpFreed=SURV.acpFreed||0;
+  const acpMonth=acpFreed>0?(SURV.acpMonth||1):0;   // ไม่มีเงินก้อน = ไม่มีเดือนเป้าหมาย
   document.getElementById('svNiLab').textContent=(niM>0?'+':'')+fmtM(niM);
   document.getElementById('svInjLab').textContent=fmtM(inj);
   const dLab=document.getElementById('svDebtLab'); if(dLab) dLab.textContent=(debtNetMo>0?'+':'')+fmtM(debtNetMo);
-  const aLab=document.getElementById('svAcpLab'); if(aLab) aLab.textContent=fmtM(acpFreed);
+  const aLab=document.getElementById('svAcpLab'); if(aLab) aLab.textContent=acpFreed>0?`${fmtM(acpFreed)} · เข้าเดือนที่ ${acpMonth} (${tLab(addMo(SURV.startT,acpMonth))})`:fmtM(0);
   const anc=v=>Math.max(0,Math.min(7, SURV.official + (v - SURV.base)));  // จำลอง → ฐานทางการ
   const startRisk=SURV.official;   // เดือน 0 = คะแนนทางการ
-  let st=simState(inj, acpFreed);
+  let st=simState(inj);
+  if(acpMonth===0 && acpFreed>0) st.ccn+=acpFreed;   // เผื่อกรณีตั้งเป้าเป็น "เดือนนี้เลย"
   const r0=anc(simScore(st).risk);
   const path=[{k:0,risk:r0,cash:st.ccn,cl:st.ccl}];
   const crossDown={}, crossUp={}; let cashOut=st.ccn<=0?0:null;
   const HORIZON=24, cashMoApprox=niM+SURV.depMo-debtNetMo;
   for(let k=1;k<=HORIZON;k++){
-    simStep(st, niM, debtNetMo);
+    simStep(st, niM, debtNetMo, k===acpMonth?acpFreed:0);
     const rk=anc(simScore(st).risk);
     path.push({k,risk:rk,cash:st.ccn,cl:st.ccl});
     for(let L=startRisk-1;L>=0;L--) if(crossDown[L]==null && rk<=L) crossDown[L]=k;  // ถึงระดับดีขึ้น
@@ -1117,8 +1128,9 @@ function projSurv(){
   for(let L=startRisk-1;L>=0;L--) if(crossDown[L]!=null) // ดีขึ้น (ใกล้ตัวก่อน)
     pills.push(`<div class="surv-pill down"><span class="rb" style="background:${riskColor(L)}">${L}</span>ดีขึ้นสู่ระดับ ${L} ในอีก <b>${crossDown[L]}</b> เดือน (${at(crossDown[L])})</div>`);
   if(!pills.length) pills.push(`<div class="surv-pill">คะแนนคงที่ที่ ${startRisk} ตลอด ${HORIZON} เดือนที่จำลอง</div>`);
+  if(acpFreed>0) pills.push(`<div class="surv-pill down">💰 คาดเก็บลูกหนี้ได้ <b>${fmtM(acpFreed)}</b> เป็นเงินสดในเดือนที่ ${acpMonth} (${at(acpMonth)})</div>`);
   if(cashOut===0) pills.push(`<div class="surv-pill out">🔴 เงินสด+เงินฝากติดลบอยู่แล้วตอนนี้</div>`);
-  else if(cashOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินสด+เงินฝากหมดในอีก ${cashOut} เดือน (${at(cashOut)})${debtNetMo>0?' — จากเร่งชำระหนี้':''}</div>`);
+  else if(cashOut!=null) pills.push(`<div class="surv-pill out">⚠️ เงินสด+เงินฝากหมดในอีก ${cashOut} เดือน (${at(cashOut)})${debtNetMo>0?' — จากเร่งชำระหนี้':''}${acpFreed>0&&cashOut<acpMonth?' (ก่อนเงินลูกหนี้จะเข้า)':''}</div>`);
   else if(cashMoApprox<0) pills.push(`<div class="surv-pill out">⚠️ เงินสด+เงินฝากลดลงเรื่อยๆ (${fmtM(cashMoApprox)}/เดือน)</div>`);
   document.getElementById('svSum').innerHTML=pills.join('');
   svTgtLive(niM, inj);
@@ -1135,9 +1147,11 @@ function svChip(v){ return `<span class="tgt-delta ${v>=0?'pos':'neg'}">(${sgnM(
 function svEvalSep(niM, inj){
   const anc=v=>Math.max(0,Math.min(7, SURV.official+(v-SURV.base)));
   const debtNetMo=SURV.debtNetMo||0, acpFreed=SURV.acpFreed||0;
-  let st=simState(inj, acpFreed);
-  let r=anc(simScore(st).risk), worst=r;
-  while(st.mo<12){ simStep(st, niM, debtNetMo); r=anc(simScore(st).risk); if(r>worst) worst=r; }
+  const acpMonth=acpFreed>0?(SURV.acpMonth||1):0;
+  let st=simState(inj);
+  if(acpMonth===0 && acpFreed>0) st.ccn+=acpFreed;
+  let r=anc(simScore(st).risk), worst=r, k=0;
+  while(st.mo<12){ k++; simStep(st, niM, debtNetMo, k===acpMonth?acpFreed:0); r=anc(simScore(st).risk); if(r>worst) worst=r; }
   return {sep:r, worst};
 }
 // binary search บนฟังก์ชัน monotone: lo ไม่ผ่าน, hi ผ่าน → ค่าต่ำสุด (step 50k) ที่ผ่าน
@@ -1460,8 +1474,8 @@ function debtSums(){
 function debtRecalc(){
   const s=debtSums(), el=document.getElementById('dpNet'), netB=s.net*1e6;
   const col=s.net>0?'var(--red)':s.net<0?'var(--green)':'var(--mut)';
-  const eff=s.net>0?`เงินสด↓ ${fmtM(netB)}/เดือน · หนี้สินหมุนเวียน↓ ${fmtM(netB)}/เดือน (NWC คงที่, CR↑, Cash Ratio↓)`
-    :s.net<0?`ยืดจ่าย: เงินสด↑ ${fmtM(-netB)}/เดือน · หนี้↑ ${fmtM(-netB)}/เดือน`
+  const eff=s.net>0?`เงินสด↓ ${fmtM(netB)}/เดือน · หนี้สินหมุนเวียน↓ ${fmtM(netB)}/เดือน · ${debtDirNote(true)}`
+    :s.net<0?`ยืดจ่าย: เงินสด↑ ${fmtM(-netB)}/เดือน · หนี้↑ ${fmtM(-netB)}/เดือน · ${debtDirNote(false)}`
     :`จ่ายเท่ากับที่ก่อหนี้ใหม่ — เงินสด/หนี้คงที่ (อยู่ใน NI แล้ว ไม่นับซ้ำ)`;
   el.innerHTML=`จ่ายชำระรวม <b>${s.pay.toFixed(2)} ล.</b> · ก่อหนี้ใหม่รวม <b>${s.inc.toFixed(2)} ล.</b> → <b style="color:${col}">เร่งชำระสุทธิ ${s.net>0?'+':''}${s.net.toFixed(2)} ล./เดือน</b><br><span class="note">${eff}</span>`;
 }
@@ -1497,46 +1511,62 @@ function debtApply(){
 }
 function closeDebtPlan(){ const el=document.getElementById('debtPlanOverlay'); if(el) el.style.display='none'; }
 
-// ── D+3: ตั้งเป้า ACP รายกองทุน → เร่งเก็บลูกหนี้เป็นเงินสดครั้งเดียว (เฉพาะเงินสด/Cash Ratio) ──
-function acpFreedOf(r, target){ if(r.acp==null||r.acp<=0) return 0; return Math.max(0, r.ar*(r.acp-target)/r.acp); }
+// ── D+3: ตั้งเป้า "จำนวนเงิน" ที่จะเก็บลูกหนี้ได้รายกองทุน + "เดือนที่" จะได้รับเป็นเงินสด ──
+// (เปลี่ยนจากตั้งเป้า ACP วัน → ตั้งเป้าจำนวนเงินตรงๆ ตามที่ขอ — ACP ที่จะเหลือโชว์เป็นข้อมูลอ้างอิงเท่านั้น)
+function acpMonthOptions(sel){
+  const HORIZON=24, cur=SURV.acpMonth||1;
+  let opts='';
+  for(let k=1;k<=HORIZON;k++) opts+=`<option value="${k}"${k===cur?' selected':''}>เดือนที่ ${k} (${tLab(addMo(SURV.startT,k))})</option>`;
+  return opts;
+}
 function acpRowsHtml(){
   return SURV.recv.map((r,i)=>{
-    if(r.acp==null||r.acp<=0)
-      return `<div class="dp-row"><div class="dp-lab"><span class="nm">${r.name}</span><span class="ctx">ลูกหนี้ ${fmtM(r.ar)} · ไม่มีค่า ACP</span></div></div>`;
+    const maxM=Math.max(r.ar/1e6, 0.01), step=Math.max(maxM/100, 0.01);
+    const acpTxt = r.acp!=null ? ` · ACP ปัจจุบัน ${fmtR(r.acp)} วัน${r.note?' · '+r.note:''}` : '';
     return `<div class="dp-row">
-      <div class="dp-lab"><span class="nm" title="${r.name}">${r.name}</span><span class="ctx">ลูกหนี้ ${fmtM(r.ar)} · ACP ปัจจุบัน ${fmtR(r.acp)} วัน · ${r.note}</span></div>
-      <input type="range" class="acp-sl" min="0" max="${r.acp.toFixed(0)}" step="1" value="${r.acp.toFixed(0)}" data-i="${i}" oninput="acpSlide(this)">
-      <input type="number" class="acp-num" step="1" inputmode="numeric" value="${r.acp.toFixed(0)}" data-i="${i}" oninput="acpType(this)">
-      <span class="u">วัน</span>
-      <span id="acpFreed-${i}" style="min-width:92px;text-align:right;font-size:11px;color:var(--green);flex-shrink:0"></span></div>`;
+      <div class="dp-lab"><span class="nm" title="${r.name}">${r.name}</span><span class="ctx">ลูกหนี้คงเหลือ ${fmtM(r.ar)}${acpTxt}</span></div>
+      <input type="range" class="acp-sl" min="0" max="${maxM.toFixed(2)}" step="${step.toFixed(3)}" value="0" data-i="${i}" data-ar="${r.ar}" data-acp="${r.acp!=null?r.acp:''}" oninput="acpSlide(this)">
+      <input type="number" class="acp-num" step="0.01" inputmode="decimal" value="0" data-i="${i}" data-ar="${r.ar}" data-acp="${r.acp!=null?r.acp:''}" oninput="acpType(this)">
+      <span class="u">ล.</span>
+      <span id="acpDay-${i}" style="min-width:112px;text-align:right;font-size:11px;color:var(--mut);flex-shrink:0"></span></div>`;
   }).join('');
 }
-function acpSlide(sl){ sl.parentElement.querySelector('.acp-num').value=sl.value; acpRecalc(); }
-function acpType(num){ const sl=num.parentElement.querySelector('.acp-sl'); let v=parseInt(num.value); if(isNaN(v))v=0; sl.value=Math.min(Math.max(v,+sl.min),+sl.max); acpRecalc(); }
+function acpSlide(sl){ sl.parentElement.querySelector('.acp-num').value=(+sl.value).toFixed(2); acpRecalc(); }
+function acpType(num){
+  const sl=num.parentElement.querySelector('.acp-sl');
+  let v=parseFloat(num.value); if(isNaN(v)) v=0;
+  sl.value=Math.min(Math.max(v,+sl.min),+sl.max);
+  acpRecalc();
+}
 function acpTotal(){
   let tot=0;
   document.querySelectorAll('#acpPlanOverlay .acp-num').forEach(num=>{
-    const r=SURV.recv[+num.dataset.i], target=parseFloat(num.value)||0;
-    const f=acpFreedOf(r,target); tot+=f;
-    const el=document.getElementById('acpFreed-'+num.dataset.i);
-    if(el) el.textContent=f>0?'+ '+fmtM(f):'';
+    const v=(parseFloat(num.value)||0)*1e6; tot+=v;
+    const ar=+num.dataset.ar, acp=num.dataset.acp?parseFloat(num.dataset.acp):null;
+    const el=document.getElementById('acpDay-'+num.dataset.i);
+    if(el) el.textContent = (acp!=null&&ar>0) ? `→ ACP ≈ ${fmtR(Math.max(0,acp*(1-v/ar)))} วัน` : '';
   });
   return tot;
 }
 function acpRecalc(){
   const tot=acpTotal(), el=document.getElementById('acpTot');
-  el.innerHTML=`ปลดเป็นเงินสดครั้งเดียวรวม <b style="color:var(--green)">${fmtM(tot)}</b> <span class="note">— เพิ่มเงินสด+เงินฝากและ Cash Ratio (สินทรัพย์หมุนเวียนรวม/NWC/CR เท่าเดิม เพราะแค่เปลี่ยนลูกหนี้เป็นเงินสด)</span>`;
+  const monthSel=document.getElementById('acpMonthSel');
+  const month = monthSel ? +monthSel.value : (SURV.acpMonth||1);
+  el.innerHTML=`เก็บได้รวม <b style="color:var(--green)">${fmtM(tot)}</b> — เข้าเป็นเงินสดครั้งเดียวในเดือนที่ <b>${month}</b> (${tLab(addMo(SURV.startT,month))}) <span class="note">— เพิ่มเงินสด+เงินฝากและ Cash Ratio (สินทรัพย์หมุนเวียนรวม/QN/NWC เท่าเดิม เพราะแค่เปลี่ยนลูกหนี้เป็นเงินสด)</span>`;
 }
 function openAcpPlan(){
   if(!SURV||!SURV.recv||!SURV.recv.length){ alert('งวดนี้ไม่มีข้อมูลลูกหนี้ค้างรับ'); return; }
   let el=document.getElementById('acpPlanOverlay');
   if(!el){ el=document.createElement('div'); el.id='acpPlanOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
   el.innerHTML=`<div class="nip-modal" onclick="event.stopPropagation()">
-    <div class="nip-head"><h3>เร่งเก็บลูกหนี้ค้างรับ — ตั้งเป้า ACP รายกองทุน</h3>
-      <div class="note">เลื่อน<b>เป้าจำนวนวันเก็บ (ACP)</b> ให้ต่ำลง → เงินสดที่ปลดออกมา ≈ ลูกหนี้ × (ACP ปัจจุบัน − เป้า) ÷ ACP ปัจจุบัน · เป็นเงินก้อน<b>ครั้งเดียว</b>ที่เปลี่ยนลูกหนี้เป็นเงินสด (ช่วยสภาพคล่อง/ระยะอยู่รอด แต่ CA รวมและ NWC ไม่เปลี่ยน)</div></div>
+    <div class="nip-head"><h3>เร่งเก็บลูกหนี้ค้างรับ — ตั้งเป้าจำนวนเงิน + เดือนที่จะได้รับ</h3>
+      <div class="note">ใส่<b>จำนวนเงินที่คาดว่าจะเก็บได้เร็วขึ้น</b>ต่อกองทุน (ล้านบาท) แล้วเลือก<b>เดือนที่คาดว่าจะได้รับเป็นเงินสด</b> — เป็นเงินก้อน<b>ครั้งเดียว</b>ที่เปลี่ยนลูกหนี้เป็นเงินสด ณ เดือนนั้น (ก่อนหน้านั้นยังไม่มีผล) ช่วยสภาพคล่อง/ระยะอยู่รอด แต่สินทรัพย์หมุนเวียนรวม/NWC ไม่เปลี่ยน</div>
+      <div class="fld" style="margin-top:8px"><label style="font-size:12.5px;color:var(--mut)">จะได้รับเงินภายในเดือนที่</label>
+        <select id="acpMonthSel" onchange="acpRecalc()" style="font-family:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)">${acpMonthOptions()}</select></div>
+    </div>
     <div class="nip-body" style="grid-template-columns:1fr">${acpRowsHtml()}</div>
     <div class="nip-foot"><div id="acpTot" class="dp-net"></div>
-      <div class="nip-btns"><button type="button" onclick="acpReset()">↺ คืนค่าเดิม (ไม่เร่ง)</button>
+      <div class="nip-btns"><button type="button" onclick="acpReset()">↺ ล้างเป็น 0</button>
         <button type="button" onclick="closeAcpPlan()">ปิด</button>
         <button type="button" class="primary" onclick="acpApply()">✓ ใช้ค่านี้กับกราฟ</button></div></div>
   </div>`;
@@ -1544,16 +1574,17 @@ function openAcpPlan(){
 }
 function acpReset(){
   document.querySelectorAll('#acpPlanOverlay .acp-num').forEach(num=>{
-    const r=SURV.recv[+num.dataset.i]; if(r.acp==null) return;
-    num.value=r.acp.toFixed(0); const sl=num.parentElement.querySelector('.acp-sl'); if(sl) sl.value=r.acp.toFixed(0);
+    num.value='0.00'; const sl=num.parentElement.querySelector('.acp-sl'); if(sl) sl.value=0;
   });
   acpRecalc();
 }
 function acpApply(){
-  let f=Math.round(acpTotal()/50000)*50000;
-  f=Math.max(0,Math.min(Math.round(SURV.totalAR/50000)*50000, f));
-  SURV.acpFreed=f;
-  const sl=document.getElementById('svAcp'); if(sl) sl.value=f;
+  let amt=Math.round(acpTotal()/50000)*50000;
+  amt=Math.max(0,Math.min(Math.round(SURV.totalAR/50000)*50000, amt));
+  const monthSel=document.getElementById('acpMonthSel');
+  const month = monthSel ? +monthSel.value : 1;
+  SURV.acpFreed=amt; SURV.acpMonth=amt>0?month:(SURV.acpMonth||1);
+  const sl=document.getElementById('svAcp'); if(sl) sl.value=amt;
   projSurv(); closeAcpPlan();
 }
 function closeAcpPlan(){ const el=document.getElementById('acpPlanOverlay'); if(el) el.style.display='none'; }
