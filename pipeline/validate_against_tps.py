@@ -5,10 +5,14 @@ validate_against_tps.py — เทียบ CR/QR/Cash/ACP(UC/CSMBS/SSS)/InvDays
 (export_risk_link.py) ใกล้เคียงกับแหล่งอ้างอิงอิสระแค่ไหน — ไม่ใช่แหล่งข้อมูลหลัก
 (TPS อัพเดตรายไตรมาส รอไม่ได้สำหรับ dashboard รายเดือน) ใช้เป็นเครื่องมือ QA เท่านั้น
 
-วิธีใช้:
-  1. ดาวน์โหลด/อัพเดต TPS export ใหม่ทับไฟล์เดิมที่ TPS_PATH (หรือแก้ path ด้วย --tps <path>)
+วิธีใช้ (อัพโหลด/รีเฟรชข้อมูล TPS ใหม่):
+  1. เมื่อได้ TPS export ใหม่ (จาก rh1-tps-v-3-1.vercel.app หรือทีม TPS) เอาไฟล์
+     financial_ratios.json (และ hospitals.json/periods.json ถ้ามี) มาวางทับที่
+     docs/data/tps_ref/ ในโปรเจกต์นี้ได้เลย (ไม่ต้อง filter เขต 1 ก่อนก็ได้ — สคริปต์
+     จะกรองเฉพาะ รพ. ที่มีอยู่ใน docs/data/risk/h/ ให้เองอัตโนมัติ)
   2. รันสคริปต์นี้หลัง export_risk_link.py ทุกครั้งที่แก้สูตร 7 Plus Efficiency Score
-     หรือเมื่อได้ไฟล์ TPS export ใหม่ — ไม่ต้องรอ/พึ่ง TPS เป็น dependency ของ pipeline หลัก
+     หรือเมื่อวางไฟล์ TPS export ใหม่ — ไม่ต้องรอ/พึ่ง TPS เป็น dependency ของ pipeline หลัก
+     (TPS อัพเดตรายไตรมาส รอไม่ได้สำหรับ dashboard รายเดือน)
   3. อ่านผลสรุป median/mean/ratio ต่อกองทุน + รายชื่อ รพ. ที่ต่างเกินเกณฑ์ (|ratio-1|>0.5) ไปตรวจมือ
 
 output: พิมพ์สรุปออก stdout เท่านั้น ไม่เขียนไฟล์ (เป็นเครื่องมือ diagnostic ไม่ใช่ pipeline step)
@@ -22,7 +26,7 @@ import statistics
 
 REPO = r"D:\Github\Rh1-BalanceSheet"
 H_DIR = os.path.join(REPO, "docs", "data", "risk", "h")
-TPS_PATH_DEFAULT = r"D:\Github\Rh1-TPS-V.3.1\public\data\financial_ratios.json"
+TPS_PATH_DEFAULT = os.path.join(REPO, "docs", "data", "tps_ref", "financial_ratios.json")
 
 FUNDS = [
     ("acpUc", "ratio_acp_uc", "ACP UC (บัตรทอง)"),
