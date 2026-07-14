@@ -145,6 +145,8 @@ details.refpanel summary::-webkit-details-marker{display:none}
 details.refpanel summary::before{content:'▶ ';font-size:11px}
 details.refpanel[open] summary::before{content:'▼ '}
 .refbody{padding:0 16px 16px}
+.wl-panel summary{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.wl-panel summary .meta{font-weight:400}
 .pillar-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
 @media(max-width:720px){.pillar-grid{grid-template-columns:1fr}}
 .pillar-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -569,28 +571,29 @@ function renderWatchlist(){
   const rows=SUMMARY.hospitals.filter(h=>(h.risk||0)>=6).sort((a,b)=>(b.risk||0)-(a.risk||0));
   document.getElementById('right').innerHTML=`
   <div class="dwrap" style="max-width:1200px">
-    <div class="dhead">
-      <h2>🚨 Watchlist — โรงพยาบาลวิกฤต 6-7 คะแนน</h2>
-      <span class="meta">งวด ${SUMMARY.periodLabel} ${SUMMARY.period} · ${rows.length} แห่ง จาก ${SUMMARY.nHosp}</span>
-    </div>
-    <div class="note">คลิกแถวเพื่อดูรายละเอียดสาเหตุเต็มรูปแบบ (เทรนด์/waterfall/บัญชี GL) ของ รพ.นั้น</div>
-    <div class="panel">
-      <div class="acctbl-wrap" style="max-height:none">
-        <table class="wltbl">
-          <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>Risk</th><th>Cash<br>ratio</th><th>เงินบำรุง<br>สุทธิ</th><th>สาเหตุ/ประเด็นชี้ปัญหา</th><th>คำแนะนำเฉพาะ รพ.</th></tr>
-          ${rows.map(h=>`<tr class="click" onclick="location.hash='h/${h.hcode}'">
-            <td>${h.prov||''}</td>
-            <td><b>${h.name}</b><div class="note">${h.typeSer||''}${h.bed?' · '+h.bed+' เตียง':''}${h.grp?' · '+h.grp:''}</div></td>
-            <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk}</span></td>
-            <td>${fmtR(h.cash)}</td>
-            <td style="color:${h.reserve<0?'var(--red)':'var(--ink)'}">${fmtM(h.reserve)}</td>
-            <td><ul class="bullets">${causeBullets(h).map(b=>`<li>${b}</li>`).join('')}</ul></td>
-            <td><ul class="bullets">${recommendFor(h).map(r=>`<li>${r}</li>`).join('')}</ul></td>
-          </tr>`).join('')}
-        </table>
+    <details class="refpanel wl-panel" open>
+      <summary>🚨 Watchlist — โรงพยาบาลวิกฤต 6-7 คะแนน <span class="meta">งวด ${SUMMARY.periodLabel} ${SUMMARY.period} · ${rows.length} แห่ง จาก ${SUMMARY.nHosp}</span></summary>
+      <div class="refbody">
+        <div class="note">คลิกแถวเพื่อดูรายละเอียดสาเหตุเต็มรูปแบบ (เทรนด์/waterfall/บัญชี GL) ของ รพ.นั้น</div>
+        <div class="panel">
+          <div class="acctbl-wrap" style="max-height:none">
+            <table class="wltbl">
+              <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>Risk</th><th>Cash<br>ratio</th><th>เงินบำรุง<br>สุทธิ</th><th>สาเหตุ/ประเด็นชี้ปัญหา</th><th>คำแนะนำเฉพาะ รพ.</th></tr>
+              ${rows.map(h=>`<tr class="click" onclick="location.hash='h/${h.hcode}'">
+                <td>${h.prov||''}</td>
+                <td><b>${h.name}</b><div class="note">${h.typeSer||''}${h.bed?' · '+h.bed+' เตียง':''}${h.grp?' · '+h.grp:''}</div></td>
+                <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk}</span></td>
+                <td>${fmtR(h.cash)}</td>
+                <td style="color:${h.reserve<0?'var(--red)':'var(--ink)'}">${fmtM(h.reserve)}</td>
+                <td><ul class="bullets">${causeBullets(h).map(b=>`<li>${b}</li>`).join('')}</ul></td>
+                <td><ul class="bullets">${recommendFor(h).map(r=>`<li>${r}</li>`).join('')}</ul></td>
+              </tr>`).join('')}
+            </table>
+          </div>
+          ${!rows.length?'<div class="note" style="padding:10px">ไม่มี รพ. ที่ Risk Score ≥ 6 ในงวดนี้ 🎉</div>':''}
+        </div>
       </div>
-      ${!rows.length?'<div class="note" style="padding:10px">ไม่มี รพ. ที่ Risk Score ≥ 6 ในงวดนี้ 🎉</div>':''}
-    </div>
+    </details>
     ${survOverviewHtml(rows)}
     ${refPanelHtml()}
   </div>`;
