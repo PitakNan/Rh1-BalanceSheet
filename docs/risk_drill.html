@@ -832,8 +832,9 @@ function exKey(p,seg){ return p+'|'+seg; }
 function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
 function exDefaultState(){
   // moe: ติ๊กรายกลุ่มนิยามกองเศรษฐฯ (default จ่ายครบ) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
+  // adjAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
   return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, ext:0, tgt:6,
-          moe:{}, xmoe:true, adj:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}};
+          moe:{}, xmoe:true, adj:{}, adjAll:0, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exLoad(){
@@ -998,10 +999,15 @@ function exSetAdj(k,v){
   exSave(); exRender();
 }
 function exSetAll(v){
+  v=Math.max(-100,Math.min(200,Math.round((+v||0)/5)*5));
+  EXST.adjAll=v;
   EXROWS_SEGS.forEach(({p,g})=>{ EXST.adj[exKey(p,g)]=v; });
   EXST.ovr={};
   exSave(); exRender();
 }
+function exBumpAll(d){ exSetAll((EXST.adjAll||0)+d); }
+// จำสถานะยุบ/กางของเมนู (ontoggle ยิงตอน render ด้วย — เซฟเฉพาะเมื่อเปลี่ยนจริง ไม่ rerender)
+function exKeepOpen(k,open){ if(!EXST.open) EXST.open={}; if(EXST.open[k]===open) return; EXST.open[k]=open; exSave(); }
 function exSetOvr(hc,k,v){ if(!EXST.ovr[hc]) EXST.ovr[hc]={}; EXST.ovr[hc][k]=v; exSave(); exRender(); }
 function exResetOvr(hc){ delete EXST.ovr[hc]; delete EXST.inj[hc]; exSave(); exRender(); }
 function exSetTj(k,v){ EXST.tj[k]=v; exSave(); exRender(); }
@@ -1043,31 +1049,45 @@ function exRender(){
   EXROWS_SEGS=[];
   for(const p of EX.revOrder) for(const g of ['op','ip','pp','oth']){ if(revAgg[exKey(p,g)]) EXROWS_SEGS.push({p,g}); }
   const revTot=rows.reduce((s,h)=>s+exRevMo(h),0);
+  const allv=EXST.adjAll!=null?EXST.adjAll:0;
+  const nAdj=EXROWS_SEGS.filter(({p,g})=>(EXST.adj[exKey(p,g)]||0)!==0).length;
+  const nOvr=Object.values(EXST.ovr||{}).reduce((s,o)=>s+Object.keys(o||{}).length,0);
   document.getElementById('exRevBox').innerHTML=`
     <h3 style="margin:0 0 6px">📈 ประมาณการรายรับกองทุน ${left} เดือนที่เหลือ (${tLab(addMo(EX.period,1))}–${sepLab})</h3>
-    <div class="note">ยอดสะสมจริง ${mo} เดือน (รวมส่วนต่ำ/ส่วนสูงแล้ว) → ค่าเฉลี่ย/เดือน → เลื่อน % ว่าช่วงที่เหลือจะเข้ากี่ % ของค่าเฉลี่ย (−100% = ไม่เข้าเลย · 0% = เท่าค่าเฉลี่ย · +200% = สามเท่า) — ส่วนใหญ่ควรค่อนไปทางลบ เพราะเงินเหมาจ่ายรายหัว/จ่ายล่วงหน้าเข้าเป็นก้อนต้นปีแล้ว · <b>เลื่อนกลุ่มเมื่อไหร่ ค่าราย รพ. ที่เคยปรับ manual จะถูกบังคับตาม</b></div>
-    <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับทุกกองทุนพร้อมกัน: <b id="exAllLab">—</b></label>
-      <input type="range" min="-100" max="200" step="5" value="0" style="max-width:520px;accent-color:var(--blue)"
-        oninput="document.getElementById('exAllLab').textContent=(this.value>0?'+':'')+this.value+'%'"
-        onchange="exSetAll(+this.value)"></div>
-    <div class="acctbl-wrap extbl" style="max-height:420px">
-      <table class="wltbl">
-        <tr><th>กองทุน</th><th>ประเภท</th><th>สะสม ${mo} เดือน</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
-        ${EXROWS_SEGS.map(({p,g})=>{
-          const k=exKey(p,g), tot=revAgg[k], av=tot/mo, pc=EXST.adj[k]!=null?EXST.adj[k]:0;
-          return `<tr>
-            <td><b>${p}</b> ${(EX.pn[p]||'').replace('รายได้','')}</td>
-            <td><span class="exchip ${g}">${EX_SEGL[g]}</span></td>
-            <td>${fmtM(tot)}</td><td>${fmtM(av)}</td>
-            <td><input type="range" min="-100" max="200" step="5" value="${pc}"
-              oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(${av}*(1+this.value/100))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
-              onchange="exSetAdj('${k}',+this.value)"></td>
-            <td><b>${fmtM(av*(1+pc/100))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span></td>
-          </tr>`;}).join('')}
-      </table>
-    </div>
-    <div class="tgt-row">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> − MOE <b>${fmtM(moeTot)}</b>${exXmoeOn()?` − นอกนิยาม <b>${fmtM(xmoeTot)}</b>`:''} → กระแสเงินสดสุทธิ <b style="color:${revTot-moeTot-(exXmoeOn()?xmoeTot:0)<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot-(exXmoeOn()?xmoeTot:0))}/เดือน</b></div>
-    <div class="note" style="margin-top:4px"><b>ที่มา:</b> รายได้บัญชีชุด 3006Y จากงบทดลอง จัดกลุ่มรหัส P ตามผัง Planfin (export_planfin.py) — บัญชีส่วนต่างสูง/ต่ำกว่าข้อตกลง (ส่วนต่ำ/ส่วนสูง) ถูกรวมในกองทุนต้นทางแล้ว · การแยก OP/IP/P&P ตีความจากชื่อบัญชี (⚠️ ร่างเอง รอ CFO ยืนยัน) · แถว "อื่น/รวม" = บัญชีที่ชื่อไม่ระบุ OP/IP เช่น เหมาจ่ายรายหัว งบบุคลากร</div>`;
+    <div class="tgt-row" style="border-top:none;padding-top:0">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> − MOE <b>${fmtM(moeTot)}</b>${exXmoeOn()?` − นอกนิยาม <b>${fmtM(xmoeTot)}</b>`:''} → กระแสเงินสดสุทธิ <b style="color:${revTot-moeTot-(exXmoeOn()?xmoeTot:0)<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot-(exXmoeOn()?xmoeTot:0))}/เดือน</b>${nAdj||nOvr?` <span class="tgt-note">· ปรับแล้ว ${nAdj} แถว${nOvr?` + ราย รพ. ${nOvr} จุด`:''}</span>`:''}</div>
+    <details ${EXST.open&&EXST.open.rev?'open':''} ontoggle="exKeepOpen('rev',this.open)">
+      <summary style="cursor:pointer;font-size:12.5px;font-weight:700;padding:6px 0">⚙️ เปิดปรับ % รายรับจากค่าเฉลี่ย (ทั้งกลุ่ม / รายกองทุน)</summary>
+      <div class="note">ยอดสะสมจริง ${mo} เดือน (รวมส่วนต่ำ/ส่วนสูงแล้ว) → ค่าเฉลี่ย/เดือน → ตั้ง % ว่าช่วงที่เหลือจะเข้ากี่ % เทียบค่าเฉลี่ย (−100% = ไม่เข้าเลย · 0% = เท่าค่าเฉลี่ย · +200% = สามเท่า) — ส่วนใหญ่ควรค่อนไปทางลบ เพราะเงินเหมาจ่ายรายหัว/จ่ายล่วงหน้าเข้าเป็นก้อนต้นปีแล้ว · <b>ปรับทั้งกลุ่มเมื่อไหร่ ค่าราย รพ. ที่เคยปรับ manual จะถูกบังคับตาม</b></div>
+      <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับทุกกองทุนพร้อมกัน: <b id="exAllLab">${(allv>0?'+':'')+allv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด)</span></label>
+        <div class="exctl" style="gap:6px;flex-wrap:wrap">
+          <button type="button" class="ovbulkbtn" onclick="exBumpAll(-10)">−10</button>
+          <button type="button" class="ovbulkbtn" onclick="exBumpAll(-5)">−5</button>
+          <input type="range" min="-100" max="200" step="5" value="${allv}" style="flex:1;min-width:140px;max-width:380px;accent-color:var(--blue)"
+            oninput="document.getElementById('exAllLab').textContent=(+this.value>0?'+':'')+this.value+'%'"
+            onchange="exSetAll(+this.value)">
+          <button type="button" class="ovbulkbtn" onclick="exBumpAll(5)">+5</button>
+          <button type="button" class="ovbulkbtn" onclick="exBumpAll(10)">+10</button>
+          <span><input type="number" class="exnum" style="width:72px" step="5" min="-100" max="200" value="${allv}" onchange="exSetAll(this.value)"> %</span>
+          <button type="button" class="ovbulkbtn" onclick="exSetAll(0)">↺ กลับ 0%</button>
+        </div></div>
+      <div class="acctbl-wrap extbl" style="max-height:420px">
+        <table class="wltbl">
+          <tr><th>กองทุน</th><th>ประเภท</th><th>สะสม ${mo} เดือน</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
+          ${EXROWS_SEGS.map(({p,g})=>{
+            const k=exKey(p,g), tot=revAgg[k], av=tot/mo, pc=EXST.adj[k]!=null?EXST.adj[k]:0;
+            return `<tr>
+              <td><b>${p}</b> ${(EX.pn[p]||'').replace('รายได้','')}</td>
+              <td><span class="exchip ${g}">${EX_SEGL[g]}</span></td>
+              <td>${fmtM(tot)}</td><td>${fmtM(av)}</td>
+              <td><input type="range" min="-100" max="200" step="5" value="${pc}"
+                oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(${av}*(1+this.value/100))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
+                onchange="exSetAdj('${k}',+this.value)"></td>
+              <td><b>${fmtM(av*(1+pc/100))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span></td>
+            </tr>`;}).join('')}
+        </table>
+      </div>
+      <div class="note" style="margin-top:4px"><b>ที่มา:</b> รายได้บัญชีชุด 3006Y จากงบทดลอง จัดกลุ่มรหัส P ตามผัง Planfin (export_planfin.py) — บัญชีส่วนต่างสูง/ต่ำกว่าข้อตกลง (ส่วนต่ำ/ส่วนสูง) ถูกรวมในกองทุนต้นทางแล้ว · การแยก OP/IP/P&P ตีความจากชื่อบัญชี (⚠️ ร่างเอง รอ CFO ยืนยัน) · แถว "อื่น/รวม" = บัญชีที่ชื่อไม่ระบุ OP/IP เช่น เหมาจ่ายรายหัว งบบุคลากร</div>
+    </details>`;
   // ── ตามจ่าย panel ──
   const creds=EX.hosp.filter(h=>EXTJ.shares[h.hcode]>0);
   document.getElementById('exTjBox').innerHTML=`
