@@ -1158,7 +1158,7 @@ function exRender(){
   }).join('');
   EX_TSV=exBuildTSV(items, horLab);
   document.getElementById('exResBox').innerHTML=`
-    <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})</h3>
+    <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
     <div class="acctbl-wrap" style="max-height:none">
       <table class="wltbl">
         <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ตอนนี้</th><th>MOE<br>/เดือน</th><th>NI จำลอง<br>/เดือน</th><th>เงินสด<br>จะหมด?</th><th>ระดับ ${sepLab}<br>ก่อนช่วย</th><th>เงินสนับสนุน<br>ที่ต้องใช้</th><th>ระดับ<br>หลังช่วย</th><th></th></tr>
@@ -1166,7 +1166,7 @@ function exRender(){
       </table>
     </div>
     <div class="tgt-card" style="margin-top:10px">
-      <h4 style="margin:0">💰 สรุประดับเขต — เงินสนับสนุนรวมที่ต้องใช้: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></h4>
+      <h4 style="margin:0">📋 สรุประดับเขต</h4>
       <div class="tgt-row">ช่วย ${nHelp} แห่ง จาก ${rows.length} แห่งที่เลือก${nFail?` · <span class="tgt-warn">⚠️ ${nFail} แห่งเงินก้อนอย่างเดียวไม่ถึงเป้า (ต้องแก้ NI/รายรับร่วมด้วย)</span>`:''}${Object.keys(byProv).length?` · <span class="tgt-note">${Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')}</span>`:''}</div>
       <div class="tgt-row">ระดับวิกฤต ณ ${sepLab}: ก่อนช่วย <span class="exhist">${hist(x=>x.r0.sepRisk)}</span> → หลังช่วย <span class="exhist">${hist(x=>x.r1.sepRisk)}</span></div>
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
