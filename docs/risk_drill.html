@@ -1055,21 +1055,21 @@ function exRender(){
   document.getElementById('exRevBox').innerHTML=`
     <h3 style="margin:0 0 6px">📈 ประมาณการรายรับกองทุน ${left} เดือนที่เหลือ (${tLab(addMo(EX.period,1))}–${sepLab})</h3>
     <div class="tgt-row" style="border-top:none;padding-top:0">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> − MOE <b>${fmtM(moeTot)}</b>${exXmoeOn()?` − นอกนิยาม <b>${fmtM(xmoeTot)}</b>`:''} → กระแสเงินสดสุทธิ <b style="color:${revTot-moeTot-(exXmoeOn()?xmoeTot:0)<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot-(exXmoeOn()?xmoeTot:0))}/เดือน</b>${nAdj||nOvr?` <span class="tgt-note">· ปรับแล้ว ${nAdj} แถว${nOvr?` + ราย รพ. ${nOvr} จุด`:''}</span>`:''}</div>
+    <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับทุกกองทุนพร้อมกัน: <b id="exAllLab">${(allv>0?'+':'')+allv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด — ${left} เดือนที่เหลือเทียบค่าเฉลี่ย)</span></label>
+      <div class="exctl" style="gap:6px;flex-wrap:wrap">
+        <button type="button" class="ovbulkbtn" onclick="exBumpAll(-10)">−10</button>
+        <button type="button" class="ovbulkbtn" onclick="exBumpAll(-5)">−5</button>
+        <input type="range" min="-100" max="200" step="5" value="${allv}" style="flex:1;min-width:140px;max-width:380px;accent-color:var(--blue)"
+          oninput="document.getElementById('exAllLab').textContent=(+this.value>0?'+':'')+this.value+'%'"
+          onchange="exSetAll(+this.value)">
+        <button type="button" class="ovbulkbtn" onclick="exBumpAll(5)">+5</button>
+        <button type="button" class="ovbulkbtn" onclick="exBumpAll(10)">+10</button>
+        <span><input type="number" class="exnum" style="width:72px" step="5" min="-100" max="200" value="${allv}" onchange="exSetAll(this.value)"> %</span>
+        <button type="button" class="ovbulkbtn" onclick="exSetAll(0)">↺ กลับ 0%</button>
+      </div></div>
     <details ${EXST.open&&EXST.open.rev?'open':''} ontoggle="exKeepOpen('rev',this.open)">
-      <summary style="cursor:pointer;font-size:12.5px;font-weight:700;padding:6px 0">⚙️ เปิดปรับ % รายรับจากค่าเฉลี่ย (ทั้งกลุ่ม / รายกองทุน)</summary>
-      <div class="note">ยอดสะสมจริง ${mo} เดือน (รวมส่วนต่ำ/ส่วนสูงแล้ว) → ค่าเฉลี่ย/เดือน → ตั้ง % ว่าช่วงที่เหลือจะเข้ากี่ % เทียบค่าเฉลี่ย (−100% = ไม่เข้าเลย · 0% = เท่าค่าเฉลี่ย · +200% = สามเท่า) — ส่วนใหญ่ควรค่อนไปทางลบ เพราะเงินเหมาจ่ายรายหัว/จ่ายล่วงหน้าเข้าเป็นก้อนต้นปีแล้ว · <b>ปรับทั้งกลุ่มเมื่อไหร่ ค่าราย รพ. ที่เคยปรับ manual จะถูกบังคับตาม</b></div>
-      <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับทุกกองทุนพร้อมกัน: <b id="exAllLab">${(allv>0?'+':'')+allv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด)</span></label>
-        <div class="exctl" style="gap:6px;flex-wrap:wrap">
-          <button type="button" class="ovbulkbtn" onclick="exBumpAll(-10)">−10</button>
-          <button type="button" class="ovbulkbtn" onclick="exBumpAll(-5)">−5</button>
-          <input type="range" min="-100" max="200" step="5" value="${allv}" style="flex:1;min-width:140px;max-width:380px;accent-color:var(--blue)"
-            oninput="document.getElementById('exAllLab').textContent=(+this.value>0?'+':'')+this.value+'%'"
-            onchange="exSetAll(+this.value)">
-          <button type="button" class="ovbulkbtn" onclick="exBumpAll(5)">+5</button>
-          <button type="button" class="ovbulkbtn" onclick="exBumpAll(10)">+10</button>
-          <span><input type="number" class="exnum" style="width:72px" step="5" min="-100" max="200" value="${allv}" onchange="exSetAll(this.value)"> %</span>
-          <button type="button" class="ovbulkbtn" onclick="exSetAll(0)">↺ กลับ 0%</button>
-        </div></div>
+      <summary style="cursor:pointer;font-size:12.5px;font-weight:700;padding:6px 0">⚙️ เปิดตารางปรับรายกองทุน (OP/IP/P&P แยกจากกัน)</summary>
+      <div class="note">ยอดสะสมจริง ${mo} เดือน (รวมส่วนต่ำ/ส่วนสูงแล้ว) → ค่าเฉลี่ย/เดือน → ตั้ง % ว่าช่วงที่เหลือจะเข้ากี่ % เทียบค่าเฉลี่ย (−100% = ไม่เข้าเลย · 0% = เท่าค่าเฉลี่ย · +200% = สามเท่า) — ส่วนใหญ่ควรค่อนไปทางลบ เพราะเงินเหมาจ่ายรายหัว/จ่ายล่วงหน้าเข้าเป็นก้อนต้นปีแล้ว · <b>ปรับทั้งกลุ่มด้านบนเมื่อไหร่ ค่าราย รพ. ที่เคยปรับ manual จะถูกบังคับตาม</b></div>
       <div class="acctbl-wrap extbl" style="max-height:420px">
         <table class="wltbl">
           <tr><th>กองทุน</th><th>ประเภท</th><th>สะสม ${mo} เดือน</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
