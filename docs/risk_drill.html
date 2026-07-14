@@ -831,15 +831,15 @@ const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
 function exKey(p,seg){ return p+'|'+seg; }
 function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
 function exDefaultState(){
-  // moe: ติ๊กรายกลุ่มนิยามกองเศรษฐฯ (default จ่ายครบ) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
-  // adjAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
+  // moePct: % ปรับรายกลุ่ม MOE จากค่าเฉลี่ย (default 0% = ตาม run-rate) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
+  // adjAll/moePctAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
   return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, ext:0, tgt:6,
-          moe:{}, xmoe:true, adj:{}, adjAll:0, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false}};
+          moePct:{}, moePctAll:0, xmoe:true, adj:{}, adjAll:0, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exLoad(){
   EXST=exDefaultState();
-  try{ const s=JSON.parse(localStorage.getItem(exStoreKey())||'null'); if(s) EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})}}; }catch(e){}
+  try{ const s=JSON.parse(localStorage.getItem(exStoreKey())||'null'); if(s) EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})}}; }catch(e){}
 }
 // % ปรับรายรับ (จำนวนเต็ม −100..+200): override ราย รพ. > ค่ากลุ่ม > 0
 function exPct(hc,p,seg){
@@ -851,7 +851,8 @@ function exPct(hc,p,seg){
 // P24/P241/EADJ = non-cash bundle (ตรง exp−e33y ของสูตรทางการ) — หักใน NI อัตโนมัติผ่าน depMo
 const EX_NONCASH={P24:1,P241:1,EADJ:1};
 // MOE ทางการ: กลุ่มบัญชี 59 ตัวตามนิยามกองเศรษฐกิจสุขภาพ (EX.moeGroups จาก export_exec.py)
-function exMoeOn(g){ return EXST.moe[g]!==false; }
+// % ปรับต่อกลุ่ม (−100% = งดจ่ายทั้งหมด · 0% = ตาม run-rate ค่าเฉลี่ยจริง · +100% = จ่ายเพิ่มเป็นสองเท่า)
+function exMoePct(g){ return EXST.moePct[g]!=null?EXST.moePct[g]:0; }
 function exXmoeOn(){ return EXST.xmoe!==false; }   // ค่าใช้จ่ายนอกนิยาม MOE (run-rate)
 // รพ. ที่แสดงตามฟิลเตอร์
 function exRows(){
@@ -886,8 +887,8 @@ function exRevMo(h){
 }
 function exMoeMo(h){
   const mo=h.bs.mo; let s=0;
-  for(const g of EX.moeGroups){ if(!exMoeOn(g.id)) continue; s+=(h.moe[g.id]||0)/mo; }
-  return s;
+  for(const g of EX.moeGroups){ const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePct(g.id)/100); }
+  return Math.max(0,s);
 }
 // ค่าใช้จ่ายเงินสดนอกนิยาม MOE = คชจ.รวม − MOE ทางการ − non-cash (เงินเดือน ขรก./ค่าตอบแทนอื่น/ตามจ่าย/ค่าใช้สอยอื่น ฯลฯ)
 function exXmoeMo(h){
@@ -976,9 +977,10 @@ async function renderExec(){
             <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${sepLab} (สิ้นปีงบ)</option>
             ${[3,6,12].map(x=>`<option value="${x}" ${+EXST.ext===x?'selected':''}>+${x} เดือน (${tLab(addMo(exSepT(),x))})</option>`).join('')}
           </select></label>
-        <label>เป้าระดับวิกฤตไม่เกิน:
-          <select onchange="exSet('tgt',+this.value)">${[0,1,2,3,4,5,6].map(L=>`<option value="${L}" ${EXST.tgt===L?'selected':''}>${L}</option>`).join('')}</select></label>
       </div>
+      <div class="tgt-title" style="margin-top:12px">🎯 ตั้งเป้าระดับวิกฤตไม่เกิน ภายใน <b id="exHorLab3">${exHorLab()}</b> (ใช้กับ <span id="exTgtCount">${exRows().length}</span> แห่งที่เลือก) — กดเลขระดับที่ต้องการ</div>
+      <div class="tgt-legend">เลข 0-6 = ต้องทำกำไร/เติมเงินก้อนเท่าไหร่ถึงจะลดลงถึงเป้าภายในกำหนด · เลข 7 = ไม่จำกัดระดับวิกฤต (7 คือระดับสูงสุดอยู่แล้ว) ดูเฉพาะเงินสนับสนุนขั้นต่ำกันเงินสดหมดเท่านั้น</div>
+      <div class="lvlbtns" id="exLvlBtns">${[0,1,2,3,4,5,6,7].map(L=>`<button type="button" class="lvlbtn${EXST.tgt===L?' on':''}" data-l="${L}" style="background:${riskColor(L)}" onclick="exSet('tgt',${L})">${L}</button>`).join('')}</div>
     </div>
     <div class="panel" style="margin-top:14px" id="exMoeBox"></div>
     <div class="panel" style="margin-top:14px" id="exRevBox"></div>
@@ -988,13 +990,27 @@ async function renderExec(){
   </div>`;
   exRender();
 }
-function exSet(k,v){ EXST[k]=v; if(k==='crisis'){document.getElementById('exC67').classList.toggle('on',v==='67');document.getElementById('exCall').classList.toggle('on',v==='all');} exSave(); exRender(); const el=document.getElementById('exHorLab2'); if(el) el.textContent=exHorLab(); }
+function exSet(k,v){
+  EXST[k]=v;
+  if(k==='crisis'){document.getElementById('exC67').classList.toggle('on',v==='67');document.getElementById('exCall').classList.toggle('on',v==='all');}
+  if(k==='tgt'){document.querySelectorAll('#exLvlBtns .lvlbtn').forEach(b=>b.classList.toggle('on', +b.dataset.l===v));}
+  exSave(); exRender();
+  const el=document.getElementById('exHorLab2'); if(el) el.textContent=exHorLab();
+  const el3=document.getElementById('exHorLab3'); if(el3) el3.textContent=exHorLab();
+}
 function exSetType(t,on){ EXST.types[t]=on; exSave(); exRender(); }
-function exSetMoe(g,on){ EXST.moe[g]=on; exSave(); exRender(); }
+function exSetMoePct(g,v){ v=Math.max(-100,Math.min(100,Math.round((+v||0)/5)*5)); EXST.moePct[g]=v; exSave(); exRender(); }
+function exSetMoeAll(v){
+  v=Math.max(-100,Math.min(100,Math.round((+v||0)/5)*5));
+  EXST.moePctAll=v;
+  EX.moeGroups.forEach(g=>{ EXST.moePct[g.id]=v; });
+  exSave(); exRender();
+}
+function exBumpMoeAll(d){ exSetMoeAll((EXST.moePctAll||0)+d); }
 function exSetXmoe(on){ EXST.xmoe=on; exSave(); exRender(); }
 // สไลด์กลุ่ม: บังคับทับ override รายแห่งของ key นั้นทุก รพ. (ตามกติกา "ปรับทั้งกลุ่ม ค่าต้องเปลี่ยนตาม")
 function exSetAdj(k,v){
-  EXST.adj[k]=v;
+  EXST.adj[k]=Math.max(-100,Math.min(200,Math.round((+v||0)/5)*5));
   for(const hc in EXST.ovr){ if(EXST.ovr[hc] && EXST.ovr[hc][k]!=null) delete EXST.ovr[hc][k]; }
   exSave(); exRender();
 }
@@ -1006,9 +1022,12 @@ function exSetAll(v){
   exSave(); exRender();
 }
 function exBumpAll(d){ exSetAll((EXST.adjAll||0)+d); }
+function exBumpAdj(k,d){ exSetAdj(k,(EXST.adj[k]!=null?EXST.adj[k]:0)+d); }
+function exBumpMoePct(g,d){ exSetMoePct(g,exMoePct(g)+d); }
 // จำสถานะยุบ/กางของเมนู (ontoggle ยิงตอน render ด้วย — เซฟเฉพาะเมื่อเปลี่ยนจริง ไม่ rerender)
 function exKeepOpen(k,open){ if(!EXST.open) EXST.open={}; if(EXST.open[k]===open) return; EXST.open[k]=open; exSave(); }
-function exSetOvr(hc,k,v){ if(!EXST.ovr[hc]) EXST.ovr[hc]={}; EXST.ovr[hc][k]=v; exSave(); exRender(); }
+function exSetOvr(hc,k,v){ if(!EXST.ovr[hc]) EXST.ovr[hc]={}; EXST.ovr[hc][k]=Math.max(-100,Math.min(200,Math.round((+v||0)/5)*5)); exSave(); exRender(); }
+function exBumpOvr(hc,k,d){ exSetOvr(hc,k,exPct(hc,k.split('|')[0],k.split('|')[1])+d); }
 function exResetOvr(hc){ delete EXST.ovr[hc]; delete EXST.inj[hc]; exSave(); exRender(); }
 function exSetTj(k,v){ EXST.tj[k]=v; exSave(); exRender(); }
 function exSetInj(hc,valM){
@@ -1024,6 +1043,7 @@ function exRender(){
   const rows=exRows();
   const mo=EX.monthsElapsed, left=12-mo;
   const horLab=exHorLab(), sepLab=tLab(exSepT());
+  const tgtCountEl=document.getElementById('exTgtCount'); if(tgtCountEl) tgtCountEl.textContent=rows.length;
   // ── MOE panel (นิยามทางการกองเศรษฐกิจสุขภาพ) ──
   const moeAgg={};
   rows.forEach(h=>{ for(const g in h.moe) moeAgg[g]=(moeAgg[g]||0)+h.moe[g]; });
@@ -1031,17 +1051,52 @@ function exRender(){
   const xmoeTot=rows.reduce((s,h)=>s+exXmoeMo(h),0);
   const depTot=rows.reduce((s,h)=>s+h.bs.depMo,0);
   const nAccs=EX.moeGroups.reduce((s,g)=>s+g.accs.length,0);
+  const moeAllv=EXST.moePctAll!=null?EXST.moePctAll:0;
+  const nMoeAdj=EX.moeGroups.filter(g=>exMoePct(g.id)!==0).length;
   document.getElementById('exMoeBox').innerHTML=`
     <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน ตามนิยามกองเศรษฐกิจสุขภาพ (${rows.length} แห่งที่เลือก)</h3>
-    <div class="note"><b>ที่มา:</b> รายการบัญชี MOE ${nAccs} บัญชีตามนิยามกองเศรษฐกิจสุขภาพ (CFO กำหนด 14 ก.ค. 69) — ยอดจ่ายจริงสะสม ${mo} เดือนจากงบทดลอง ÷ ${mo} = ค่าเฉลี่ย/เดือน · <b>ไม่รวม</b>เงินเดือนข้าราชการ (จ่ายจากงบประมาณ ไม่ใช่เงินบำรุง) และค่ารักษาตามจ่าย · ติ๊กออก = สมมติว่างดจ่ายกลุ่มนั้นในช่วงที่เหลือ</div>
-    <div class="exctl" style="margin-top:8px">
-      ${EX.moeGroups.map(g=>`<label><input type="checkbox" ${exMoeOn(g.id)?'checked':''} onchange="exSetMoe('${g.id}',this.checked)"> ${g.name} <span class="tgt-note">${fmtM((moeAgg[g.id]||0)/mo)}/ด.</span></label>`).join('')}
-    </div>
-    <div class="tgt-row" style="margin-top:6px">รวม MOE ที่เลือก: <b>${fmtM(moeTot)}/เดือน</b></div>
+    <div class="tgt-row" style="border-top:none;padding-top:0">รวม MOE จำลอง: <b>${fmtM(moeTot)}/เดือน</b>${nMoeAdj?` <span class="tgt-note">· ปรับแล้ว ${nMoeAdj}/${EX.moeGroups.length} กลุ่ม</span>`:''}</div>
+    <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับ MOE ทุกกลุ่มพร้อมกัน: <b id="exMoeAllLab">${(moeAllv>0?'+':'')+moeAllv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด — เทียบค่าเฉลี่ยรายจ่ายจริง)</span></label>
+      <div class="exctl" style="gap:6px;flex-wrap:wrap">
+        <button type="button" class="ovbulkbtn" onclick="exBumpMoeAll(-10)">−10</button>
+        <button type="button" class="ovbulkbtn" onclick="exBumpMoeAll(-5)">−5</button>
+        <input type="range" min="-100" max="100" step="5" value="${moeAllv}" style="flex:1;min-width:140px;max-width:380px;accent-color:var(--blue)"
+          oninput="document.getElementById('exMoeAllLab').textContent=(+this.value>0?'+':'')+this.value+'%'"
+          onchange="exSetMoeAll(+this.value)">
+        <button type="button" class="ovbulkbtn" onclick="exBumpMoeAll(5)">+5</button>
+        <button type="button" class="ovbulkbtn" onclick="exBumpMoeAll(10)">+10</button>
+        <span><input type="number" class="exnum" style="width:72px" step="5" min="-100" max="100" value="${moeAllv}" onchange="exSetMoeAll(this.value)"> %</span>
+        <button type="button" class="ovbulkbtn" onclick="exSetMoeAll(0)">↺ กลับ 0%</button>
+      </div></div>
     <div class="tgt-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${exXmoeOn()?'checked':''} onchange="exSetXmoe(this.checked)"> ค่าใช้จ่ายเงินสด<b>นอกนิยาม MOE</b> (เงินเดือน ขรก.·ค่าตอบแทนอื่น·ค่ารักษาตามจ่าย·ค่าใช้สอยอื่น ฯลฯ): <b>${fmtM(xmoeTot)}/เดือน</b></label> <span class="tgt-note">คงตาม run-rate เพื่อให้ NI จำลองตรงบัญชีจริง (เงินเดือน ขรก. มีรายได้งบบุคลากรจับคู่ฝั่งรายรับ หักล้างกันเอง) — ติ๊กออกเฉพาะเมื่อต้องการดูภาพ "จ่ายเฉพาะ MOE"</span></div>
     <div class="tgt-row tgt-note">รายการไม่ใช่เงินสด (ค่าเสื่อม·หนี้สูญ·ปรับปรุงระหว่างหน่วยงาน = P24·P241·EADJ): ${fmtM(depTot)}/เดือน — หักใน NI อัตโนมัติ ไม่กระทบเงินสด</div>
-    <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--mut)">📖 ดูรายการบัญชีทั้ง ${nAccs} ตัว (ตรวจสอบที่มาได้รายบัญชี)</summary>
-      <div style="margin-top:6px">${EX.moeGroups.map(g=>`<div class="tgt-row" style="align-items:flex-start"><b style="min-width:170px">${g.name}</b><span class="tgt-note">${g.accs.map(a=>`${a.a} ${a.n}`).join(' · ')}</span></div>`).join('')}</div>
+    <details ${EXST.open&&EXST.open.moe?'open':''} ontoggle="exKeepOpen('moe',this.open)" style="margin-top:6px">
+      <summary style="cursor:pointer;font-size:12.5px;font-weight:700;padding:6px 0">⚙️ เปิดตารางปรับรายหมวดรายจ่าย (${EX.moeGroups.length} กลุ่ม / ${nAccs} บัญชี)</summary>
+      <div class="note">ยอดจ่ายจริงสะสม ${mo} เดือนจากงบทดลอง ÷ ${mo} = ค่าเฉลี่ย/เดือน → ตั้ง % ว่าช่วงที่เหลือจะจ่ายกี่ % เทียบค่าเฉลี่ย (−100% = งดจ่ายทั้งหมด · 0% = ตาม run-rate · +100% = จ่ายเพิ่มเป็นสองเท่า เช่น สถานการณ์ยาขาดตลาด/ต้นทุนพุ่ง) · <b>ปรับทั้งกลุ่มด้านบนเมื่อไหร่ ค่ารายหมวดที่เคยปรับจะถูกบังคับตาม</b></div>
+      <div class="acctbl-wrap extbl" style="max-height:360px;margin-top:6px">
+        <table class="wltbl">
+          <tr><th>หมวดรายจ่าย</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
+          ${EX.moeGroups.map(g=>{
+            const av=(moeAgg[g.id]||0)/mo, pc=exMoePct(g.id);
+            return `<tr>
+              <td><b>${g.name}</b></td>
+              <td>${fmtM(av)}</td>
+              <td><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:300px">
+                <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpMoePct('${g.id}',-5)">−5</button>
+                <input type="range" min="-100" max="100" step="5" value="${pc}" style="flex:1;min-width:70px"
+                  oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(Math.max(0,${av}*(1+this.value/100)))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
+                  onchange="exSetMoePct('${g.id}',+this.value)">
+                <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpMoePct('${g.id}',5)">+5</button>
+                <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="100" value="${pc}" onchange="exSetMoePct('${g.id}',this.value)">
+              </div></td>
+              <td><b>${fmtM(Math.max(0,av*(1+pc/100)))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span></td>
+            </tr>`;}).join('')}
+        </table>
+      </div>
+      <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--mut)">📖 ดูรายการบัญชีทั้ง ${nAccs} ตัว (ตรวจสอบที่มาได้รายบัญชี)</summary>
+        <div style="margin-top:6px">${EX.moeGroups.map(g=>`<div class="tgt-row" style="align-items:flex-start"><b style="min-width:170px">${g.name}</b><span class="tgt-note">${g.accs.map(a=>`${a.a} ${a.n}`).join(' · ')}</span></div>`).join('')}</div>
+      </details>
+      <div class="note" style="margin-top:4px"><b>ที่มา:</b> รายการบัญชี MOE ${nAccs} บัญชีตามนิยามกองเศรษฐกิจสุขภาพ (CFO กำหนด 14 ก.ค. 69) — <b>ไม่รวม</b>เงินเดือนข้าราชการ (จ่ายจากงบประมาณ ไม่ใช่เงินบำรุง) และค่ารักษาตามจ่าย</div>
     </details>`;
   // ── Revenue panel ──
   const revAgg={};
@@ -1079,9 +1134,14 @@ function exRender(){
               <td><b>${p}</b> ${(EX.pn[p]||'').replace('รายได้','')}</td>
               <td><span class="exchip ${g}">${EX_SEGL[g]}</span></td>
               <td>${fmtM(tot)}</td><td>${fmtM(av)}</td>
-              <td><input type="range" min="-100" max="200" step="5" value="${pc}"
-                oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(${av}*(1+this.value/100))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
-                onchange="exSetAdj('${k}',+this.value)"></td>
+              <td><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:300px">
+                <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpAdj('${k}',-5)">−5</button>
+                <input type="range" min="-100" max="200" step="5" value="${pc}" style="flex:1;min-width:70px"
+                  oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(${av}*(1+this.value/100))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
+                  onchange="exSetAdj('${k}',+this.value)">
+                <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpAdj('${k}',5)">+5</button>
+                <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="200" value="${pc}" onchange="exSetAdj('${k}',this.value)">
+              </div></td>
               <td><b>${fmtM(av*(1+pc/100))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span></td>
             </tr>`;}).join('')}
         </table>
@@ -1151,7 +1211,12 @@ function exRender(){
           onchange="exSetInj('${hc}',this.value)"></label></div>
       ${segs.map(({p,g,v})=>{ const k=exKey(p,g), pc=exPct(hc,p,g), av=v/h.bs.mo, ov=EXST.ovr[hc]&&EXST.ovr[hc][k]!=null;
         return `<div class="fld"><label>${p} ${(EX.pn[p]||'').replace('รายได้','')} <span class="exchip ${g}">${EX_SEGL[g]}</span> เฉลี่ย ${fmtM(av)}/ด. → <b>${fmtM(av*(1+pc/100))}/ด. (${pc>0?'+':''}${pc}%)</b>${ov?' <span class="tgt-note">(ปรับเอง)</span>':''}</label>
-        <input type="range" min="-100" max="200" step="5" value="${pc}" onchange="exSetOvr('${hc}','${k}',+this.value)"></div>`;}).join('')}
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:380px">
+          <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpOvr('${hc}','${k}',-5)">−5</button>
+          <input type="range" min="-100" max="200" step="5" value="${pc}" style="flex:1;min-width:70px" onchange="exSetOvr('${hc}','${k}',+this.value)">
+          <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpOvr('${hc}','${k}',5)">+5</button>
+          <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="200" value="${pc}" onchange="exSetOvr('${hc}','${k}',+this.value)">
+        </div></div>`;}).join('')}
       <div class="tgt-note"><a href="#" onclick="exResetOvr('${hc}');return false">↺ ล้างค่าปรับเองของ รพ.นี้ (กลับไปตามกลุ่ม/Solver)</a></div>
     </div></td></tr>`;
     return main+sub;
