@@ -834,7 +834,7 @@ function exDefaultState(){
   // moePct: % ปรับรายกลุ่ม MOE จากค่าเฉลี่ย (default 0% = ตาม run-rate) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
   // adjAll/moePctAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
   return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, ext:0, tgt:6,
-          moePct:{}, moePctAll:0, xmoe:true, adj:{}, adjAll:0, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false}};
+          moePct:{}, moePctAll:0, moeOff:{}, xmoe:true, adj:{}, adjAll:0, revOff:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exLoad(){
@@ -878,16 +878,20 @@ function exTjCalc(){
           total:debtors.reduce((s,h)=>s+h.tj.payIn,0), uncovered};
 }
 // ── NI จำลอง/เดือน (บัญชี) = Σรายรับ×(1+%) − MOE − ค่าเสื่อม run-rate ──
+// revOff/moeOff: ปิดรายการทั้งเขต (ไม่นับรวมเข้าคำนวณเลย) — คนละแกนกับ % ปรับ (ปิดแล้วเปิดใหม่ค่า % เดิมยังอยู่)
+function exRevOff(k){ return !!EXST.revOff[k]; }
+function exMoeOff(g){ return !!EXST.moeOff[g]; }
 function exRevMo(h){
   const mo=h.bs.mo; let s=0;
   for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
     for(const g of ['op','ip','pp','oth']){ const v=r[g]||0; if(!v) continue;
+      const k=exKey(p,g); if(exRevOff(k)) continue;
       s += v/mo*(1+exPct(h.hcode,p,g)/100); } }
   return s;
 }
 function exMoeMo(h){
   const mo=h.bs.mo; let s=0;
-  for(const g of EX.moeGroups){ const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePct(g.id)/100); }
+  for(const g of EX.moeGroups){ if(exMoeOff(g.id)) continue; const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePct(g.id)/100); }
   return Math.max(0,s);
 }
 // ค่าใช้จ่ายเงินสดนอกนิยาม MOE = คชจ.รวม − MOE ทางการ − non-cash (เงินเดือน ขรก./ค่าตอบแทนอื่น/ตามจ่าย/ค่าใช้สอยอื่น ฯลฯ)
@@ -1008,6 +1012,8 @@ function exSetMoeAll(v){
 }
 function exBumpMoeAll(d){ exSetMoeAll((EXST.moePctAll||0)+d); }
 function exSetXmoe(on){ EXST.xmoe=on; exSave(); exRender(); }
+function exSetRevOff(k,off){ EXST.revOff[k]=off; exSave(); exRender(); }
+function exSetMoeOff(g,off){ EXST.moeOff[g]=off; exSave(); exRender(); }
 // สไลด์กลุ่ม: บังคับทับ override รายแห่งของ key นั้นทุก รพ. (ตามกติกา "ปรับทั้งกลุ่ม ค่าต้องเปลี่ยนตาม")
 function exSetAdj(k,v){
   EXST.adj[k]=Math.max(-100,Math.min(200,Math.round((+v||0)/5)*5));
@@ -1053,9 +1059,10 @@ function exRender(){
   const nAccs=EX.moeGroups.reduce((s,g)=>s+g.accs.length,0);
   const moeAllv=EXST.moePctAll!=null?EXST.moePctAll:0;
   const nMoeAdj=EX.moeGroups.filter(g=>exMoePct(g.id)!==0).length;
+  const nMoeOff=EX.moeGroups.filter(g=>exMoeOff(g.id)).length;
   document.getElementById('exMoeBox').innerHTML=`
     <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน ตามนิยามกองเศรษฐกิจสุขภาพ (${rows.length} แห่งที่เลือก)</h3>
-    <div class="tgt-row" style="border-top:none;padding-top:0">รวม MOE จำลอง: <b>${fmtM(moeTot)}/เดือน</b>${nMoeAdj?` <span class="tgt-note">· ปรับแล้ว ${nMoeAdj}/${EX.moeGroups.length} กลุ่ม</span>`:''}</div>
+    <div class="tgt-row" style="border-top:none;padding-top:0">รวม MOE จำลอง: <b>${fmtM(moeTot)}/เดือน</b>${nMoeAdj?` <span class="tgt-note">· ปรับแล้ว ${nMoeAdj}/${EX.moeGroups.length} กลุ่ม</span>`:''}${nMoeOff?` <span class="tgt-note">· ปิดไว้ ${nMoeOff} กลุ่ม (ไม่นับรวม)</span>`:''}</div>
     <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับ MOE ทุกกลุ่มพร้อมกัน: <b id="exMoeAllLab">${(moeAllv>0?'+':'')+moeAllv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด — เทียบค่าเฉลี่ยรายจ่ายจริง)</span></label>
       <div class="exctl" style="gap:6px;flex-wrap:wrap">
         <button type="button" class="ovbulkbtn" onclick="exBumpMoeAll(-10)">−10</button>
@@ -1075,21 +1082,22 @@ function exRender(){
       <div class="note">ยอดจ่ายจริงสะสม ${mo} เดือนจากงบทดลอง ÷ ${mo} = ค่าเฉลี่ย/เดือน → ตั้ง % ว่าช่วงที่เหลือจะจ่ายกี่ % เทียบค่าเฉลี่ย (−100% = งดจ่ายทั้งหมด · 0% = ตาม run-rate · +100% = จ่ายเพิ่มเป็นสองเท่า เช่น สถานการณ์ยาขาดตลาด/ต้นทุนพุ่ง) · <b>ปรับทั้งกลุ่มด้านบนเมื่อไหร่ ค่ารายหมวดที่เคยปรับจะถูกบังคับตาม</b></div>
       <div class="acctbl-wrap extbl" style="max-height:360px;margin-top:6px">
         <table class="wltbl">
-          <tr><th>หมวดรายจ่าย</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
+          <tr><th>ใช้</th><th>หมวดรายจ่าย</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
           ${EX.moeGroups.map(g=>{
-            const av=(moeAgg[g.id]||0)/mo, pc=exMoePct(g.id);
-            return `<tr>
-              <td><b>${g.name}</b></td>
+            const av=(moeAgg[g.id]||0)/mo, pc=exMoePct(g.id), off=exMoeOff(g.id);
+            return `<tr style="${off?'opacity:.5':''}">
+              <td><input type="checkbox" ${off?'':'checked'} title="ปิด = ไม่นับหมวดนี้เข้า MOE เลย" onchange="exSetMoeOff('${g.id}',!this.checked)"></td>
+              <td><b>${g.name}</b>${off?' <span class="tgt-note">(ปิดไว้ — ไม่ใช้)</span>':''}</td>
               <td>${fmtM(av)}</td>
-              <td><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:300px">
+              <td>${off?'<span class="tgt-note">—</span>':`<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:300px">
                 <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpMoePct('${g.id}',-5)">−5</button>
                 <input type="range" min="-100" max="100" step="5" value="${pc}" style="flex:1;min-width:70px"
                   oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(Math.max(0,${av}*(1+this.value/100)))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
                   onchange="exSetMoePct('${g.id}',+this.value)">
                 <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpMoePct('${g.id}',5)">+5</button>
                 <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="100" value="${pc}" onchange="exSetMoePct('${g.id}',this.value)">
-              </div></td>
-              <td><b>${fmtM(Math.max(0,av*(1+pc/100)))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span></td>
+              </div>`}</td>
+              <td>${off?'<b>฿0</b> <span class="tgt-note">(ปิดไว้)</span>':`<b>${fmtM(Math.max(0,av*(1+pc/100)))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span>`}</td>
             </tr>`;}).join('')}
         </table>
       </div>
@@ -1107,9 +1115,10 @@ function exRender(){
   const allv=EXST.adjAll!=null?EXST.adjAll:0;
   const nAdj=EXROWS_SEGS.filter(({p,g})=>(EXST.adj[exKey(p,g)]||0)!==0).length;
   const nOvr=Object.values(EXST.ovr||{}).reduce((s,o)=>s+Object.keys(o||{}).length,0);
+  const nRevOff=EXROWS_SEGS.filter(({p,g})=>exRevOff(exKey(p,g))).length;
   document.getElementById('exRevBox').innerHTML=`
     <h3 style="margin:0 0 6px">📈 ประมาณการรายรับกองทุน ${left} เดือนที่เหลือ (${tLab(addMo(EX.period,1))}–${sepLab})</h3>
-    <div class="tgt-row" style="border-top:none;padding-top:0">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> − MOE <b>${fmtM(moeTot)}</b>${exXmoeOn()?` − นอกนิยาม <b>${fmtM(xmoeTot)}</b>`:''} → กระแสเงินสดสุทธิ <b style="color:${revTot-moeTot-(exXmoeOn()?xmoeTot:0)<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot-(exXmoeOn()?xmoeTot:0))}/เดือน</b>${nAdj||nOvr?` <span class="tgt-note">· ปรับแล้ว ${nAdj} แถว${nOvr?` + ราย รพ. ${nOvr} จุด`:''}</span>`:''}</div>
+    <div class="tgt-row" style="border-top:none;padding-top:0">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> − MOE <b>${fmtM(moeTot)}</b>${exXmoeOn()?` − นอกนิยาม <b>${fmtM(xmoeTot)}</b>`:''} → กระแสเงินสดสุทธิ <b style="color:${revTot-moeTot-(exXmoeOn()?xmoeTot:0)<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot-(exXmoeOn()?xmoeTot:0))}/เดือน</b>${nAdj||nOvr?` <span class="tgt-note">· ปรับแล้ว ${nAdj} แถว${nOvr?` + ราย รพ. ${nOvr} จุด`:''}</span>`:''}${nRevOff?` <span class="tgt-note">· ปิดไว้ ${nRevOff} รายการ (ไม่นับรวม)</span>`:''}</div>
     <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับทุกกองทุนพร้อมกัน: <b id="exAllLab">${(allv>0?'+':'')+allv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด — ${left} เดือนที่เหลือเทียบค่าเฉลี่ย)</span></label>
       <div class="exctl" style="gap:6px;flex-wrap:wrap">
         <button type="button" class="ovbulkbtn" onclick="exBumpAll(-10)">−10</button>
@@ -1127,22 +1136,23 @@ function exRender(){
       <div class="note">ยอดสะสมจริง ${mo} เดือน (รวมส่วนต่ำ/ส่วนสูงแล้ว) → ค่าเฉลี่ย/เดือน → ตั้ง % ว่าช่วงที่เหลือจะเข้ากี่ % เทียบค่าเฉลี่ย (−100% = ไม่เข้าเลย · 0% = เท่าค่าเฉลี่ย · +200% = สามเท่า) — ส่วนใหญ่ควรค่อนไปทางลบ เพราะเงินเหมาจ่ายรายหัว/จ่ายล่วงหน้าเข้าเป็นก้อนต้นปีแล้ว · <b>ปรับทั้งกลุ่มด้านบนเมื่อไหร่ ค่าราย รพ. ที่เคยปรับ manual จะถูกบังคับตาม</b></div>
       <div class="acctbl-wrap extbl" style="max-height:420px">
         <table class="wltbl">
-          <tr><th>กองทุน</th><th>ประเภท</th><th>สะสม ${mo} เดือน</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
+          <tr><th>ใช้</th><th>กองทุน</th><th>ประเภท</th><th>สะสม ${mo} เดือน</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
           ${EXROWS_SEGS.map(({p,g})=>{
-            const k=exKey(p,g), tot=revAgg[k], av=tot/mo, pc=EXST.adj[k]!=null?EXST.adj[k]:0;
-            return `<tr>
-              <td><b>${p}</b> ${(EX.pn[p]||'').replace('รายได้','')}</td>
+            const k=exKey(p,g), tot=revAgg[k], av=tot/mo, pc=EXST.adj[k]!=null?EXST.adj[k]:0, off=exRevOff(k);
+            return `<tr style="${off?'opacity:.5':''}">
+              <td><input type="checkbox" ${off?'':'checked'} title="ปิด = ไม่นับรายรับนี้เข้าคำนวณเลย" onchange="exSetRevOff('${k}',!this.checked)"></td>
+              <td><b>${p}</b> ${(EX.pn[p]||'').replace('รายได้','')}${off?' <span class="tgt-note">(ปิดไว้ — ไม่ใช้)</span>':''}</td>
               <td><span class="exchip ${g}">${EX_SEGL[g]}</span></td>
               <td>${fmtM(tot)}</td><td>${fmtM(av)}</td>
-              <td><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:300px">
+              <td>${off?'<span class="tgt-note">—</span>':`<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:300px">
                 <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpAdj('${k}',-5)">−5</button>
                 <input type="range" min="-100" max="200" step="5" value="${pc}" style="flex:1;min-width:70px"
                   oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(${av}*(1+this.value/100))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
                   onchange="exSetAdj('${k}',+this.value)">
                 <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpAdj('${k}',5)">+5</button>
                 <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="200" value="${pc}" onchange="exSetAdj('${k}',this.value)">
-              </div></td>
-              <td><b>${fmtM(av*(1+pc/100))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span></td>
+              </div>`}</td>
+              <td>${off?'<b>฿0</b> <span class="tgt-note">(ปิดไว้)</span>':`<b>${fmtM(av*(1+pc/100))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span>`}</td>
             </tr>`;}).join('')}
         </table>
       </div>
@@ -1209,7 +1219,8 @@ function exRender(){
       <div class="fld"><label>💰 เงินสนับสนุนกำหนดเอง (ล้านบาท — เว้นว่าง = ใช้ค่า Solver อัตโนมัติ):
         <input type="number" class="exnum" step="0.5" min="0" value="${x.manual?(EXST.inj[hc]/1e6):''}" placeholder="อัตโนมัติ"
           onchange="exSetInj('${hc}',this.value)"></label></div>
-      ${segs.map(({p,g,v})=>{ const k=exKey(p,g), pc=exPct(hc,p,g), av=v/h.bs.mo, ov=EXST.ovr[hc]&&EXST.ovr[hc][k]!=null;
+      ${segs.map(({p,g,v})=>{ const k=exKey(p,g), pc=exPct(hc,p,g), av=v/h.bs.mo, ov=EXST.ovr[hc]&&EXST.ovr[hc][k]!=null, off=exRevOff(k);
+        if(off) return `<div class="fld"><label>${p} ${(EX.pn[p]||'').replace('รายได้','')} <span class="exchip ${g}">${EX_SEGL[g]}</span> <span class="tgt-note">ปิดไว้ทั้งเขต — ไม่นับรวม (เปิดกลับได้ในตาราง "เปิดตารางปรับรายกองทุน" ด้านบน)</span></label></div>`;
         return `<div class="fld"><label>${p} ${(EX.pn[p]||'').replace('รายได้','')} <span class="exchip ${g}">${EX_SEGL[g]}</span> เฉลี่ย ${fmtM(av)}/ด. → <b>${fmtM(av*(1+pc/100))}/ด. (${pc>0?'+':''}${pc}%)</b>${ov?' <span class="tgt-note">(ปรับเอง)</span>':''}</label>
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:380px">
           <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpOvr('${hc}','${k}',-5)">−5</button>
