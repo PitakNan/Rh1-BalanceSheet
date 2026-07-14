@@ -831,9 +831,9 @@ const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
 function exKey(p,seg){ return p+'|'+seg; }
 function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
 function exDefaultState(){
-  const moe={};  // true = นับเป็น MOE (จ่ายต่อไปตาม run-rate) — P24 ไม่อยู่ในลิสต์ (หักเป็นค่าเสื่อมใน NI อัตโนมัติ)
+  // moe: ติ๊กรายกลุ่มนิยามกองเศรษฐฯ (default จ่ายครบ) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
   return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, ext:0, tgt:6,
-          moe, adj:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}};
+          moe:{}, xmoe:true, adj:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exLoad(){
@@ -847,9 +847,11 @@ function exPct(hc,p,seg){
   if(o && o[k]!=null) return o[k];
   return EXST.adj[k]!=null?EXST.adj[k]:0;
 }
-// P24/P241/EADJ = non-cash bundle (ตรง exp−e33y ของสูตรทางการ) — ไม่อยู่ในลิสต์ MOE หักใน NI อัตโนมัติผ่าน depMo
+// P24/P241/EADJ = non-cash bundle (ตรง exp−e33y ของสูตรทางการ) — หักใน NI อัตโนมัติผ่าน depMo
 const EX_NONCASH={P24:1,P241:1,EADJ:1};
-function exMoeOn(p){ return !EX_NONCASH[p] && EXST.moe[p]!==false; }
+// MOE ทางการ: กลุ่มบัญชี 59 ตัวตามนิยามกองเศรษฐกิจสุขภาพ (EX.moeGroups จาก export_exec.py)
+function exMoeOn(g){ return EXST.moe[g]!==false; }
+function exXmoeOn(){ return EXST.xmoe!==false; }   // ค่าใช้จ่ายนอกนิยาม MOE (run-rate)
 // รพ. ที่แสดงตามฟิลเตอร์
 function exRows(){
   return EX.hosp.filter(h=>EXST.types[h.type] && (EXST.crisis==='all' || (h.risk||0)>=6));
@@ -883,10 +885,18 @@ function exRevMo(h){
 }
 function exMoeMo(h){
   const mo=h.bs.mo; let s=0;
-  for(const p of EX.expOrder){ if(!exMoeOn(p)) continue; s+=(h.exp[p]||0)/mo; }
+  for(const g of EX.moeGroups){ if(!exMoeOn(g.id)) continue; s+=(h.moe[g.id]||0)/mo; }
   return s;
 }
-function exNiMo(h){ return exRevMo(h)-exMoeMo(h)-h.bs.depMo; }
+// ค่าใช้จ่ายเงินสดนอกนิยาม MOE = คชจ.รวม − MOE ทางการ − non-cash (เงินเดือน ขรก./ค่าตอบแทนอื่น/ตามจ่าย/ค่าใช้สอยอื่น ฯลฯ)
+function exXmoeMo(h){
+  const mo=h.bs.mo;
+  let exp=0, nc=0;
+  for(const p in h.exp){ exp+=h.exp[p]; if(EX_NONCASH[p]) nc+=h.exp[p]; }
+  let moe=0; for(const g in h.moe) moe+=h.moe[g];
+  return Math.max(0,(exp-moe-nc))/mo;
+}
+function exNiMo(h){ return exRevMo(h)-exMoeMo(h)-(exXmoeOn()?exXmoeMo(h):0)-h.bs.depMo; }
 // ── จำลองเส้นทางถึง horizon (ก.ย. + ext เดือน) — anchor คะแนนทางการแบบเดียวกับ Simulator เดิม ──
 function exSimPath(h, inj){
   const bs=h.bs;
@@ -919,7 +929,7 @@ function exSimPath(h, inj){
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     endRisk=r;
   }
-  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:exMoeMo(h)};
+  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:exMoeMo(h),xmoeMo:exXmoeOn()?exXmoeMo(h):0};
 }
 // ── Solver: เงินก้อนขั้นต่ำ (เดือน 0) ให้ ระดับ ณ ก.ย.≤เป้า และปลาย horizon≤เป้า และเงินสดไม่หมด ──
 function exSolve(h){
@@ -953,7 +963,7 @@ async function renderExec(){
   <div class="dwrap" style="max-width:1200px">
     <div class="panel">
       <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง <span id="exHorLab2">${sepLab}</span> ด้วยโมเดล MOE</h3>
-      <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE)</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b></div>
+      <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + Risk Score ทางการ</div>
       <div class="exctl" style="margin-top:10px">
         <span class="seg" style="display:inline-flex">
           <button id="exC67" class="${EXST.crisis==='67'?'on':''}" onclick="exSet('crisis','67')">🚨 วิกฤต 6-7</button>
@@ -973,13 +983,14 @@ async function renderExec(){
     <div class="panel" style="margin-top:14px" id="exRevBox"></div>
     <div class="panel" style="margin-top:14px" id="exTjBox"></div>
     <div class="panel" style="margin-top:14px" id="exResBox"></div>
-    <div class="gap-note" style="margin-top:14px">⚙️ สมมติฐาน: <b>NI จำลอง/เดือน = Σรายรับกองทุน×(1+%ปรับ) − MOE − ค่าเสื่อม run-rate</b> · กระแสเงินสด/เดือน = NI + ค่าเสื่อม = รายรับ − MOE · ค่าเฉลี่ยรายรับ/รายจ่ายมาจากยอดจริงสะสม ${EX.monthsElapsed} เดือน (ต.ค.–${EX.periodLabel}) ผัง P ของ Planfin — <b>รวมส่วนต่ำ/ส่วนสูงแล้ว</b> · การแยก OP/IP/P&P map จากชื่อบัญชี (ร่างเอง รอ CFO review) · เงินสนับสนุน = เงินก้อนครั้งเดียวเดือน 0 เพิ่ม CA/QN/เงินสด · ตามจ่าย: เจ้าหนี้ OP-UC นอก CUP ในจังหวัด (2101020199.202) ↔ ลูกหนี้นอก CUP (1102050101/.194) เกลี่ยสัดส่วนในจังหวัด — <b>ยกหนี้</b>: รพช. ตัดหนี้+รับรู้รายได้ (4301020105.256), รพศ./รพท. ตัดลูกหนี้+คชจ.อุดหนุน (5107) ตามบัญชีจริง · เกณฑ์คะแนน CR/QR/Cash/NWC/NI/SU ตรงสูตรทางการชุดเดียวกับหน้าจำลองเดิม · จุดตั้งต้นเดือน 0 ตรง badge ทางการ · เป็นการจำลองเชิงสถานการณ์เพื่อวางแผนจัดสรร ไม่ใช่พยากรณ์</div>
+    <div class="gap-note" style="margin-top:14px">⚙️ สมมติฐาน: <b>NI จำลอง/เดือน = Σรายรับกองทุน×(1+%ปรับ) − MOE (นิยามกองเศรษฐกิจสุขภาพ) − คชจ.นอกนิยาม (run-rate) − รายการไม่ใช่เงินสด</b> · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด · ค่าเฉลี่ยรายรับ/รายจ่ายมาจากยอดจริงสะสม ${EX.monthsElapsed} เดือน (ต.ค.–${EX.periodLabel}) จากงบทดลอง — <b>รวมส่วนต่ำ/ส่วนสูงแล้ว</b> · เงินสนับสนุน = เงินก้อนครั้งเดียวเดือน 0 เพิ่ม CA/QN/เงินสด · เกณฑ์คะแนน CR/QR/Cash/NWC/NI/SU ตรงสูตรทางการกองเศรษฐกิจสุขภาพชุดเดียวกับหน้าจำลองเดิม · จุดตั้งต้นเดือน 0 ตรง badge ทางการ · เป็นการจำลองเชิงสถานการณ์เพื่อวางแผนจัดสรร ไม่ใช่พยากรณ์ — ที่มารายบัญชีของแต่ละส่วนดูในหัวข้อนั้น ๆ</div>
   </div>`;
   exRender();
 }
 function exSet(k,v){ EXST[k]=v; if(k==='crisis'){document.getElementById('exC67').classList.toggle('on',v==='67');document.getElementById('exCall').classList.toggle('on',v==='all');} exSave(); exRender(); const el=document.getElementById('exHorLab2'); if(el) el.textContent=exHorLab(); }
 function exSetType(t,on){ EXST.types[t]=on; exSave(); exRender(); }
-function exSetMoe(p,on){ EXST.moe[p]=on; exSave(); exRender(); }
+function exSetMoe(g,on){ EXST.moe[g]=on; exSave(); exRender(); }
+function exSetXmoe(on){ EXST.xmoe=on; exSave(); exRender(); }
 // สไลด์กลุ่ม: บังคับทับ override รายแห่งของ key นั้นทุก รพ. (ตามกติกา "ปรับทั้งกลุ่ม ค่าต้องเปลี่ยนตาม")
 function exSetAdj(k,v){
   EXST.adj[k]=v;
@@ -1007,18 +1018,25 @@ function exRender(){
   const rows=exRows();
   const mo=EX.monthsElapsed, left=12-mo;
   const horLab=exHorLab(), sepLab=tLab(exSepT());
-  // ── MOE panel ──
-  const expAgg={};
-  rows.forEach(h=>{ for(const p in h.exp) expAgg[p]=(expAgg[p]||0)+h.exp[p]; });
+  // ── MOE panel (นิยามทางการกองเศรษฐกิจสุขภาพ) ──
+  const moeAgg={};
+  rows.forEach(h=>{ for(const g in h.moe) moeAgg[g]=(moeAgg[g]||0)+h.moe[g]; });
   const moeTot=rows.reduce((s,h)=>s+exMoeMo(h),0);
+  const xmoeTot=rows.reduce((s,h)=>s+exXmoeMo(h),0);
   const depTot=rows.reduce((s,h)=>s+h.bs.depMo,0);
+  const nAccs=EX.moeGroups.reduce((s,g)=>s+g.accs.length,0);
   document.getElementById('exMoeBox').innerHTML=`
-    <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน (${rows.length} แห่งที่เลือก)</h3>
-    <div class="note">ติ๊กออก = สมมติว่า<b>งดจ่าย</b>หมวดนั้นในช่วงที่เหลือ (ค่าตั้งต้น: จ่ายทุกหมวดตาม run-rate = NI จำลองตรงค่าเฉลี่ยจริง) · ค่าเสื่อม/หนี้สูญ/ปรับปรุงระหว่างหน่วยงาน (P24·P241·EADJ) ไม่อยู่ในลิสต์ — ไม่ใช่เงินสด หักใน NI อัตโนมัติ ${fmtM(depTot)}/เดือน</div>
+    <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน ตามนิยามกองเศรษฐกิจสุขภาพ (${rows.length} แห่งที่เลือก)</h3>
+    <div class="note"><b>ที่มา:</b> รายการบัญชี MOE ${nAccs} บัญชีตามนิยามกองเศรษฐกิจสุขภาพ (CFO กำหนด 14 ก.ค. 69) — ยอดจ่ายจริงสะสม ${mo} เดือนจากงบทดลอง ÷ ${mo} = ค่าเฉลี่ย/เดือน · <b>ไม่รวม</b>เงินเดือนข้าราชการ (จ่ายจากงบประมาณ ไม่ใช่เงินบำรุง) และค่ารักษาตามจ่าย · ติ๊กออก = สมมติว่างดจ่ายกลุ่มนั้นในช่วงที่เหลือ</div>
     <div class="exctl" style="margin-top:8px">
-      ${EX.expOrder.filter(p=>!EX_NONCASH[p]&&(expAgg[p]||0)!==0).map(p=>`<label title="${EX.pn[p]||p}"><input type="checkbox" ${exMoeOn(p)?'checked':''} onchange="exSetMoe('${p}',this.checked)"> ${p} ${(EX.pn[p]||'').replace('ต้นทุน','')} <span class="tgt-note">${fmtM((expAgg[p]||0)/mo)}/ด.</span></label>`).join('')}
+      ${EX.moeGroups.map(g=>`<label><input type="checkbox" ${exMoeOn(g.id)?'checked':''} onchange="exSetMoe('${g.id}',this.checked)"> ${g.name} <span class="tgt-note">${fmtM((moeAgg[g.id]||0)/mo)}/ด.</span></label>`).join('')}
     </div>
-    <div class="tgt-row" style="margin-top:6px">รวม MOE ที่เลือก: <b>${fmtM(moeTot)}/เดือน</b> <span class="tgt-note">(ไม่รวมค่าเสื่อม)</span></div>`;
+    <div class="tgt-row" style="margin-top:6px">รวม MOE ที่เลือก: <b>${fmtM(moeTot)}/เดือน</b></div>
+    <div class="tgt-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${exXmoeOn()?'checked':''} onchange="exSetXmoe(this.checked)"> ค่าใช้จ่ายเงินสด<b>นอกนิยาม MOE</b> (เงินเดือน ขรก.·ค่าตอบแทนอื่น·ค่ารักษาตามจ่าย·ค่าใช้สอยอื่น ฯลฯ): <b>${fmtM(xmoeTot)}/เดือน</b></label> <span class="tgt-note">คงตาม run-rate เพื่อให้ NI จำลองตรงบัญชีจริง (เงินเดือน ขรก. มีรายได้งบบุคลากรจับคู่ฝั่งรายรับ หักล้างกันเอง) — ติ๊กออกเฉพาะเมื่อต้องการดูภาพ "จ่ายเฉพาะ MOE"</span></div>
+    <div class="tgt-row tgt-note">รายการไม่ใช่เงินสด (ค่าเสื่อม·หนี้สูญ·ปรับปรุงระหว่างหน่วยงาน = P24·P241·EADJ): ${fmtM(depTot)}/เดือน — หักใน NI อัตโนมัติ ไม่กระทบเงินสด</div>
+    <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--mut)">📖 ดูรายการบัญชีทั้ง ${nAccs} ตัว (ตรวจสอบที่มาได้รายบัญชี)</summary>
+      <div style="margin-top:6px">${EX.moeGroups.map(g=>`<div class="tgt-row" style="align-items:flex-start"><b style="min-width:170px">${g.name}</b><span class="tgt-note">${g.accs.map(a=>`${a.a} ${a.n}`).join(' · ')}</span></div>`).join('')}</div>
+    </details>`;
   // ── Revenue panel ──
   const revAgg={};
   rows.forEach(h=>{ for(const p in h.rev){ const r=h.rev[p]; for(const g of ['op','ip','pp','oth']){ if(r[g]) { const k=exKey(p,g); revAgg[k]=(revAgg[k]||0)+r[g]; } } } });
@@ -1048,7 +1066,8 @@ function exRender(){
           </tr>`;}).join('')}
       </table>
     </div>
-    <div class="tgt-row">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> · เทียบ MOE <b>${fmtM(moeTot)}/เดือน</b> → ส่วนต่างเงินสด <b style="color:${revTot-moeTot<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot)}/เดือน</b></div>`;
+    <div class="tgt-row">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> − MOE <b>${fmtM(moeTot)}</b>${exXmoeOn()?` − นอกนิยาม <b>${fmtM(xmoeTot)}</b>`:''} → กระแสเงินสดสุทธิ <b style="color:${revTot-moeTot-(exXmoeOn()?xmoeTot:0)<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot-(exXmoeOn()?xmoeTot:0))}/เดือน</b></div>
+    <div class="note" style="margin-top:4px"><b>ที่มา:</b> รายได้บัญชีชุด 3006Y จากงบทดลอง จัดกลุ่มรหัส P ตามผัง Planfin (export_planfin.py) — บัญชีส่วนต่างสูง/ต่ำกว่าข้อตกลง (ส่วนต่ำ/ส่วนสูง) ถูกรวมในกองทุนต้นทางแล้ว · การแยก OP/IP/P&P ตีความจากชื่อบัญชี (⚠️ ร่างเอง รอ CFO ยืนยัน) · แถว "อื่น/รวม" = บัญชีที่ชื่อไม่ระบุ OP/IP เช่น เหมาจ่ายรายหัว งบบุคลากร</div>`;
   // ── ตามจ่าย panel ──
   const creds=EX.hosp.filter(h=>EXTJ.shares[h.hcode]>0);
   document.getElementById('exTjBox').innerHTML=`
@@ -1072,7 +1091,8 @@ function exRender(){
           <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> → <span class="badge" style="background:${riskColor(r.sepRisk)}">${r.sepRisk!=null?r.sepRisk:'–'}</span></td></tr>`;}).join('')}
       </table>
     </div>
-    <div class="note" style="margin-top:4px">การเกลี่ยภาระเป็น<b>การประมาณตามสัดส่วน</b>ลูกหนี้นอก CUP ในจังหวัดเดียวกัน — คู่หนี้จริงอาจต่างจากนี้ ต้องยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขตก่อนสั่งการจริง</div>`}`;
+    <div class="note" style="margin-top:4px">การเกลี่ยภาระเป็น<b>การประมาณตามสัดส่วน</b>ลูกหนี้นอก CUP ในจังหวัดเดียวกัน — คู่หนี้จริงอาจต่างจากนี้ ต้องยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขตก่อนสั่งการจริง</div>`}
+    <div class="note" style="margin-top:4px"><b>ที่มา:</b> ยอดคงเหลืองบทดลองงวด ${EX.periodLabel} — เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (2101020199.202) ฝั่ง รพช. ↔ ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (1102050101.203, 1102050194.204) ฝั่ง รพศ./รพท. · การยกหนี้ลงบัญชีตามผัง MOPH: รพช. รับรู้ "รายได้จากการยกหนี้กรณีส่งต่อผู้ป่วยระหว่างรพ." (4301020105.256) · รพศ./รพท. บันทึกค่าใช้จ่ายอุดหนุนหน่วยงานภาครัฐ (5107010101)</div>`;
   // ── Results ──
   const items=rows.map(h=>{
     const need=exSolve(h);
@@ -1093,6 +1113,7 @@ function exRender(){
       <td>${h.prov||''}</td>
       <td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.cls?' '+h.cls:''}</span> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a></td>
       <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span></td>
+      <td>${fmtM(r0.moeMo)}</td>
       <td style="color:${r0.niM<0?'var(--red)':'var(--green)'}">${sgnM(r0.niM)}</td>
       <td>${r0.cashOut!=null?`<span class="tgt-warn">${r0.cashOut===0?'ติดลบแล้ว':'เดือน '+r0.cashOut+' ('+tLab(addMo(h.bs.t,r0.cashOut))+')'}</span>`:'<span style="color:var(--green)">ไม่หมด</span>'}</td>
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
@@ -1104,7 +1125,7 @@ function exRender(){
     const segs=[];
     for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
       for(const g of ['op','ip','pp','oth']){ if(r[g]) segs.push({p,g,v:r[g]}); } }
-    const sub=`<tr class="ovsub"><td colspan="9"><div class="ovsub-box">
+    const sub=`<tr class="ovsub"><td colspan="10"><div class="ovsub-box">
       <div class="fld"><label>💰 เงินสนับสนุนกำหนดเอง (ล้านบาท — เว้นว่าง = ใช้ค่า Solver อัตโนมัติ):
         <input type="number" class="exnum" step="0.5" min="0" value="${x.manual?(EXST.inj[hc]/1e6):''}" placeholder="อัตโนมัติ"
           onchange="exSetInj('${hc}',this.value)"></label></div>
@@ -1120,7 +1141,7 @@ function exRender(){
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})</h3>
     <div class="acctbl-wrap" style="max-height:none">
       <table class="wltbl">
-        <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ตอนนี้</th><th>NI จำลอง<br>/เดือน</th><th>เงินสด<br>จะหมด?</th><th>ระดับ ${sepLab}<br>ก่อนช่วย</th><th>เงินสนับสนุน<br>ที่ต้องใช้</th><th>ระดับ<br>หลังช่วย</th><th></th></tr>
+        <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ตอนนี้</th><th>MOE<br>/เดือน</th><th>NI จำลอง<br>/เดือน</th><th>เงินสด<br>จะหมด?</th><th>ระดับ ${sepLab}<br>ก่อนช่วย</th><th>เงินสนับสนุน<br>ที่ต้องใช้</th><th>ระดับ<br>หลังช่วย</th><th></th></tr>
         ${rowsHtml}
       </table>
     </div>
@@ -1129,13 +1150,14 @@ function exRender(){
       <div class="tgt-row">ช่วย ${nHelp} แห่ง จาก ${rows.length} แห่งที่เลือก${nFail?` · <span class="tgt-warn">⚠️ ${nFail} แห่งเงินก้อนอย่างเดียวไม่ถึงเป้า (ต้องแก้ NI/รายรับร่วมด้วย)</span>`:''}${Object.keys(byProv).length?` · <span class="tgt-note">${Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')}</span>`:''}</div>
       <div class="tgt-row">ระดับวิกฤต ณ ${sepLab}: ก่อนช่วย <span class="exhist">${hist(x=>x.r0.sepRisk)}</span> → หลังช่วย <span class="exhist">${hist(x=>x.r1.sepRisk)}</span></div>
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
+      <div class="tgt-row tgt-note"><b>ที่มา:</b> ระดับตอนนี้ = Risk Score ทางการงวด ${EX.periodLabel} (badge เดียวกับหน้าหลัก) · MOE = นิยามกองเศรษฐกิจสุขภาพ (ดูรายบัญชีใน panel MOE) · เงินสนับสนุน = ผล Solver หาค่าต่ำสุดที่ทำให้ระดับ ณ ${horLab} ≤ ${EXST.tgt} และเงินสดไม่หมดระหว่างทาง (ปรับเองรายแห่งได้ในปุ่ม "ปรับรายแห่ง")</div>
     </div>`;
 }
 function exBuildTSV(items, horLab){
   const M=v=>v==null?'':(v/1e6).toFixed(2);
-  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','รายรับจำลอง/เดือน(ลบ.)','MOE/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
-  const lines=items.map(({h,need,inj,r0,r1})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',M(r0.revMo),M(r0.moeMo),M(r0.niM),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
-  const tot=['รวม','','','','','','','','',M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
+  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','รายรับจำลอง/เดือน(ลบ.)','MOE กองเศรษฐฯ/เดือน(ลบ.)','คชจ.นอกนิยาม/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
+  const lines=items.map(({h,need,inj,r0,r1})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',M(r0.revMo),M(r0.moeMo),M(r0.xmoeMo),M(r0.niM),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
+  const tot=['รวม','','','','','','','','','',M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
   return [head,...lines,tot].join('\n');
 }
 function exCopyTSV(){
