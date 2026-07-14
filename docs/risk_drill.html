@@ -834,7 +834,7 @@ function exDefaultState(){
   // moePct: % ปรับรายกลุ่ม MOE จากค่าเฉลี่ย (default 0% = ตาม run-rate) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
   // adjAll/moePctAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
   return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, ext:0, tgt:6,
-          moePct:{}, moePctAll:0, moeOff:{}, xmoe:true, adj:{}, adjAll:0, revOff:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false}};
+          moePct:{}, moePctAll:0, moeOff:{}, moeOvr:{}, xmoe:true, adj:{}, adjAll:0, revOff:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exLoad(){
@@ -853,6 +853,12 @@ const EX_NONCASH={P24:1,P241:1,EADJ:1};
 // MOE ทางการ: กลุ่มบัญชี 59 ตัวตามนิยามกองเศรษฐกิจสุขภาพ (EX.moeGroups จาก export_exec.py)
 // % ปรับต่อกลุ่ม (−100% = งดจ่ายทั้งหมด · 0% = ตาม run-rate ค่าเฉลี่ยจริง · +100% = จ่ายเพิ่มเป็นสองเท่า)
 function exMoePct(g){ return EXST.moePct[g]!=null?EXST.moePct[g]:0; }
+// % ปรับ MOE รายแห่ง (override) > ค่ากลุ่ม > 0 — เหมือน exPct ของรายรับ
+function exMoePctFor(hc,g){
+  const o=EXST.moeOvr[hc];
+  if(o && o[g]!=null) return o[g];
+  return exMoePct(g);
+}
 function exXmoeOn(){ return EXST.xmoe!==false; }   // ค่าใช้จ่ายนอกนิยาม MOE (run-rate)
 // รพ. ที่แสดงตามฟิลเตอร์
 function exRows(){
@@ -891,7 +897,7 @@ function exRevMo(h){
 }
 function exMoeMo(h){
   const mo=h.bs.mo; let s=0;
-  for(const g of EX.moeGroups){ if(exMoeOff(g.id)) continue; const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePct(g.id)/100); }
+  for(const g of EX.moeGroups){ if(exMoeOff(g.id)) continue; const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
   return Math.max(0,s);
 }
 // ค่าใช้จ่ายเงินสดนอกนิยาม MOE = คชจ.รวม − MOE ทางการ − non-cash (เงินเดือน ขรก./ค่าตอบแทนอื่น/ตามจ่าย/ค่าใช้สอยอื่น ฯลฯ)
@@ -1003,14 +1009,24 @@ function exSet(k,v){
   const el3=document.getElementById('exHorLab3'); if(el3) el3.textContent=exHorLab();
 }
 function exSetType(t,on){ EXST.types[t]=on; exSave(); exRender(); }
-function exSetMoePct(g,v){ v=Math.max(-100,Math.min(100,Math.round((+v||0)/5)*5)); EXST.moePct[g]=v; exSave(); exRender(); }
+function exSetMoePct(g,v){
+  v=Math.max(-100,Math.min(100,Math.round((+v||0)/5)*5));
+  EXST.moePct[g]=v;
+  for(const hc in EXST.moeOvr){ if(EXST.moeOvr[hc] && EXST.moeOvr[hc][g]!=null) delete EXST.moeOvr[hc][g]; }
+  exSave(); exRender();
+}
 function exSetMoeAll(v){
   v=Math.max(-100,Math.min(100,Math.round((+v||0)/5)*5));
   EXST.moePctAll=v;
-  EX.moeGroups.forEach(g=>{ EXST.moePct[g.id]=v; });
+  EX.moeGroups.forEach(g=>{
+    EXST.moePct[g.id]=v;
+    for(const hc in EXST.moeOvr){ if(EXST.moeOvr[hc] && EXST.moeOvr[hc][g.id]!=null) delete EXST.moeOvr[hc][g.id]; }
+  });
   exSave(); exRender();
 }
 function exBumpMoeAll(d){ exSetMoeAll((EXST.moePctAll||0)+d); }
+function exSetMoeOvr(hc,g,v){ if(!EXST.moeOvr[hc]) EXST.moeOvr[hc]={}; EXST.moeOvr[hc][g]=Math.max(-100,Math.min(100,Math.round((+v||0)/5)*5)); exSave(); exRender(); }
+function exBumpMoeOvr(hc,g,d){ exSetMoeOvr(hc,g,exMoePctFor(hc,g)+d); }
 function exSetXmoe(on){ EXST.xmoe=on; exSave(); exRender(); }
 function exSetRevOff(k,off){ EXST.revOff[k]=off; exSave(); exRender(); }
 function exSetMoeOff(g,off){ EXST.moeOff[g]=off; exSave(); exRender(); }
@@ -1034,7 +1050,7 @@ function exBumpMoePct(g,d){ exSetMoePct(g,exMoePct(g)+d); }
 function exKeepOpen(k,open){ if(!EXST.open) EXST.open={}; if(EXST.open[k]===open) return; EXST.open[k]=open; exSave(); }
 function exSetOvr(hc,k,v){ if(!EXST.ovr[hc]) EXST.ovr[hc]={}; EXST.ovr[hc][k]=Math.max(-100,Math.min(200,Math.round((+v||0)/5)*5)); exSave(); exRender(); }
 function exBumpOvr(hc,k,d){ exSetOvr(hc,k,exPct(hc,k.split('|')[0],k.split('|')[1])+d); }
-function exResetOvr(hc){ delete EXST.ovr[hc]; delete EXST.inj[hc]; exSave(); exRender(); }
+function exResetOvr(hc){ delete EXST.ovr[hc]; delete EXST.moeOvr[hc]; delete EXST.inj[hc]; exSave(); exRender(); }
 function exSetTj(k,v){ EXST.tj[k]=v; exSave(); exRender(); }
 function exSetInj(hc,valM){
   if(valM===''||valM==null||isNaN(+valM)) delete EXST.inj[hc];
@@ -1060,9 +1076,10 @@ function exRender(){
   const moeAllv=EXST.moePctAll!=null?EXST.moePctAll:0;
   const nMoeAdj=EX.moeGroups.filter(g=>exMoePct(g.id)!==0).length;
   const nMoeOff=EX.moeGroups.filter(g=>exMoeOff(g.id)).length;
+  const nMoeOvr=Object.values(EXST.moeOvr||{}).reduce((s,o)=>s+Object.keys(o||{}).length,0);
   document.getElementById('exMoeBox').innerHTML=`
     <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน ตามนิยามกองเศรษฐกิจสุขภาพ (${rows.length} แห่งที่เลือก)</h3>
-    <div class="tgt-row" style="border-top:none;padding-top:0">รวม MOE จำลอง: <b>${fmtM(moeTot)}/เดือน</b>${nMoeAdj?` <span class="tgt-note">· ปรับแล้ว ${nMoeAdj}/${EX.moeGroups.length} กลุ่ม</span>`:''}${nMoeOff?` <span class="tgt-note">· ปิดไว้ ${nMoeOff} กลุ่ม (ไม่นับรวม)</span>`:''}</div>
+    <div class="tgt-row" style="border-top:none;padding-top:0">รวม MOE จำลอง: <b>${fmtM(moeTot)}/เดือน</b>${nMoeAdj?` <span class="tgt-note">· ปรับแล้ว ${nMoeAdj}/${EX.moeGroups.length} กลุ่ม</span>`:''}${nMoeOvr?` <span class="tgt-note">· ราย รพ. ${nMoeOvr} จุด</span>`:''}${nMoeOff?` <span class="tgt-note">· ปิดไว้ ${nMoeOff} กลุ่ม (ไม่นับรวม)</span>`:''}</div>
     <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับ MOE ทุกกลุ่มพร้อมกัน: <b id="exMoeAllLab">${(moeAllv>0?'+':'')+moeAllv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด — เทียบค่าเฉลี่ยรายจ่ายจริง)</span></label>
       <div class="exctl" style="gap:6px;flex-wrap:wrap">
         <button type="button" class="ovbulkbtn" onclick="exBumpMoeAll(-10)">−10</button>
@@ -1227,6 +1244,17 @@ function exRender(){
           <input type="range" min="-100" max="200" step="5" value="${pc}" style="flex:1;min-width:70px" onchange="exSetOvr('${hc}','${k}',+this.value)">
           <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpOvr('${hc}','${k}',5)">+5</button>
           <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="200" value="${pc}" onchange="exSetOvr('${hc}','${k}',+this.value)">
+        </div></div>`;}).join('')}
+      <div class="tgt-note" style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">💸 MOE รายแห่ง</div>
+      ${EX.moeGroups.filter(g=>(h.moe[g.id]||0)>0).map(g=>{
+        const gid=g.id, pc=exMoePctFor(hc,gid), av=(h.moe[gid]||0)/h.bs.mo, ov=EXST.moeOvr[hc]&&EXST.moeOvr[hc][gid]!=null, off=exMoeOff(gid);
+        if(off) return `<div class="fld"><label>${g.name} <span class="tgt-note">ปิดไว้ทั้งเขต — ไม่นับรวม (เปิดกลับได้ในตาราง MOE ด้านบน)</span></label></div>`;
+        return `<div class="fld"><label>${g.name} เฉลี่ย ${fmtM(av)}/ด. → <b>${fmtM(Math.max(0,av*(1+pc/100)))}/ด. (${pc>0?'+':''}${pc}%)</b>${ov?' <span class="tgt-note">(ปรับเอง)</span>':''}</label>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:380px">
+          <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpMoeOvr('${hc}','${gid}',-5)">−5</button>
+          <input type="range" min="-100" max="100" step="5" value="${pc}" style="flex:1;min-width:70px" onchange="exSetMoeOvr('${hc}','${gid}',+this.value)">
+          <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpMoeOvr('${hc}','${gid}',5)">+5</button>
+          <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="100" value="${pc}" onchange="exSetMoeOvr('${hc}','${gid}',+this.value)">
         </div></div>`;}).join('')}
       <div class="tgt-note"><a href="#" onclick="exResetOvr('${hc}');return false">↺ ล้างค่าปรับเองของ รพ.นี้ (กลับไปตามกลุ่ม/Solver)</a></div>
     </div></td></tr>`;
