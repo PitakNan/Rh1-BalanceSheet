@@ -571,7 +571,7 @@ function renderWatchlist(){
   const rows=SUMMARY.hospitals.filter(h=>(h.risk||0)>=6).sort((a,b)=>(b.risk||0)-(a.risk||0));
   document.getElementById('right').innerHTML=`
   <div class="dwrap" style="max-width:1200px">
-    <details class="refpanel wl-panel" open>
+    <details class="refpanel wl-panel">
       <summary>🚨 Watchlist — โรงพยาบาลวิกฤต 6-7 คะแนน <span class="meta">งวด ${SUMMARY.periodLabel} ${SUMMARY.period} · ${rows.length} แห่ง จาก ${SUMMARY.nHosp}</span></summary>
       <div class="refbody">
         <div class="note">คลิกแถวเพื่อดูรายละเอียดสาเหตุเต็มรูปแบบ (เทรนด์/waterfall/บัญชี GL) ของ รพ.นั้น</div>
@@ -681,7 +681,7 @@ function ovRender(){
     let injTxt, niTxt, sepTxt=sepBadge(c.sep);
     if(c.m==='skip'){ injTxt='—'; niTxt=`<span class="tgt-note">เป้า ≥ ระดับปัจจุบัน</span>`; sepTxt='—'; }
     else if(c.m==='already'){ injTxt='<b>฿0</b>'; niTxt=`<span style="color:var(--green)">ถึงเป้าด้วยอัตรากำไรปัจจุบัน${p.acp>0?'+เก็บลูกหนี้':''}</span>`; }
-    else if(!c.ok){ injTxt=`<span class="tgt-warn">วิธีนี้ไม่ถึงเป้า</span>`; niTxt=`<span class="tgt-warn">ลองผสม/เพิ่มคันโยก</span>`; }
+    else if(!c.ok){ injTxt=`<span class="tgt-warn">วิธีนี้ไม่ถึงเป้า</span>`; niTxt=`<span class="tgt-warn">ลองผสม/ปรับเงื่อนไขเพิ่มเติม</span>`; }
     else{ injTxt=c.inj>0?`<b>${fmtM(c.inj)}</b>`:'<b>฿0</b>'; niTxt=c.ni>c.r.run?`${sgnM(c.ni)}/ด. ${svChip(c.ni-c.r.run)}`:`<span class="tgt-note">คงอัตราปัจจุบัน (${sgnM(c.r.run)}/ด.)</span>`; }
     const main=`<tr class="ovrow${c.ok?'':' ovbad'}">
       <td>${o.h.prov||''}</td>
@@ -689,7 +689,7 @@ function ovRender(){
       <td><span class="badge" style="background:${riskColor(o.ctx.official)}">${o.ctx.official}</span></td>
       <td class="ovm">${c.m==='skip'?'<span class="tgt-note">—</span>':[radio('auto'),radio('ni'),radio('inj'),radio('mix')].join('')}</td>
       <td>${injTxt}</td><td>${niTxt}</td><td>${sepTxt}</td>
-      <td><button type="button" class="ovtgl" onclick="ovToggle('${hc}')">${open?'▾':'▸'} คันโยก</button></td>
+      <td><button type="button" class="ovtgl" onclick="ovToggle('${hc}')">${open?'▾':'▸'} ปรับเงื่อนไขเพิ่มเติม</button></td>
     </tr>`;
     if(!open) return main;
     // ── sub-row: คันโยกรายแห่ง ──
@@ -736,7 +736,7 @@ function ovRender(){
       <div class="tgt-row">💰 เงินก้อนที่เขต/จังหวัดต้องจัดสรรรวม: <b>${fmtM(sumInj)}</b>${provTxt?` <span class="tgt-note">(${provTxt})</span>`:''}</div>
       <div class="tgt-row">💪 กำไรที่หน่วยบริการต้องทำเพิ่มรวม: <b>${sgnM(sumNiUp)}</b>/เดือน · วิธีที่เลือก: 💪 ${nBy('ni')} · 💰 ${nBy('inj')} · ⚖️ ${nBy('mix')} แห่ง${act.length-plan.length?` · ✅ ถึงเป้าเองแล้ว ${act.length-plan.length} แห่ง`:''}</div>
       <div class="tgt-row">🔄 เงินจากการเร่งเก็บลูกหนี้ (หน่วยบริการหาเอง ไม่ใช่เงินเขต): <b>${fmtM(sumAcp)}</b></div>
-      ${bad.length?`<div class="tgt-row"><span class="tgt-warn">⚠️ แผนที่เลือกยังไม่ถึงเป้า ${bad.length} แห่ง: ${bad.map(x=>x.o.h.name).join(', ')} — เปลี่ยนวิธี/เพิ่มคันโยก หรือยอมรับเป้าที่สูงขึ้น</span></div>`:''}
+      ${bad.length?`<div class="tgt-row"><span class="tgt-warn">⚠️ แผนที่เลือกยังไม่ถึงเป้า ${bad.length} แห่ง: ${bad.map(x=>x.o.h.name).join(', ')} — เปลี่ยนวิธี/ปรับเงื่อนไขเพิ่มเติม หรือยอมรับเป้าที่สูงขึ้น</span></div>`:''}
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="ovCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="ovCopyMsg"></span></div>
     </div>`;
   OV_TSV=ovBuildTSV(items, L, sepLab);
