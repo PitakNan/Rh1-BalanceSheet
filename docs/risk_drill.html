@@ -282,6 +282,18 @@ tr.ovsub td{background:var(--hover);padding:10px 14px}
 .ovsub-box .fld label{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
 .ovsub-box input[type=range]{width:100%;max-width:520px;accent-color:var(--blue);cursor:pointer}
 .ovsub-box select{font-family:inherit;font-size:11.5px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:2px 4px}
+/* ── Executive tab (แนวทางสำหรับผู้บริหาร) ── */
+.extbl input[type=range]{width:150px;max-width:38vw;accent-color:var(--blue);cursor:pointer;vertical-align:middle}
+.exchip{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+.exchip.op{color:var(--blue);border-color:var(--blue)}
+.exchip.ip{color:var(--orange);border-color:var(--orange)}
+.exchip.pp{color:var(--green);border-color:var(--green)}
+.exctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px}
+.exctl label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.exctl select{font-family:inherit;font-size:12px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:4px 6px}
+.exhist{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap}
+.exhist .b{min-width:26px;text-align:center;border-radius:7px;color:#fff;font-weight:800;font-size:11.5px;padding:3px 4px}
+.exnum{font-family:inherit;font-size:12px;width:90px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
 /* ปุ่ม + ป็อปอัปประมาณการ NI รายหมวด (แนว Planfin) */
 .planfin-btn{font-family:inherit;font-size:11px;font-weight:600;padding:2px 9px;border:1px solid var(--blue);border-radius:7px;background:var(--card);color:var(--blue);cursor:pointer;margin-left:8px;white-space:nowrap;vertical-align:middle}
 .planfin-btn:hover{background:var(--blue);color:#fff}
@@ -394,6 +406,7 @@ tr.ovsub td{background:var(--hover);padding:10px 14px}
   <div class="sub">ไล่สาเหตุ Risk Score จากงบทดลอง — เขตสุขภาพที่ 1 · <span id="hPeriod">-</span> · <span id="hNHosp">-</span> รพ.</div>
   <nav style="margin-left:auto;display:flex;gap:14px;font-size:13px;flex-wrap:wrap;align-items:center">
     <a href="index.html" style="color:#cbd5e1;text-decoration:none">← Balance Sheet</a>
+    <a href="#exec" style="color:#6ee7b7;text-decoration:none;font-weight:600">🧭 ผู้บริหาร</a>
     <a href="explorer.html" style="color:#fbbf24;text-decoration:none;font-weight:600">🔍 Explorer</a>
     <a href="https://pitaknan.github.io/Risk-Score-Rh1/" target="_blank" style="color:#cbd5e1;text-decoration:none">🎯 Risk Score</a>
     <button id="themeBtn" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">🌙</button>
@@ -489,6 +502,7 @@ async function init(){
 function applyHash(){
   const m=location.hash.match(/^#h\/(\w+)/);
   if(m && SUMMARY.hospitals.find(h=>h.hcode===m[1])) selectHosp(m[1]);
+  else if(location.hash.startsWith('#exec')) { CUR=null; renderList(); closeDrawer(); renderExec(); }
   else { CUR=null; renderList(); renderWatchlist(); }
 }
 
@@ -611,7 +625,7 @@ let OV_CTX=null, OV_TGT=null, OV_OPEN={}, OV_PLAN={}, OV_TSV='';
 function survOverviewHtml(rows){
   if(!rows.length) return '';
   return `<div class="panel" id="ovBox" style="margin-top:14px">
-    <h3 style="margin:0 0 8px">🧮 ภาพรวม จำลองอัตราความอยู่รอด — แผนจัดสรรรายแห่ง</h3>
+    <h3 style="margin:0 0 8px">🧮 ภาพรวม จำลองอัตราความอยู่รอด — แผนจัดสรรรายแห่ง <a class="ovlink" href="#exec" style="font-weight:600">🧭 มุมมองผู้บริหาร (โมเดล MOE) →</a></h3>
     <div class="note">ตั้งเป้าระดับวิกฤตร่วมกันสำหรับ รพ. วิกฤต 6-7 คะแนนทั้ง ${rows.length} แห่ง แล้ว<b>เลือกวิธีของแต่ละแห่ง</b> (กำไร/เงินก้อน/ผสม) พร้อมคันโยกเร่งเก็บลูกหนี้และชำระหนี้ — ระบบรวมเป็นแผนจัดสรรเงินระดับเขตให้อัตโนมัติ (บันทึกแผนไว้ในเครื่อง เปิดใหม่ไม่หาย)</div>
     <div id="ovBody"><div class="note" style="padding:10px 0">กำลังโหลดข้อมูล ${rows.length} แห่ง...</div></div>
   </div>`;
@@ -802,6 +816,331 @@ function ovResetRow(hc){ const o=OV_CTX.find(x=>x.h.hcode===hc); if(!o)return; O
 function ovCopyTSV(){
   const done=ok=>{ const el=document.getElementById('ovCopyMsg'); if(el) el.textContent=ok?'คัดลอกแล้ว ✓ วางใน Excel/รายงานได้เลย':'คัดลอกไม่ได้ — เบราว์เซอร์ไม่รองรับ'; };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(OV_TSV).then(()=>done(true),()=>done(false));
+  else done(false);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ── Executive Tab: แนวทางสำหรับผู้บริหาร (hash #exec) ──────────────────
+// โมเดล MOE: NI จำลอง/เดือน = Σรายรับกองทุน×(1+%) − MOE (คชจ.จำเป็น) − ค่าเสื่อม
+// แทนการลาก NI เฉลี่ย YTD ตรงๆ — เพราะรายรับต้นปีมีเงินเหมาจ่าย/จ่ายล่วงหน้าเป็นก้อน
+// + Option ปรับหนี้ค่ารักษาตามจ่าย รพช.↔รพศ./รพท. (จ่ายจริง/ยกหนี้ เกลี่ยสัดส่วนในจังหวัด)
+// + Solver เงินสนับสนุนขั้นต่ำรายแห่งให้ถึงเป้าระดับวิกฤต ≤ เป้า และเงินสดไม่หมด
+// ══════════════════════════════════════════════════════════════════════
+let EX=null, EXST=null, EXOPEN={}, EXTJ=null, EXROWS=null, EX_TSV='';
+const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
+function exKey(p,seg){ return p+'|'+seg; }
+function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
+function exDefaultState(){
+  const moe={};  // true = นับเป็น MOE (จ่ายต่อไปตาม run-rate) — P24 ไม่อยู่ในลิสต์ (หักเป็นค่าเสื่อมใน NI อัตโนมัติ)
+  return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, ext:0, tgt:6,
+          moe, adj:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}};
+}
+function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
+function exLoad(){
+  EXST=exDefaultState();
+  try{ const s=JSON.parse(localStorage.getItem(exStoreKey())||'null'); if(s) EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})}}; }catch(e){}
+}
+// % ปรับรายรับ (จำนวนเต็ม −100..+200): override ราย รพ. > ค่ากลุ่ม > 0
+function exPct(hc,p,seg){
+  const k=exKey(p,seg);
+  const o=EXST.ovr[hc];
+  if(o && o[k]!=null) return o[k];
+  return EXST.adj[k]!=null?EXST.adj[k]:0;
+}
+// P24/P241/EADJ = non-cash bundle (ตรง exp−e33y ของสูตรทางการ) — ไม่อยู่ในลิสต์ MOE หักใน NI อัตโนมัติผ่าน depMo
+const EX_NONCASH={P24:1,P241:1,EADJ:1};
+function exMoeOn(p){ return !EX_NONCASH[p] && EXST.moe[p]!==false; }
+// รพ. ที่แสดงตามฟิลเตอร์
+function exRows(){
+  return EX.hosp.filter(h=>EXST.types[h.type] && (EXST.crisis==='all' || (h.risk||0)>=6));
+}
+// ── ตามจ่าย: เกลี่ยภาระฝั่งเจ้าหนี้ (รพศ./รพท.) ตามสัดส่วนลูกหนี้นอก CUP ในจังหวัดเดียวกัน ──
+function exTjCalc(){
+  if(EXST.tj.mode==='off') return {debtors:new Set(), shares:{}, byProv:{}, total:0, uncovered:0};
+  const scope=EXST.tj.scope;
+  const debtors=EX.hosp.filter(h=>h.type==='รพช.' && h.tj.payIn>0 && (scope==='all' || (h.risk||0)>=6));
+  const byProv={};
+  debtors.forEach(h=>{ byProv[h.prov]=(byProv[h.prov]||0)+h.tj.payIn; });
+  const shares={}; let uncovered=0;
+  for(const prov in byProv){
+    const creds=EX.hosp.filter(h=>(h.type==='รพศ.'||h.type==='รพท.') && h.prov===prov && h.tj.arIn>0);
+    const w=creds.reduce((s,h)=>s+h.tj.arIn,0);
+    if(!w){ uncovered+=byProv[prov]; continue; }
+    let left=byProv[prov];
+    creds.forEach(h=>{ const s=Math.min(h.tj.arIn, byProv[prov]*h.tj.arIn/w); shares[h.hcode]=(shares[h.hcode]||0)+s; left-=s; });
+    if(left>1) uncovered+=left;
+  }
+  return {debtors:new Set(debtors.map(h=>h.hcode)), shares, byProv,
+          total:debtors.reduce((s,h)=>s+h.tj.payIn,0), uncovered};
+}
+// ── NI จำลอง/เดือน (บัญชี) = Σรายรับ×(1+%) − MOE − ค่าเสื่อม run-rate ──
+function exRevMo(h){
+  const mo=h.bs.mo; let s=0;
+  for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
+    for(const g of ['op','ip','pp','oth']){ const v=r[g]||0; if(!v) continue;
+      s += v/mo*(1+exPct(h.hcode,p,g)/100); } }
+  return s;
+}
+function exMoeMo(h){
+  const mo=h.bs.mo; let s=0;
+  for(const p of EX.expOrder){ if(!exMoeOn(p)) continue; s+=(h.exp[p]||0)/mo; }
+  return s;
+}
+function exNiMo(h){ return exRevMo(h)-exMoeMo(h)-h.bs.depMo; }
+// ── จำลองเส้นทางถึง horizon (ก.ย. + ext เดือน) — anchor คะแนนทางการแบบเดียวกับ Simulator เดิม ──
+function exSimPath(h, inj){
+  const bs=h.bs;
+  let st={cca:bs.ca+inj, ccl:bs.cl, cqn:bs.qn+inj, ccn:bs.cn+inj, ni:bs.ni, mo:bs.mo};
+  if(EXST.tj.mode!=='off'){
+    if(EXTJ.debtors.has(h.hcode)){
+      const D=h.tj.payIn;
+      if(EXST.tj.mode==='pay'){ st.cca-=D; st.cqn-=D; st.ccn-=D; st.ccl=Math.max(0,st.ccl-D); }
+      else { st.ccl=Math.max(0,st.ccl-D); st.ni+=D; }   // ยกหนี้ = รายได้ (4301020105.256) เข้า NI ตามบัญชีจริง
+    }
+    const S=EXTJ.shares[h.hcode]||0;
+    if(S>0){
+      if(EXST.tj.mode==='pay'){ st.ccn+=S; }            // ได้เงินสด (ลูกหนี้→เงินสด CA/QN คงที่)
+      else { st.cca-=S; st.cqn-=S; st.ni-=S; }          // ยกหนี้ = ตัดลูกหนี้ + คชจ.อุดหนุน (5107) เข้า NI
+    }
+  }
+  const niM=exNiMo(h), depMo=bs.depMo;
+  const base=scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo).risk;
+  const anc=v=>Math.max(0,Math.min(7,(h.risk!=null?h.risk:0)+(v-base)));
+  const months=(12-bs.mo)+(+EXST.ext||0);
+  let r=anc(scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo).risk);
+  let sepRisk=(bs.mo===12?r:null), endRisk=r, cashOut=st.ccn<=0?0:null;
+  for(let k=1;k<=months;k++){
+    if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;
+    st.ni+=niM;
+    const c=niM+depMo;
+    st.cca+=c; st.cqn+=c; st.ccn+=c;
+    r=anc(scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo).risk);
+    if(st.mo===12 && sepRisk==null) sepRisk=r;   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
+    if(st.ccn<=0 && cashOut==null) cashOut=k;
+    endRisk=r;
+  }
+  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:exMoeMo(h)};
+}
+// ── Solver: เงินก้อนขั้นต่ำ (เดือน 0) ให้ ระดับ ณ ก.ย.≤เป้า และปลาย horizon≤เป้า และเงินสดไม่หมด ──
+function exSolve(h){
+  const L=EXST.tgt;
+  const pass=v=>{ const r=exSimPath(h,v); return (r.sepRisk==null||r.sepRisk<=L)&&r.endRisk<=L&&r.cashOut==null; };
+  if(pass(0)) return 0;
+  const HI=Math.max(2*h.bs.cl, 400e6);
+  if(!pass(HI)) return null;
+  let lo=0, hi=HI;
+  while(hi-lo>SV_STEP){
+    const mid=Math.round((lo+hi)/2/SV_STEP)*SV_STEP;
+    if(mid<=lo||mid>=hi) break;
+    if(pass(mid)) hi=mid; else lo=mid;
+  }
+  return hi;
+}
+function exInjOf(h, need){ const m=EXST.inj[h.hcode]; return m!=null?m:(need!=null?need:0); }
+function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }
+function exHorLab(){ return (+EXST.ext||0)>0 ? tLab(addMo(exSepT(), +EXST.ext)) : tLab(exSepT()); }
+// ── Render หลักของแท็บ ──
+async function renderExec(){
+  document.getElementById('right').innerHTML='<div class="hint-empty">กำลังโหลดข้อมูลผู้บริหาร...</div>';
+  if(!EX){
+    try{ EX=await fetch(D+'exec.json').then(r=>r.json()); }
+    catch(e){ document.getElementById('right').innerHTML='<div class="hint-empty">โหลด exec.json ไม่ได้ — ยังไม่ได้รัน export_exec.py</div>'; return; }
+    exLoad();
+  }
+  if(!location.hash.startsWith('#exec')) return;
+  const sepLab=tLab(exSepT());
+  document.getElementById('right').innerHTML=`
+  <div class="dwrap" style="max-width:1200px">
+    <div class="panel">
+      <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง <span id="exHorLab2">${sepLab}</span> ด้วยโมเดล MOE</h3>
+      <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE)</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b></div>
+      <div class="exctl" style="margin-top:10px">
+        <span class="seg" style="display:inline-flex">
+          <button id="exC67" class="${EXST.crisis==='67'?'on':''}" onclick="exSet('crisis','67')">🚨 วิกฤต 6-7</button>
+          <button id="exCall" class="${EXST.crisis==='all'?'on':''}" onclick="exSet('crisis','all')">ทุกระดับ</button>
+        </span>
+        ${['รพศ.','รพท.','รพช.'].map(t=>`<label><input type="checkbox" ${EXST.types[t]?'checked':''} onchange="exSetType('${t}',this.checked)"> ${t}</label>`).join('')}
+        <label>ช่วงจำลอง:
+          <select onchange="exSet('ext',+this.value)">
+            <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${sepLab} (สิ้นปีงบ)</option>
+            ${[3,6,12].map(x=>`<option value="${x}" ${+EXST.ext===x?'selected':''}>+${x} เดือน (${tLab(addMo(exSepT(),x))})</option>`).join('')}
+          </select></label>
+        <label>เป้าระดับวิกฤตไม่เกิน:
+          <select onchange="exSet('tgt',+this.value)">${[0,1,2,3,4,5,6].map(L=>`<option value="${L}" ${EXST.tgt===L?'selected':''}>${L}</option>`).join('')}</select></label>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:14px" id="exMoeBox"></div>
+    <div class="panel" style="margin-top:14px" id="exRevBox"></div>
+    <div class="panel" style="margin-top:14px" id="exTjBox"></div>
+    <div class="panel" style="margin-top:14px" id="exResBox"></div>
+    <div class="gap-note" style="margin-top:14px">⚙️ สมมติฐาน: <b>NI จำลอง/เดือน = Σรายรับกองทุน×(1+%ปรับ) − MOE − ค่าเสื่อม run-rate</b> · กระแสเงินสด/เดือน = NI + ค่าเสื่อม = รายรับ − MOE · ค่าเฉลี่ยรายรับ/รายจ่ายมาจากยอดจริงสะสม ${EX.monthsElapsed} เดือน (ต.ค.–${EX.periodLabel}) ผัง P ของ Planfin — <b>รวมส่วนต่ำ/ส่วนสูงแล้ว</b> · การแยก OP/IP/P&P map จากชื่อบัญชี (ร่างเอง รอ CFO review) · เงินสนับสนุน = เงินก้อนครั้งเดียวเดือน 0 เพิ่ม CA/QN/เงินสด · ตามจ่าย: เจ้าหนี้ OP-UC นอก CUP ในจังหวัด (2101020199.202) ↔ ลูกหนี้นอก CUP (1102050101/.194) เกลี่ยสัดส่วนในจังหวัด — <b>ยกหนี้</b>: รพช. ตัดหนี้+รับรู้รายได้ (4301020105.256), รพศ./รพท. ตัดลูกหนี้+คชจ.อุดหนุน (5107) ตามบัญชีจริง · เกณฑ์คะแนน CR/QR/Cash/NWC/NI/SU ตรงสูตรทางการชุดเดียวกับหน้าจำลองเดิม · จุดตั้งต้นเดือน 0 ตรง badge ทางการ · เป็นการจำลองเชิงสถานการณ์เพื่อวางแผนจัดสรร ไม่ใช่พยากรณ์</div>
+  </div>`;
+  exRender();
+}
+function exSet(k,v){ EXST[k]=v; if(k==='crisis'){document.getElementById('exC67').classList.toggle('on',v==='67');document.getElementById('exCall').classList.toggle('on',v==='all');} exSave(); exRender(); const el=document.getElementById('exHorLab2'); if(el) el.textContent=exHorLab(); }
+function exSetType(t,on){ EXST.types[t]=on; exSave(); exRender(); }
+function exSetMoe(p,on){ EXST.moe[p]=on; exSave(); exRender(); }
+// สไลด์กลุ่ม: บังคับทับ override รายแห่งของ key นั้นทุก รพ. (ตามกติกา "ปรับทั้งกลุ่ม ค่าต้องเปลี่ยนตาม")
+function exSetAdj(k,v){
+  EXST.adj[k]=v;
+  for(const hc in EXST.ovr){ if(EXST.ovr[hc] && EXST.ovr[hc][k]!=null) delete EXST.ovr[hc][k]; }
+  exSave(); exRender();
+}
+function exSetAll(v){
+  EXROWS_SEGS.forEach(({p,g})=>{ EXST.adj[exKey(p,g)]=v; });
+  EXST.ovr={};
+  exSave(); exRender();
+}
+function exSetOvr(hc,k,v){ if(!EXST.ovr[hc]) EXST.ovr[hc]={}; EXST.ovr[hc][k]=v; exSave(); exRender(); }
+function exResetOvr(hc){ delete EXST.ovr[hc]; delete EXST.inj[hc]; exSave(); exRender(); }
+function exSetTj(k,v){ EXST.tj[k]=v; exSave(); exRender(); }
+function exSetInj(hc,valM){
+  if(valM===''||valM==null||isNaN(+valM)) delete EXST.inj[hc];
+  else EXST.inj[hc]=Math.max(0,Math.round(+valM*1e6/SV_STEP)*SV_STEP);
+  exSave(); exRender();
+}
+function exToggle(hc){ EXOPEN[hc]=!EXOPEN[hc]; exRender(); }
+let EXROWS_SEGS=[];
+function exRender(){
+  if(!EX || !document.getElementById('exResBox')) return;
+  EXTJ=exTjCalc();
+  const rows=exRows();
+  const mo=EX.monthsElapsed, left=12-mo;
+  const horLab=exHorLab(), sepLab=tLab(exSepT());
+  // ── MOE panel ──
+  const expAgg={};
+  rows.forEach(h=>{ for(const p in h.exp) expAgg[p]=(expAgg[p]||0)+h.exp[p]; });
+  const moeTot=rows.reduce((s,h)=>s+exMoeMo(h),0);
+  const depTot=rows.reduce((s,h)=>s+h.bs.depMo,0);
+  document.getElementById('exMoeBox').innerHTML=`
+    <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน (${rows.length} แห่งที่เลือก)</h3>
+    <div class="note">ติ๊กออก = สมมติว่า<b>งดจ่าย</b>หมวดนั้นในช่วงที่เหลือ (ค่าตั้งต้น: จ่ายทุกหมวดตาม run-rate = NI จำลองตรงค่าเฉลี่ยจริง) · ค่าเสื่อม/หนี้สูญ/ปรับปรุงระหว่างหน่วยงาน (P24·P241·EADJ) ไม่อยู่ในลิสต์ — ไม่ใช่เงินสด หักใน NI อัตโนมัติ ${fmtM(depTot)}/เดือน</div>
+    <div class="exctl" style="margin-top:8px">
+      ${EX.expOrder.filter(p=>!EX_NONCASH[p]&&(expAgg[p]||0)!==0).map(p=>`<label title="${EX.pn[p]||p}"><input type="checkbox" ${exMoeOn(p)?'checked':''} onchange="exSetMoe('${p}',this.checked)"> ${p} ${(EX.pn[p]||'').replace('ต้นทุน','')} <span class="tgt-note">${fmtM((expAgg[p]||0)/mo)}/ด.</span></label>`).join('')}
+    </div>
+    <div class="tgt-row" style="margin-top:6px">รวม MOE ที่เลือก: <b>${fmtM(moeTot)}/เดือน</b> <span class="tgt-note">(ไม่รวมค่าเสื่อม)</span></div>`;
+  // ── Revenue panel ──
+  const revAgg={};
+  rows.forEach(h=>{ for(const p in h.rev){ const r=h.rev[p]; for(const g of ['op','ip','pp','oth']){ if(r[g]) { const k=exKey(p,g); revAgg[k]=(revAgg[k]||0)+r[g]; } } } });
+  EXROWS_SEGS=[];
+  for(const p of EX.revOrder) for(const g of ['op','ip','pp','oth']){ if(revAgg[exKey(p,g)]) EXROWS_SEGS.push({p,g}); }
+  const revTot=rows.reduce((s,h)=>s+exRevMo(h),0);
+  document.getElementById('exRevBox').innerHTML=`
+    <h3 style="margin:0 0 6px">📈 ประมาณการรายรับกองทุน ${left} เดือนที่เหลือ (${tLab(addMo(EX.period,1))}–${sepLab})</h3>
+    <div class="note">ยอดสะสมจริง ${mo} เดือน (รวมส่วนต่ำ/ส่วนสูงแล้ว) → ค่าเฉลี่ย/เดือน → เลื่อน % ว่าช่วงที่เหลือจะเข้ากี่ % ของค่าเฉลี่ย (−100% = ไม่เข้าเลย · 0% = เท่าค่าเฉลี่ย · +200% = สามเท่า) — ส่วนใหญ่ควรค่อนไปทางลบ เพราะเงินเหมาจ่ายรายหัว/จ่ายล่วงหน้าเข้าเป็นก้อนต้นปีแล้ว · <b>เลื่อนกลุ่มเมื่อไหร่ ค่าราย รพ. ที่เคยปรับ manual จะถูกบังคับตาม</b></div>
+    <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับทุกกองทุนพร้อมกัน: <b id="exAllLab">—</b></label>
+      <input type="range" min="-100" max="200" step="5" value="0" style="max-width:520px;accent-color:var(--blue)"
+        oninput="document.getElementById('exAllLab').textContent=(this.value>0?'+':'')+this.value+'%'"
+        onchange="exSetAll(+this.value)"></div>
+    <div class="acctbl-wrap extbl" style="max-height:420px">
+      <table class="wltbl">
+        <tr><th>กองทุน</th><th>ประเภท</th><th>สะสม ${mo} เดือน</th><th>เฉลี่ย/เดือน</th><th>% จากค่าเฉลี่ย</th><th>ใช้จริง/เดือน</th></tr>
+        ${EXROWS_SEGS.map(({p,g})=>{
+          const k=exKey(p,g), tot=revAgg[k], av=tot/mo, pc=EXST.adj[k]!=null?EXST.adj[k]:0;
+          return `<tr>
+            <td><b>${p}</b> ${(EX.pn[p]||'').replace('รายได้','')}</td>
+            <td><span class="exchip ${g}">${EX_SEGL[g]}</span></td>
+            <td>${fmtM(tot)}</td><td>${fmtM(av)}</td>
+            <td><input type="range" min="-100" max="200" step="5" value="${pc}"
+              oninput="this.parentNode.nextElementSibling.innerHTML='<b>'+fmtM(${av}*(1+this.value/100))+'</b> <span class=tgt-note>('+(this.value>0?'+':'')+this.value+'%)</span>'"
+              onchange="exSetAdj('${k}',+this.value)"></td>
+            <td><b>${fmtM(av*(1+pc/100))}</b> <span class="tgt-note">(${pc>0?'+':''}${pc}%)</span></td>
+          </tr>`;}).join('')}
+      </table>
+    </div>
+    <div class="tgt-row">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> · เทียบ MOE <b>${fmtM(moeTot)}/เดือน</b> → ส่วนต่างเงินสด <b style="color:${revTot-moeTot<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot)}/เดือน</b></div>`;
+  // ── ตามจ่าย panel ──
+  const creds=EX.hosp.filter(h=>EXTJ.shares[h.hcode]>0);
+  document.getElementById('exTjBox').innerHTML=`
+    <h3 style="margin:0 0 6px">🔁 Option พิเศษ: ปรับหนี้ค่ารักษาตามจ่าย รพช. ↔ รพศ./รพท.</h3>
+    <div class="exctl">
+      <label><input type="radio" name="extj" ${EXST.tj.mode==='off'?'checked':''} onchange="exSetTj('mode','off')"> ไม่ใช้</label>
+      <label><input type="radio" name="extj" ${EXST.tj.mode==='forgive'?'checked':''} onchange="exSetTj('mode','forgive')"> 🤝 ยกหนี้ (เงินให้เปล่าตามหนี้ค้าง → เคลียร์กัน)</label>
+      <label><input type="radio" name="extj" ${EXST.tj.mode==='pay'?'checked':''} onchange="exSetTj('mode','pay')"> 💵 รพช. จ่ายชำระจริง</label>
+      <span style="border-left:1px solid var(--line);padding-left:14px">ขอบเขต:
+        <label style="display:inline-flex"><input type="radio" name="extjs" ${EXST.tj.scope==='crisis'?'checked':''} onchange="exSetTj('scope','crisis')"> เฉพาะ รพช. วิกฤต 6-7</label>
+        <label style="display:inline-flex;margin-left:8px"><input type="radio" name="extjs" ${EXST.tj.scope==='all'?'checked':''} onchange="exSetTj('scope','all')"> รพช. ทุกแห่ง</label></span>
+    </div>
+    ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่ง รพศ./รพท. ${fmtM(EX.hosp.filter(h=>h.type!=='รพช.').reduce((s,h)=>s+h.tj.arIn,0))}</div>`
+    :`<div class="tgt-row" style="margin-top:8px">ยอดหนี้ที่เคลียร์: <b>${fmtM(EXTJ.total)}</b> จาก รพช. ${EXTJ.debtors.size} แห่ง <span class="tgt-note">(${Object.entries(EXTJ.byProv).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')})</span>${EXTJ.uncovered>1?` <span class="tgt-warn">⚠️ ${fmtM(EXTJ.uncovered)} เกลี่ยไม่ได้ (ลูกหนี้ฝั่งรับในจังหวัดไม่พอ/ไม่มี)</span>`:''}</div>
+    <div class="acctbl-wrap" style="max-height:260px;margin-top:6px">
+      <table class="wltbl">
+        <tr><th>ผู้รับภาระ (เจ้าหนี้เดิม)</th><th>จังหวัด</th><th>ลูกหนี้นอก CUP</th><th>ภาระที่รับ</th><th>ผลกระทบ</th><th>ระดับ ณ ${sepLab}</th></tr>
+        ${creds.map(h=>{ const S=EXTJ.shares[h.hcode]; const r=exSimPath(h,0);
+          return `<tr><td><b>${h.name}</b> <span class="tgt-note">${h.type}</span></td><td>${h.prov}</td><td>${fmtM(h.tj.arIn)}</td><td><b>${fmtM(S)}</b></td>
+          <td class="tgt-note">${EXST.tj.mode==='pay'?'ได้เงินสด +'+fmtM(S):'ตัดลูกหนี้เป็น คชจ. −'+fmtM(S)}</td>
+          <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> → <span class="badge" style="background:${riskColor(r.sepRisk)}">${r.sepRisk!=null?r.sepRisk:'–'}</span></td></tr>`;}).join('')}
+      </table>
+    </div>
+    <div class="note" style="margin-top:4px">การเกลี่ยภาระเป็น<b>การประมาณตามสัดส่วน</b>ลูกหนี้นอก CUP ในจังหวัดเดียวกัน — คู่หนี้จริงอาจต่างจากนี้ ต้องยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขตก่อนสั่งการจริง</div>`}`;
+  // ── Results ──
+  const items=rows.map(h=>{
+    const need=exSolve(h);
+    const inj=exInjOf(h, need);
+    const r0=exSimPath(h,0), r1=(inj>0?exSimPath(h,inj):r0);
+    return {h, need, inj, r0, r1, manual:EXST.inj[h.hcode]!=null};
+  }).sort((a,b)=>((b.h.risk||0)-(a.h.risk||0)) || ((b.need||0)-(a.need||0)));
+  const sumNeed=items.reduce((s,x)=>s+(x.inj||0),0);
+  const nHelp=items.filter(x=>(x.inj||0)>0).length;
+  const nFail=items.filter(x=>x.need==null).length;
+  const byProv={};
+  items.forEach(x=>{ if(x.inj>0) byProv[x.h.prov]=(byProv[x.h.prov]||0)+x.inj; });
+  const hist=lv=>{ const c={}; items.forEach(x=>{ const v=lv(x); if(v!=null) c[v]=(c[v]||0)+1; });
+    return [7,6,5,4,3,2,1,0].filter(L=>c[L]).map(L=>`<span class="b" style="background:${riskColor(L)}">${L}×${c[L]}</span>`).join(''); };
+  const rowsHtml=items.map(x=>{
+    const {h,need,inj,r0,r1}=x, hc=h.hcode, open=!!EXOPEN[hc];
+    const main=`<tr>
+      <td>${h.prov||''}</td>
+      <td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.cls?' '+h.cls:''}</span> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a></td>
+      <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span></td>
+      <td style="color:${r0.niM<0?'var(--red)':'var(--green)'}">${sgnM(r0.niM)}</td>
+      <td>${r0.cashOut!=null?`<span class="tgt-warn">${r0.cashOut===0?'ติดลบแล้ว':'เดือน '+r0.cashOut+' ('+tLab(addMo(h.bs.t,r0.cashOut))+')'}</span>`:'<span style="color:var(--green)">ไม่หมด</span>'}</td>
+      <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
+      <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<b>฿0</b>')}</td>
+      <td><span class="badge" style="background:${riskColor(r1.sepRisk)}">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
+      <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
+    </tr>`;
+    if(!open) return main;
+    const segs=[];
+    for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
+      for(const g of ['op','ip','pp','oth']){ if(r[g]) segs.push({p,g,v:r[g]}); } }
+    const sub=`<tr class="ovsub"><td colspan="9"><div class="ovsub-box">
+      <div class="fld"><label>💰 เงินสนับสนุนกำหนดเอง (ล้านบาท — เว้นว่าง = ใช้ค่า Solver อัตโนมัติ):
+        <input type="number" class="exnum" step="0.5" min="0" value="${x.manual?(EXST.inj[hc]/1e6):''}" placeholder="อัตโนมัติ"
+          onchange="exSetInj('${hc}',this.value)"></label></div>
+      ${segs.map(({p,g,v})=>{ const k=exKey(p,g), pc=exPct(hc,p,g), av=v/h.bs.mo, ov=EXST.ovr[hc]&&EXST.ovr[hc][k]!=null;
+        return `<div class="fld"><label>${p} ${(EX.pn[p]||'').replace('รายได้','')} <span class="exchip ${g}">${EX_SEGL[g]}</span> เฉลี่ย ${fmtM(av)}/ด. → <b>${fmtM(av*(1+pc/100))}/ด. (${pc>0?'+':''}${pc}%)</b>${ov?' <span class="tgt-note">(ปรับเอง)</span>':''}</label>
+        <input type="range" min="-100" max="200" step="5" value="${pc}" onchange="exSetOvr('${hc}','${k}',+this.value)"></div>`;}).join('')}
+      <div class="tgt-note"><a href="#" onclick="exResetOvr('${hc}');return false">↺ ล้างค่าปรับเองของ รพ.นี้ (กลับไปตามกลุ่ม/Solver)</a></div>
+    </div></td></tr>`;
+    return main+sub;
+  }).join('');
+  EX_TSV=exBuildTSV(items, horLab);
+  document.getElementById('exResBox').innerHTML=`
+    <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})</h3>
+    <div class="acctbl-wrap" style="max-height:none">
+      <table class="wltbl">
+        <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ตอนนี้</th><th>NI จำลอง<br>/เดือน</th><th>เงินสด<br>จะหมด?</th><th>ระดับ ${sepLab}<br>ก่อนช่วย</th><th>เงินสนับสนุน<br>ที่ต้องใช้</th><th>ระดับ<br>หลังช่วย</th><th></th></tr>
+        ${rowsHtml}
+      </table>
+    </div>
+    <div class="tgt-card" style="margin-top:10px">
+      <h4 style="margin:0">💰 สรุประดับเขต — เงินสนับสนุนรวมที่ต้องใช้: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></h4>
+      <div class="tgt-row">ช่วย ${nHelp} แห่ง จาก ${rows.length} แห่งที่เลือก${nFail?` · <span class="tgt-warn">⚠️ ${nFail} แห่งเงินก้อนอย่างเดียวไม่ถึงเป้า (ต้องแก้ NI/รายรับร่วมด้วย)</span>`:''}${Object.keys(byProv).length?` · <span class="tgt-note">${Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')}</span>`:''}</div>
+      <div class="tgt-row">ระดับวิกฤต ณ ${sepLab}: ก่อนช่วย <span class="exhist">${hist(x=>x.r0.sepRisk)}</span> → หลังช่วย <span class="exhist">${hist(x=>x.r1.sepRisk)}</span></div>
+      <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
+    </div>`;
+}
+function exBuildTSV(items, horLab){
+  const M=v=>v==null?'':(v/1e6).toFixed(2);
+  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','รายรับจำลอง/เดือน(ลบ.)','MOE/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
+  const lines=items.map(({h,need,inj,r0,r1})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',M(r0.revMo),M(r0.moeMo),M(r0.niM),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
+  const tot=['รวม','','','','','','','','',M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
+  return [head,...lines,tot].join('\n');
+}
+function exCopyTSV(){
+  const done=ok=>{ const el=document.getElementById('exCopyMsg'); if(el) el.textContent=ok?'คัดลอกแล้ว ✓':'คัดลอกไม่ได้'; };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(EX_TSV).then(()=>done(true),()=>done(false));
   else done(false);
 }
 
