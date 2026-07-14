@@ -576,8 +576,82 @@ function renderWatchlist(){
       </div>
       ${!rows.length?'<div class="note" style="padding:10px">ไม่มี รพ. ที่ Risk Score ≥ 6 ในงวดนี้ 🎉</div>':''}
     </div>
+    ${survOverviewHtml(rows)}
     ${refPanelHtml()}
   </div>`;
+  if(rows.length) loadSurvOverview(rows);
+}
+
+// ── Watchlist Overview: จำลองอัตราความอยู่รอดรวมทั้งกลุ่มวิกฤต 6-7 พร้อมกัน ──
+// ใช้ solveTargetFor() + buildSurvCtx() ซ้ำจาก Survival Simulator รายโรงพยาบาล (ตัวเลขต้องตรงกันเป๊ะ)
+let OV_CTX=null;
+function survOverviewHtml(rows){
+  if(!rows.length) return '';
+  return `<div class="panel" id="ovBox" style="margin-top:14px">
+    <h3 style="margin:0 0 8px">🧮 ภาพรวม จำลองอัตราความอยู่รอด (Survival Simulator)</h3>
+    <div class="note">ตั้งเป้าระดับวิกฤตร่วมกันสำหรับ รพ. วิกฤต 6-7 คะแนนทั้ง ${rows.length} แห่งนี้ ภายในสิ้นปีงบ — ประมาณการ 3 แนวทางทีละแห่ง แล้วสรุปยอดรวม</div>
+    <div id="ovBody"><div class="note" style="padding:10px 0">กำลังโหลดข้อมูล ${rows.length} แห่ง...</div></div>
+  </div>`;
+}
+function svSepLabelFor(ctx){ return tLab(Math.floor(ctx.startT/100)*100+12); }
+async function loadSurvOverview(rows){
+  const need=rows.filter(h=>!(h.hcode in H_CACHE));
+  if(need.length) await Promise.all(need.map(async h=>{
+    try{ H_CACHE[h.hcode]=await fetch(`${D}h/${h.hcode}.json`).then(r=>r.json()); }
+    catch(e){ H_CACHE[h.hcode]=null; }
+  }));
+  OV_CTX=rows.map(h=>{ const hd=H_CACHE[h.hcode]; return {h, ctx:hd?buildSurvCtx(hd,h):null}; });
+  const el=document.getElementById('ovBody'); if(!el) return;  // ผู้ใช้อาจสลับหน้าไปแล้วระหว่างโหลด
+  const okList=OV_CTX.filter(o=>o.ctx), bad=OV_CTX.length-okList.length;
+  const sepLab=okList.length?svSepLabelFor(okList[0].ctx):'ก.ย.';
+  el.innerHTML=`
+    <div class="tgt-title">🎯 ตั้งเป้าระดับวิกฤตร่วมกันภายใน <b>${sepLab}</b> (ใช้กับ ${okList.length} แห่ง) — กดเลขระดับที่ต้องการ</div>
+    <div class="lvlbtns" id="ovLvlBtns">${[0,1,2,3,4,5,6].map(L=>`<button type="button" class="lvlbtn" data-l="${L}" style="background:${riskColor(L)}" onclick="svOverviewTarget(${L})">${L}</button>`).join('')}</div>
+    ${bad?`<div class="note" style="margin-top:6px">⚠️ ${bad} แห่งข้อมูลเดือนนี้ไม่พอสำหรับจำลอง (ไม่รวมในผลลัพธ์ด้านล่าง)</div>`:''}
+    <div id="ovResult"></div>`;
+}
+function svOverviewTarget(L){
+  if(!OV_CTX) return;
+  document.querySelectorAll('#ovLvlBtns .lvlbtn').forEach(b=>b.classList.toggle('on', +b.dataset.l===L));
+  const results=OV_CTX.filter(o=>o.ctx).map(o=>({h:o.h, ctx:o.ctx, r:solveTargetFor(o.ctx,L)}));
+  const sepLab=results.length?svSepLabelFor(results[0].ctx):'ก.ย.';
+  const rowsHtml=results.map(({h,ctx,r})=>{
+    let ni,inj,mix;
+    if(r.status==='skip'){ ni=inj=mix=`<span class="tgt-note">เป้า ≥ ระดับปัจจุบัน (${ctx.official})</span>`; }
+    else if(r.status==='already'){ ni=inj=mix=`<span style="color:var(--green)">ถึงเป้าอยู่แล้ว</span>`; }
+    else{
+      ni = r.niReq==null?`<span class="tgt-warn">ไม่ทันภายใน ${sepLab}</span>`:`≥ ${sgnM(r.niReq)}/ด. ${svChip(r.niReq-r.run)}`;
+      inj = r.injOnly==null?`<span class="tgt-warn">เติมเท่าไหร่ก็ไม่ถึง</span>`:`≥ ${fmtM(r.injOnly)}`;
+      mix = (r.injMid!=null && r.niMid>r.run)?`${sgnM(r.niMid)}/ด. + ${fmtM(r.injMid)}`:'<span class="tgt-note">—</span>';
+    }
+    return `<tr class="click" onclick="location.hash='h/${h.hcode}'">
+      <td>${h.prov||''}</td><td><b>${h.name}</b></td><td><span class="badge" style="background:${riskColor(ctx.official)}">${ctx.official}</span></td>
+      <td>${ni}</td><td>${inj}</td><td>${mix}</td></tr>`;
+  }).join('');
+  const active=results.filter(x=>x.r.status==='ok');
+  const excluded=results.length-active.length;
+  const niFail=active.filter(x=>x.r.niReq==null).length;
+  const injOnlyOk=active.filter(x=>x.r.injOnly!=null);
+  const sumInjOnly=injOnlyOk.reduce((s,x)=>s+x.r.injOnly,0);
+  const injOnlyFail=active.length-injOnlyOk.length;
+  const mixOk=active.filter(x=>x.r.injMid!=null && x.r.niMid>x.r.run);
+  const sumInjMid=mixOk.reduce((s,x)=>s+x.r.injMid,0);
+  const sumNiMidDelta=mixOk.reduce((s,x)=>s+(x.r.niMid-x.r.run),0);
+  const cards = !active.length
+    ? `<div class="note">ทุกแห่งอยู่ในเกณฑ์เป้าหมายนี้แล้ว หรือเป้าที่เลือก ≥ ระดับปัจจุบันของทุกแห่ง — ไม่มีอะไรต้องประมาณการเพิ่ม</div>`
+    : `<div class="surv-pill down">💪 กำไรอย่างเดียว: ${niFail?`${active.length-niFail}/${active.length} แห่งถึงเป้าได้ (${niFail} แห่งไม่ทันภายใน ${sepLab})`:`ทุกแห่ง (${active.length}) ถึงเป้าได้ด้วยกำไรอย่างเดียว`} — ไม่ต้องใช้เงินก้อนเลย (฿0)</div>
+      <div class="surv-pill up">💰 เติมเงินก้อนอย่างเดียว: รวม <b>${fmtM(sumInjOnly)}</b>${injOnlyFail?` (นับ ${injOnlyOk.length} แห่ง — ${injOnlyFail} แห่งเติมเท่าไหร่ก็ไม่ถึงเป้า)`:` (${injOnlyOk.length} แห่ง)`}</div>
+      <div class="surv-pill">⚖️ แนวทางผสม: รวมเงินก้อน <b>${fmtM(sumInjMid)}</b> + กำไรรวมที่ต้องเพิ่ม <b>${sgnM(sumNiMidDelta)}</b>/เดือน (${mixOk.length} แห่ง)</div>`;
+  document.getElementById('ovResult').innerHTML=`
+    <div class="acctbl-wrap" style="max-height:none;margin-top:8px">
+      <table class="wltbl">
+        <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ปัจจุบัน</th><th>💪 กำไร<br>อย่างเดียว</th><th>💰 เงินก้อน<br>อย่างเดียว</th><th>⚖️ แนวทาง<br>ผสม</th></tr>
+        ${rowsHtml}
+      </table>
+    </div>
+    <div class="surv-sum" style="margin-top:10px">${cards}</div>
+    ${excluded?`<div class="tgt-row tgt-note" style="border-top:1px dashed var(--line);margin-top:6px">${excluded} แห่งอยู่ในเกณฑ์เป้าหมายแล้ว/เป้า ≥ ระดับปัจจุบัน — ไม่รวมในผลรวมด้านบน</div>`:''}
+    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">สมมติฐานเดียวกับ Target Solver รายโรงพยาบาล (กระแสเงินสด = NI + ค่าเสื่อม run-rate) · ไม่รวมแผนเร่งชำระหนี้/เร่งเก็บลูกหนี้ที่ปรับเองได้รายแห่ง (ค่าเริ่มต้น 0 เท่ากันทุกแห่ง) · คลิกแถวเพื่อดูรายละเอียดเต็มของ รพ.นั้น</div>`;
 }
 
 // ── Reference Panel: กรอบ 4 เสาหลัก + ข้อเสนอเชิงระบบ 3 ระดับ ───────────
@@ -993,10 +1067,9 @@ function survLimits(h){
   const [ni,inj]=T[cls]||[100,40];
   return {niLim:ni*1e6, injMax:inj*1e6, cls};
 }
-function renderSurvival(h, s){
-  const box=document.getElementById('survBox'); if(!box) return;
+function buildSurvCtx(h, s){
   const t=h.trend[h.trend.length-1];
-  if(!t || !t.cl || t.e33y==null){ box.innerHTML='<div class="note">งวดนี้ไม่มีข้อมูลพอสำหรับจำลอง</div>'; return; }
+  if(!t || !t.cl || t.e33y==null) return null;
   const mo=t.t%100;
   const depMo=Math.max(0,(t.exp-t.e33y)/mo);   // ค่าเสื่อม/เดือน (run-rate ปัจจุบัน)
   const niRun=Math.round(t.ni/mo/50000)*50000; // NI/เดือน (ค่าเฉลี่ย YTD) ปัดหลักห้าหมื่น
@@ -1018,25 +1091,31 @@ function renderSurvival(h, s){
   // สเกลแกนปรับตามระดับหน่วยบริการ (A ใหญ่สุด → F3 เล็กสุด) เพื่อไม่ให้สเกลกว้างจนมองผลการเปลี่ยนแปลงไม่ออก
   const lim=survLimits(h);
   const NI_LIM=lim.niLim, INJ_MAX=lim.injMax;
-  const clampNi=v=>Math.max(-NI_LIM,Math.min(NI_LIM,v));
   // หนี้สินหมุนเวียนรายหมวด (จ่ายชำระ/ก่อใหม่ ต่อเดือน) + ลูกหนี้ค้างรับ (เร่งเก็บ → เงินก้อน)
   const clbd=h.clBreakdown||null, recv=h.recv||null;
   const totalAR=recv?recv.reduce((s,r)=>s+(r.ar||0),0):0;
   // สเกลสไลด์ "จ่ายหนี้สุทธิ/เดือน": ±ความสามารถจ่ายรวม (Σ payMo) หรือ fallback ตามระดับ
   const DEBT_LIM=Math.max(clbd?Math.round((clbd.totalPay||0)/50000)*50000:0, INJ_MAX);
-  SURV={ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp,planSrc,niLim:NI_LIM,injMax:INJ_MAX,niRun,tgt:null,
+  return {ca:t.ca,cl:t.cl,qn:t.qn,cn:t.cn,ni:t.ni,mo,depMo,startT:t.t,official:(s.risk||0),base,planRev,planExp,planSrc,niLim:NI_LIM,injMax:INJ_MAX,cls:lim.cls,niRun,tgt:null,
         clbd,recv,totalAR,debtLim:DEBT_LIM,debtNetMo:0,acpFreed:0,acpMonth:1};
-  const curL=SURV.official, sepLab=svSepLabel(), moLeft=12-mo;
-  const debtCtrl = clbd ? `
+}
+function renderSurvival(h, s){
+  const box=document.getElementById('survBox'); if(!box) return;
+  const ctx=buildSurvCtx(h,s);
+  if(!ctx){ box.innerHTML='<div class="note">งวดนี้ไม่มีข้อมูลพอสำหรับจำลอง</div>'; return; }
+  SURV=ctx;
+  const curL=SURV.official, sepLab=svSepLabel(), moLeft=12-SURV.mo;
+  const clampNi=v=>Math.max(-SURV.niLim,Math.min(SURV.niLim,v));
+  const debtCtrl = SURV.clbd ? `
       <div class="fld"><label>เร่งชำระหนี้สินหมุนเวียนสุทธิ/เดือน (เกินกว่าที่ก่อหนี้ใหม่): <b id="svDebtLab"></b> ${tip('**คืออะไร**: จ่ายชำระหนี้มากกว่าที่ก่อใหม่ต่อเดือน\n**สูตร**: จ่ายเท่ากับก่อใหม่ถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ นับเฉพาะส่วนสุทธิ — ทำให้เงินสด↓และ CL↓เท่ากัน (NWC คงที่)\n**ข้อมูลจาก**: ตั้งต้นจากค่าเฉลี่ยจ่ายชำระ/ก่อหนี้ใหม่จริงในตาราง "หนี้สินหมุนเวียนรายหมวดย่อย"')}
         <button type="button" class="planfin-btn" onclick="openDebtPlan()">✎ แผนชำระหนี้รายหมวด</button></label>
-        <input type="range" id="svDebt" min="-${DEBT_LIM}" max="${DEBT_LIM}" step="50000" value="0">
-        <span class="surv-base">+ = เร่งจ่าย (เงินสด↓ หนี้↓) · − = ยืดจ่าย (เงินสด↑ หนี้↑) · หนี้คงเหลือ <b>${fmtM(clbd.total)}</b> · ปกติจ่าย ~<b>${fmtM(clbd.totalPay)}</b>/ก่อใหม่ ~<b>${fmtM(clbd.totalInc)}</b> ต่อเดือน · <a href="#" onclick="svReset('debt');return false">ล้างเป็น 0</a></span></div>` : '';
-  const acpCtrl = (recv&&totalAR>0) ? `
+        <input type="range" id="svDebt" min="-${SURV.debtLim}" max="${SURV.debtLim}" step="50000" value="0">
+        <span class="surv-base">+ = เร่งจ่าย (เงินสด↓ หนี้↓) · − = ยืดจ่าย (เงินสด↑ หนี้↑) · หนี้คงเหลือ <b>${fmtM(SURV.clbd.total)}</b> · ปกติจ่าย ~<b>${fmtM(SURV.clbd.totalPay)}</b>/ก่อใหม่ ~<b>${fmtM(SURV.clbd.totalInc)}</b> ต่อเดือน · <a href="#" onclick="svReset('debt');return false">ล้างเป็น 0</a></span></div>` : '';
+  const acpCtrl = (SURV.recv&&SURV.totalAR>0) ? `
       <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (เงินสดเข้าตามเดือนที่ตั้งเป้า): <b id="svAcpLab"></b> ${tip('**คืออะไร**: ตั้งเป้าจำนวนเงินที่จะเก็บลูกหนี้ได้เร็วขึ้น + เดือนที่คาดว่าจะได้รับเป็นเงินสด\n**สูตร**: เงินสดเข้าเป็นก้อนเดียว ณ เดือนที่ตั้งเป้า (ไม่ใช่ทันที) — CA/QN/NWC รวมไม่เปลี่ยน (ลูกหนี้ในนั้นอยู่แล้ว) เปลี่ยนเฉพาะเงินสด/Cash Ratio\n**ข้อมูลจาก**: ลูกหนี้สิทธิ UC/CSMBS/SSS (2610X/2620X/2630X) + ACP ที่คำนวณไว้')}
         <button type="button" class="planfin-btn" onclick="openAcpPlan()">✎ ตั้งเป้าจำนวนเงิน+เดือน รายกองทุน</button></label>
-        <input type="range" id="svAcp" min="0" max="${Math.round(totalAR/50000)*50000}" step="50000" value="0">
-        <span class="surv-base">ลูกหนี้ค้างรับรวม <b>${fmtM(totalAR)}</b> · เก็บได้เร็วขึ้น = เงินสด+Cash Ratio ดีขึ้น (CA/QN/NWC เท่าเดิม) — เข้าเดือนที่ ${SURV.acpMonth} เป็นค่าเริ่มต้น ปรับได้ในป็อปอัป · <a href="#" onclick="svReset('acp');return false">ล้างเป็น 0</a></span></div>` : '';
+        <input type="range" id="svAcp" min="0" max="${Math.round(SURV.totalAR/50000)*50000}" step="50000" value="0">
+        <span class="surv-base">ลูกหนี้ค้างรับรวม <b>${fmtM(SURV.totalAR)}</b> · เก็บได้เร็วขึ้น = เงินสด+Cash Ratio ดีขึ้น (CA/QN/NWC เท่าเดิม) — เข้าเดือนที่ ${SURV.acpMonth} เป็นค่าเริ่มต้น ปรับได้ในป็อปอัป · <a href="#" onclick="svReset('acp');return false">ล้างเป็น 0</a></span></div>` : '';
   box.innerHTML=`
     <div class="tgt-box">
       <div class="tgt-title">🎯 ตั้งเป้าระดับวิกฤตภายใน <b>${sepLab}</b> (สิ้นปีงบ${moLeft>0?` · เหลือ ${moLeft} เดือน`:' · งวดนี้คือ ก.ย. แล้ว'}) — กดเลขระดับที่ต้องการ</div>
@@ -1046,21 +1125,21 @@ function renderSurvival(h, s){
       <div id="tgtCard"></div>
     </div>
     <div class="surv-ctrl">
-      <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b> ${tip('**คืออะไร**: สมมติฐานกำไร/ขาดทุนสุทธิต่อเดือน — ตั้งต้น = ค่าเฉลี่ยจริง YTD÷เดือนที่ผ่าน\n**สูตร**: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (run-rate คงที่) · NI สะสมรีเซ็ตทุก ต.ค.\n**ข้อมูลจาก**: รายได้รวม−ค่าใช้จ่ายรวม (3006Y−3010X) งวดล่าสุด')}${planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
-        <input type="range" id="svNi" min="-${NI_LIM}" max="${NI_LIM}" step="50000" value="${clampNi(niRun)}">
-        <span class="surv-base">เฉลี่ยจริงตอนนี้ <b>${niRun>0?'+':''}${fmtM(niRun)}</b>/เดือน · สเกล ±${fmtM(NI_LIM)} (ระดับ ${lim.cls||'-'}) · <a href="#" onclick="svReset('ni');return false">คืนค่าเฉลี่ย</a></span></div>
+      <div class="fld"><label>กำไร/ขาดทุนต่อเดือน (NI บัญชี): <b id="svNiLab"></b> ${tip('**คืออะไร**: สมมติฐานกำไร/ขาดทุนสุทธิต่อเดือน — ตั้งต้น = ค่าเฉลี่ยจริง YTD÷เดือนที่ผ่าน\n**สูตร**: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (run-rate คงที่) · NI สะสมรีเซ็ตทุก ต.ค.\n**ข้อมูลจาก**: รายได้รวม−ค่าใช้จ่ายรวม (3006Y−3010X) งวดล่าสุด')}${SURV.planRev?`<button type="button" class="planfin-btn" onclick="openNIPlan()">✎ ประมาณการรายหมวด (Planfin)</button>`:''}</label>
+        <input type="range" id="svNi" min="-${SURV.niLim}" max="${SURV.niLim}" step="50000" value="${clampNi(SURV.niRun)}">
+        <span class="surv-base">เฉลี่ยจริงตอนนี้ <b>${SURV.niRun>0?'+':''}${fmtM(SURV.niRun)}</b>/เดือน · สเกล ±${fmtM(SURV.niLim)} (ระดับ ${SURV.cls||'-'}) · <a href="#" onclick="svReset('ni');return false">คืนค่าเฉลี่ย</a></span></div>
       <div class="fld"><label>เงินก้อนเสริมสภาพคล่องจากภายนอก (ครั้งเดียว ตอนนี้): <b id="svInjLab"></b> ${tip('**คืออะไร**: เงินก้อนจากภายนอก (เช่น เขต/สปสช. ช่วยพยุง) ไม่ใช่เงินที่ รพ. หาเองจากกำไร/เก็บลูกหนี้\n**สูตร**: เพิ่มสินทรัพย์หมุนเวียน+สินทรัพย์เร็ว+เงินสด (CA/QN/CN) เท่ากันทันทีในเดือน 0\n**ข้อมูลจาก**: ค่าสมมติ ผู้ใช้กำหนดเอง ไม่มีที่มาจากงบทดลอง')}</label>
-        <input type="range" id="svInj" min="0" max="${INJ_MAX}" step="50000" value="0">
-        <span class="surv-base">ครั้งเดียว ณ ตอนนี้ · สเกล 0–${fmtM(INJ_MAX)} · <a href="#" onclick="svReset('inj');return false">ล้างเป็น 0</a></span></div>
+        <input type="range" id="svInj" min="0" max="${SURV.injMax}" step="50000" value="0">
+        <span class="surv-base">ครั้งเดียว ณ ตอนนี้ · สเกล 0–${fmtM(SURV.injMax)} · <a href="#" onclick="svReset('inj');return false">ล้างเป็น 0</a></span></div>
       ${debtCtrl}
       ${acpCtrl}
     </div>
-    ${SHOW_NET_CASH?`<div class="surv-now">สถานะตอนนี้: เงินสด+เงินฝาก <b>${fmtM(t.cn)}</b> − หนี้สินหมุนเวียน <b>${fmtM(t.cl)}</b> = เงินบำรุงสุทธิ (หลังหักหนี้) <b class="${t.cn-t.cl<0?'neg':'pos'}">${fmtM(t.cn-t.cl)}</b></div>`:''}
+    ${SHOW_NET_CASH?`<div class="surv-now">สถานะตอนนี้: เงินสด+เงินฝาก <b>${fmtM(SURV.cn)}</b> − หนี้สินหมุนเวียน <b>${fmtM(SURV.cl)}</b> = เงินบำรุงสุทธิ (หลังหักหนี้) <b class="${SURV.cn-SURV.cl<0?'neg':'pos'}">${fmtM(SURV.cn-SURV.cl)}</b></div>`:''}
     <div class="surv-sum" id="svSum"></div>
     <div class="surv-chartbox"><canvas id="survChart"></canvas></div>
     ${SHOW_NET_CASH?`<div class="surv-cash-cap">เทียบเงินสด+เงินฝาก (gross) กับ เงินบำรุงสุทธิหลังหักหนี้สินหมุนเวียน (net) ตลอด 24 เดือนที่จำลอง</div>
     <div class="surv-chartbox"><canvas id="cashChart"></canvas></div>`:''}
-    <div class="gap-note">⚙️ สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (<b>${fmtM(depMo)}/เดือน</b> คงที่ตาม run-rate) − เร่งชำระหนี้สุทธิ · <b>เร่งชำระหนี้สุทธิ</b> ลดเงินสดและหนี้สินหมุนเวียนเท่ากัน (NWC/ST/SU ไม่เปลี่ยนเลย) — ${debtDirNote(true)} — เป็นการลดขนาดงบดุล (deleverage) ไม่ใช่การเพิ่มสภาพคล่องเสมอไป · การจ่าย=ก่อหนี้ใหม่ปกติถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ · <b>เร่งเก็บลูกหนี้</b> เปลี่ยนลูกหนี้เป็นเงินสด (CA/QN/NWC เท่าเดิม ดีเฉพาะเงินสด+Cash Ratio) · NI สะสมรีเซ็ตทุก ต.ค. ตามปีงบ · <b>เดือน 0 = สถานะจริงปัจจุบัน</b> — จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</div>`;
+    <div class="gap-note">⚙️ สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม (<b>${fmtM(SURV.depMo)}/เดือน</b> คงที่ตาม run-rate) − เร่งชำระหนี้สุทธิ · <b>เร่งชำระหนี้สุทธิ</b> ลดเงินสดและหนี้สินหมุนเวียนเท่ากัน (NWC/ST/SU ไม่เปลี่ยนเลย) — ${debtDirNote(true)} — เป็นการลดขนาดงบดุล (deleverage) ไม่ใช่การเพิ่มสภาพคล่องเสมอไป · การจ่าย=ก่อหนี้ใหม่ปกติถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ · <b>เร่งเก็บลูกหนี้</b> เปลี่ยนลูกหนี้เป็นเงินสด (CA/QN/NWC เท่าเดิม ดีเฉพาะเงินสด+Cash Ratio) · NI สะสมรีเซ็ตทุก ต.ค. ตามปีงบ · <b>เดือน 0 = สถานะจริงปัจจุบัน</b> — จำลองเชิงสถานการณ์ ไม่ใช่พยากรณ์</div>`;
   document.getElementById('svNi').oninput=projSurv;
   document.getElementById('svInj').oninput=projSurv;
   const dEl=document.getElementById('svDebt'); if(dEl) dEl.oninput=()=>{SURV.debtNetMo=+dEl.value;projSurv();};
@@ -1186,6 +1265,22 @@ function svSolveDown(L){
   if(pass(LO)) return null;
   if(!pass(HI)) return HI;
   return svBin(pass, LO, HI);
+}
+// ── ภาพรวม Watchlist: หา 3 แนวทางของ รพ.เดียว ตามเป้า L ใช้ตรรกะเดียวกับ renderTgtCard ──
+// สลับ SURV ชั่วคราวเพื่อใช้ svSolveNI/svSolveInj/svEvalSep ซ้ำได้ตรงๆ (JS single-thread จึงปลอดภัย)
+function solveTargetFor(ctx, L){
+  const prev=SURV; SURV=ctx;
+  try{
+    const run=ctx.niRun, cur=ctx.official;
+    if(L>=cur) return {status:'skip'};
+    if(svEvalSep(run,0).sep<=L) return {status:'already', run};
+    const niReq=svSolveNI(L,0);
+    const injOnly=svSolveInj(L,run);
+    const niHigh=niReq!=null?niReq:run+ctx.niLim;
+    const niMid=Math.round((run+niHigh)/2/SV_STEP)*SV_STEP;
+    const injMid=niMid>run?svSolveInj(L,niMid):null;
+    return {status:'ok', run, niReq, injOnly, niMid, injMid};
+  } finally { SURV=prev; }
 }
 function svTarget(L){
   if(!SURV) return;
