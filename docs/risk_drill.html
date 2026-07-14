@@ -270,6 +270,10 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .ovlink{font-size:10.5px;color:var(--blue);text-decoration:none;white-space:nowrap}
 .ovlink:hover{text-decoration:underline}
 .ovtgl{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:4px 8px;font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.ovbulk-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:2px}
+.ovbulk{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ovbulkbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:4px 10px;font-size:11.5px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.ovbulkbtn:hover{background:var(--hover);border-color:var(--blue)}
 .ovtgl:hover{background:var(--hover)}
 tr.ovbad td{background:rgba(220,60,60,.06)}
 tr.ovsub td{background:var(--hover);padding:10px 14px}
@@ -732,7 +736,17 @@ function ovRender(){
   const provTxt=Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>`${pv} ${fmtM(v)}`).join(' · ');
   const nBy=m=>plan.filter(x=>x.c.ok&&x.c.m===m).length;
   const summary=`
-    <div class="tgt-card" style="margin-top:10px"><h4>📋 แผนจัดสรรรวม — เป้าระดับ ≤ ${L} ภายใน ${sepLab} (${act.length} แห่ง${items.length-act.length?` · ${items.length-act.length} แห่งเป้า ≥ ระดับปัจจุบัน ไม่นับ`:''})</h4>
+    <div class="tgt-card" style="margin-top:10px">
+      <div class="ovbulk-head">
+        <h4 style="margin:0">📋 แผนจัดสรรรวม — เป้าระดับ ≤ ${L} ภายใน ${sepLab} (${act.length} แห่ง${items.length-act.length?` · ${items.length-act.length} แห่งเป้า ≥ ระดับปัจจุบัน ไม่นับ`:''})</h4>
+        <div class="ovbulk">
+          <span class="tgt-note">บังคับทุกแห่งเป็น:</span>
+          <button type="button" class="ovbulkbtn" onclick="ovSetAllMethod('auto')">อัตโนมัติ</button>
+          <button type="button" class="ovbulkbtn" onclick="ovSetAllMethod('ni')">💪 กำไร</button>
+          <button type="button" class="ovbulkbtn" onclick="ovSetAllMethod('inj')">💰 เงินก้อน</button>
+          <button type="button" class="ovbulkbtn" onclick="ovSetAllMethod('mix')">⚖️ ผสม</button>
+        </div>
+      </div>
       <div class="tgt-row">💰 เงินก้อนที่เขต/จังหวัดต้องจัดสรรรวม: <b>${fmtM(sumInj)}</b>${provTxt?` <span class="tgt-note">(${provTxt})</span>`:''}</div>
       <div class="tgt-row">💪 กำไรที่หน่วยบริการต้องทำเพิ่มรวม: <b>${sgnM(sumNiUp)}</b>/เดือน · วิธีที่เลือก: 💪 ${nBy('ni')} · 💰 ${nBy('inj')} · ⚖️ ${nBy('mix')} แห่ง${act.length-plan.length?` · ✅ ถึงเป้าเองแล้ว ${act.length-plan.length} แห่ง`:''}</div>
       <div class="tgt-row">🔄 เงินจากการเร่งเก็บลูกหนี้ (หน่วยบริการหาเอง ไม่ใช่เงินเขต): <b>${fmtM(sumAcp)}</b></div>
@@ -763,6 +777,12 @@ function ovBuildTSV(items, L, sepLab){
 }
 function ovToggle(hc){ OV_OPEN[hc]=!OV_OPEN[hc]; ovRender(); }
 function ovSetMethod(hc,v){ const o=OV_CTX.find(x=>x.h.hcode===hc); if(!o)return; ovPlanOf(hc,o.ctx).method=v; ovSavePlan(); ovRender(); }
+// บังคับวิธีเดียวกันทุกแห่งพร้อมกัน (ปุ่มข้างหัวข้อ "แผนจัดสรรรวม") — เชื่อมกับ radio รายแถวด้านบนทันที เพราะ ovRender() วาดใหม่จาก OV_PLAN ตัวเดียวกัน
+function ovSetAllMethod(v){
+  if(!OV_CTX) return;
+  OV_CTX.filter(o=>o.ctx).forEach(o=>{ ovPlanOf(o.h.hcode,o.ctx).method=v; });
+  ovSavePlan(); ovRender();
+}
 function ovSetLever(hc,k,v){ const o=OV_CTX.find(x=>x.h.hcode===hc); if(!o)return; ovPlanOf(hc,o.ctx)[k]=v; ovSavePlan(); ovRender(); }
 function ovResetRow(hc){ const o=OV_CTX.find(x=>x.h.hcode===hc); if(!o)return; OV_PLAN[hc]=ovDefaultPlan(o.ctx); ovSavePlan(); ovRender(); }
 function ovCopyTSV(){
