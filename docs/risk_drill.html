@@ -261,6 +261,21 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .tgt-live{margin-top:8px;padding:8px 11px;border-radius:8px;background:var(--bg);font-size:12px;border:1px dashed var(--line);line-height:1.55}
 .tgt-note{font-size:10.5px;color:var(--mut)}
 .tgt-warn{color:var(--bad-ink);font-weight:600}
+/* Overview Allocation Planner */
+.ovm{display:flex;flex-direction:column;gap:2px;font-size:11.5px;white-space:nowrap}
+.ovm label{cursor:pointer;display:flex;align-items:center;gap:4px}
+.ovm input[type=radio]{margin:0;accent-color:var(--blue)}
+.ovlink{font-size:10.5px;color:var(--blue);text-decoration:none;white-space:nowrap}
+.ovlink:hover{text-decoration:underline}
+.ovtgl{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:4px 8px;font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.ovtgl:hover{background:var(--hover)}
+tr.ovbad td{background:rgba(220,60,60,.06)}
+tr.ovsub td{background:var(--hover);padding:10px 14px}
+.ovsub-box{display:flex;flex-direction:column;gap:10px}
+.ovsub-box .fld{display:flex;flex-direction:column;gap:3px}
+.ovsub-box .fld label{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
+.ovsub-box input[type=range]{width:100%;max-width:520px;accent-color:var(--blue);cursor:pointer}
+.ovsub-box select{font-family:inherit;font-size:11.5px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:2px 4px}
 /* ปุ่ม + ป็อปอัปประมาณการ NI รายหมวด (แนว Planfin) */
 .planfin-btn{font-family:inherit;font-size:11px;font-weight:600;padding:2px 9px;border:1px solid var(--blue);border-radius:7px;background:var(--card);color:var(--blue);cursor:pointer;margin-left:8px;white-space:nowrap;vertical-align:middle}
 .planfin-btn:hover{background:var(--blue);color:#fff}
@@ -582,18 +597,34 @@ function renderWatchlist(){
   if(rows.length) loadSurvOverview(rows);
 }
 
-// ── Watchlist Overview: จำลองอัตราความอยู่รอดรวมทั้งกลุ่มวิกฤต 6-7 พร้อมกัน ──
-// ใช้ solveTargetFor() + buildSurvCtx() ซ้ำจาก Survival Simulator รายโรงพยาบาล (ตัวเลขต้องตรงกันเป๊ะ)
-let OV_CTX=null;
+// ── Watchlist Overview v2: แผนจัดสรรรายแห่ง (Allocation Planner) ──
+// เลือกวิธีรายแห่ง (อัตโนมัติ/💪/💰/⚖️) + คันโยกเร่งเก็บลูกหนี้/ชำระหนี้/สมดุลผสม
+// ใช้ solveTargetFor()+buildSurvCtx() ชุดเดียวกับ Simulator รายโรงพยาบาล → ตัวเลขตรงกันเป๊ะ
+let OV_CTX=null, OV_TGT=null, OV_OPEN={}, OV_PLAN={}, OV_TSV='';
 function survOverviewHtml(rows){
   if(!rows.length) return '';
   return `<div class="panel" id="ovBox" style="margin-top:14px">
-    <h3 style="margin:0 0 8px">🧮 ภาพรวม จำลองอัตราความอยู่รอด (Survival Simulator)</h3>
-    <div class="note">ตั้งเป้าระดับวิกฤตร่วมกันสำหรับ รพ. วิกฤต 6-7 คะแนนทั้ง ${rows.length} แห่งนี้ ภายในสิ้นปีงบ — ประมาณการ 3 แนวทางทีละแห่ง แล้วสรุปยอดรวม</div>
+    <h3 style="margin:0 0 8px">🧮 ภาพรวม จำลองอัตราความอยู่รอด — แผนจัดสรรรายแห่ง</h3>
+    <div class="note">ตั้งเป้าระดับวิกฤตร่วมกันสำหรับ รพ. วิกฤต 6-7 คะแนนทั้ง ${rows.length} แห่ง แล้ว<b>เลือกวิธีของแต่ละแห่ง</b> (กำไร/เงินก้อน/ผสม) พร้อมคันโยกเร่งเก็บลูกหนี้และชำระหนี้ — ระบบรวมเป็นแผนจัดสรรเงินระดับเขตให้อัตโนมัติ (บันทึกแผนไว้ในเครื่อง เปิดใหม่ไม่หาย)</div>
     <div id="ovBody"><div class="note" style="padding:10px 0">กำลังโหลดข้อมูล ${rows.length} แห่ง...</div></div>
   </div>`;
 }
 function svSepLabelFor(ctx){ return tLab(Math.floor(ctx.startT/100)*100+12); }
+// ค่าแนะนำ "เร่งเก็บลูกหนี้": ส่วนเกินเป้า ACP ทางการรายกองทุน (UC/CSMBS ≤60 วัน, SSS ≤90 วัน — จาก note)
+function arSuggest(ctx){
+  if(!ctx.recv) return 0;
+  let s=0;
+  for(const r of ctx.recv){
+    const m=(r.note||'').match(/(\d+)/); const tgt=m?+m[1]:60;
+    if(r.acp>tgt && r.ar>0) s+=r.ar*(1-tgt/r.acp);
+  }
+  return Math.round(s/SV_STEP)*SV_STEP;
+}
+function ovDefaultPlan(ctx){ return {method:'auto', alpha:50, acp:arSuggest(ctx), acpMonth:2, debt:0}; }
+function ovPlanOf(hc, ctx){ let p=OV_PLAN[hc]; if(!p){ p=ovDefaultPlan(ctx); OV_PLAN[hc]=p; } return p; }
+function ovStoreKey(){ return 'rh1-ovplan-'+((SUMMARY&&SUMMARY.period)||''); }
+function ovLoadPlan(){ try{ const s=JSON.parse(localStorage.getItem(ovStoreKey())||'null'); if(s){ OV_PLAN=s.plans||{}; OV_TGT=(s.tgt!=null?s.tgt:null); } }catch(e){} }
+function ovSavePlan(){ try{ localStorage.setItem(ovStoreKey(), JSON.stringify({tgt:OV_TGT, plans:OV_PLAN})); }catch(e){} }
 async function loadSurvOverview(rows){
   const need=rows.filter(h=>!(h.hcode in H_CACHE));
   if(need.length) await Promise.all(need.map(async h=>{
@@ -602,6 +633,7 @@ async function loadSurvOverview(rows){
   }));
   OV_CTX=rows.map(h=>{ const hd=H_CACHE[h.hcode]; return {h, ctx:hd?buildSurvCtx(hd,h):null}; });
   const el=document.getElementById('ovBody'); if(!el) return;  // ผู้ใช้อาจสลับหน้าไปแล้วระหว่างโหลด
+  ovLoadPlan();
   const okList=OV_CTX.filter(o=>o.ctx), bad=OV_CTX.length-okList.length;
   const sepLab=okList.length?svSepLabelFor(okList[0].ctx):'ก.ย.';
   el.innerHTML=`
@@ -609,49 +641,131 @@ async function loadSurvOverview(rows){
     <div class="lvlbtns" id="ovLvlBtns">${[0,1,2,3,4,5,6].map(L=>`<button type="button" class="lvlbtn" data-l="${L}" style="background:${riskColor(L)}" onclick="svOverviewTarget(${L})">${L}</button>`).join('')}</div>
     ${bad?`<div class="note" style="margin-top:6px">⚠️ ${bad} แห่งข้อมูลเดือนนี้ไม่พอสำหรับจำลอง (ไม่รวมในผลลัพธ์ด้านล่าง)</div>`:''}
     <div id="ovResult"></div>`;
+  if(OV_TGT!=null) svOverviewTarget(OV_TGT);
 }
 function svOverviewTarget(L){
   if(!OV_CTX) return;
+  OV_TGT=L;
   document.querySelectorAll('#ovLvlBtns .lvlbtn').forEach(b=>b.classList.toggle('on', +b.dataset.l===L));
-  const results=OV_CTX.filter(o=>o.ctx).map(o=>({h:o.h, ctx:o.ctx, r:solveTargetFor(o.ctx,L)}));
-  const sepLab=results.length?svSepLabelFor(results[0].ctx):'ก.ย.';
-  const rowsHtml=results.map(({h,ctx,r})=>{
-    let ni,inj,mix;
-    if(r.status==='skip'){ ni=inj=mix=`<span class="tgt-note">เป้า ≥ ระดับปัจจุบัน (${ctx.official})</span>`; }
-    else if(r.status==='already'){ ni=inj=mix=`<span style="color:var(--green)">ถึงเป้าอยู่แล้ว</span>`; }
-    else{
-      ni = r.niReq==null?`<span class="tgt-warn">ไม่ทันภายใน ${sepLab}</span>`:`≥ ${sgnM(r.niReq)}/ด. ${svChip(r.niReq-r.run)}`;
-      inj = r.injOnly==null?`<span class="tgt-warn">เติมเท่าไหร่ก็ไม่ถึง</span>`:`≥ ${fmtM(r.injOnly)}`;
-      mix = (r.injMid!=null && r.niMid>r.run)?`${sgnM(r.niMid)}/ด. + ${fmtM(r.injMid)}`:'<span class="tgt-note">—</span>';
-    }
-    return `<tr class="click" onclick="location.hash='h/${h.hcode}'">
-      <td>${h.prov||''}</td><td><b>${h.name}</b></td><td><span class="badge" style="background:${riskColor(ctx.official)}">${ctx.official}</span></td>
-      <td>${ni}</td><td>${inj}</td><td>${mix}</td></tr>`;
+  ovSavePlan();
+  ovRender();
+}
+// เลือกตัวเลขตามวิธีที่ผู้ใช้ติ๊ก — 'auto' = วิธีที่ใช้เงินก้อนภายนอกน้อยสุดที่ยังถึงเป้า (💪→⚖️→💰)
+function ovChoose(o){
+  const p=ovPlanOf(o.h.hcode, o.ctx);
+  const opts={alpha:p.alpha/100, acpFreed:p.acp, acpMonth:p.acpMonth, debtNetMo:p.debt};
+  const r=solveTargetFor(o.ctx, OV_TGT, opts);
+  const run=r.run;
+  if(r.status!=='ok') return {p, opts, r, m:r.status, ni:run, inj:0, ok:true, sep:r.status==='skip'?null:evalPlanFor(o.ctx,opts,run,0)};
+  let m=p.method;
+  if(m==='auto') m = r.niReq!=null?'ni' : (r.injMid!=null?'mix' : (r.injOnly!=null?'inj':'ni'));
+  let ni=run, inj=0, ok=true;
+  if(m==='ni'){ if(r.niReq!=null){ni=r.niReq;} else ok=false; }
+  else if(m==='inj'){ if(r.injOnly!=null){inj=r.injOnly;} else ok=false; }
+  else { if(r.injMid!=null){ni=Math.max(r.niMid,run); inj=r.injMid;} else {ni=Math.max(r.niMid||run,run); ok=false;} }
+  return {p, opts, r, m, auto:p.method==='auto', ni, inj, ok, sep:evalPlanFor(o.ctx,opts,ni,inj)};
+}
+const OV_MLAB={ni:'💪 กำไร', inj:'💰 เงินก้อน', mix:'⚖️ ผสม'};
+function ovRender(){
+  const box=document.getElementById('ovResult'); if(!box||OV_TGT==null) return;
+  const L=OV_TGT;
+  const items=OV_CTX.filter(o=>o.ctx).map(o=>({o, c:ovChoose(o)}));
+  const sepLab=items.length?svSepLabelFor(items[0].o.ctx):'ก.ย.';
+  const sepBadge=s=>s==null?'—':`<span class="badge" style="background:${riskColor(s)}">${s}</span>`;
+  const rowsHtml=items.map(({o,c})=>{
+    const hc=o.h.hcode, p=c.p, open=!!OV_OPEN[hc];
+    const radio=v=>`<label><input type="radio" name="ovm-${hc}" value="${v}" ${p.method===v?'checked':''} onchange="ovSetMethod('${hc}',this.value)"> ${v==='auto'?`อัตโนมัติ${c.m!=='skip'&&c.m!=='already'&&p.method==='auto'?` <span class="tgt-note">(→${OV_MLAB[c.m]||''})</span>`:''}`:OV_MLAB[v]}</label>`;
+    let injTxt, niTxt, sepTxt=sepBadge(c.sep);
+    if(c.m==='skip'){ injTxt='—'; niTxt=`<span class="tgt-note">เป้า ≥ ระดับปัจจุบัน</span>`; sepTxt='—'; }
+    else if(c.m==='already'){ injTxt='<b>฿0</b>'; niTxt=`<span style="color:var(--green)">ถึงเป้าด้วยอัตรากำไรปัจจุบัน${p.acp>0?'+เก็บลูกหนี้':''}</span>`; }
+    else if(!c.ok){ injTxt=`<span class="tgt-warn">วิธีนี้ไม่ถึงเป้า</span>`; niTxt=`<span class="tgt-warn">ลองผสม/เพิ่มคันโยก</span>`; }
+    else{ injTxt=c.inj>0?`<b>${fmtM(c.inj)}</b>`:'<b>฿0</b>'; niTxt=c.ni>c.r.run?`${sgnM(c.ni)}/ด. ${svChip(c.ni-c.r.run)}`:`<span class="tgt-note">คงอัตราปัจจุบัน (${sgnM(c.r.run)}/ด.)</span>`; }
+    const main=`<tr class="ovrow${c.ok?'':' ovbad'}">
+      <td>${o.h.prov||''}</td>
+      <td><b>${o.h.name}</b> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a></td>
+      <td><span class="badge" style="background:${riskColor(o.ctx.official)}">${o.ctx.official}</span></td>
+      <td class="ovm">${c.m==='skip'?'<span class="tgt-note">—</span>':[radio('auto'),radio('ni'),radio('inj'),radio('mix')].join('')}</td>
+      <td>${injTxt}</td><td>${niTxt}</td><td>${sepTxt}</td>
+      <td><button type="button" class="ovtgl" onclick="ovToggle('${hc}')">${open?'▾':'▸'} คันโยก</button></td>
+    </tr>`;
+    if(!open) return main;
+    // ── sub-row: คันโยกรายแห่ง ──
+    const ctx=o.ctx;
+    const arMax=Math.round(ctx.totalAR/SV_STEP)*SV_STEP, sug=arSuggest(ctx);
+    const recvNote=(ctx.recv||[]).map(rr=>`${rr.name.replace('ลูกหนี้สิทธิ ','')} ${fmtM(rr.ar)} (ACP ${rr.acp!=null?rr.acp.toFixed(0):'?'} วัน, ${rr.note||''})`).join(' · ');
+    const dLim=ctx.clbd?Math.round((ctx.clbd.totalPay||0)/SV_STEP)*SV_STEP:0;
+    const dir=x=>x===ctx.cl?'ไม่เปลี่ยน':(x>ctx.cl?'ดีขึ้น':'แย่ลง');
+    const effMix=(c.m==='mix');
+    const sub=`<tr class="ovsub"><td colspan="8"><div class="ovsub-box">
+      ${effMix?`<div class="fld"><label>⚖️ สมดุลแผนผสม: <b id="ovAlphaLab-${hc}">เน้นกำไร ${100-p.alpha}% : เงินก้อน ${p.alpha}%</b></label>
+        <input type="range" min="0" max="100" step="5" value="${p.alpha}"
+          oninput="document.getElementById('ovAlphaLab-${hc}').textContent='เน้นกำไร '+(100-this.value)+'% : เงินก้อน '+this.value+'%'"
+          onchange="ovSetLever('${hc}','alpha',+this.value)">
+        <span class="surv-base">0% = พึ่งกำไรล้วน (เงินก้อนน้อยสุด) · 100% = คงกำไรปัจจุบัน พึ่งเงินก้อนล้วน · 50% = สูตรกึ่งกลางมาตรฐาน</span></div>`:''}
+      ${arMax>0?`<div class="fld"><label>🔄 เร่งเก็บลูกหนี้ (เปลี่ยนลูกหนี้เป็นเงินสด): <b id="ovAcpLab-${hc}">${fmtM(p.acp)}</b> · เงินเข้าเดือนที่
+        <select onchange="ovSetLever('${hc}','acpMonth',+this.value)">${[1,2,3,4,5,6].map(k=>`<option value="${k}" ${p.acpMonth===k?'selected':''}>${k} (${tLab(addMo(ctx.startT,k))})</option>`).join('')}</select></label>
+        <input type="range" min="0" max="${arMax}" step="${SV_STEP}" value="${Math.min(p.acp,arMax)}"
+          oninput="document.getElementById('ovAcpLab-${hc}').textContent=fmtM(+this.value)"
+          onchange="ovSetLever('${hc}','acp',+this.value)">
+        <span class="surv-base">ค่าแนะนำ <b>${fmtM(sug)}</b> = ส่วนเกินเป้า ACP ทางการ · ค้างรับรวม ${fmtM(ctx.totalAR)} — ${recvNote}</span></div>`:''}
+      ${dLim>0?`<div class="fld"><label>💳 ชำระหนี้สุทธิ/เดือน: <b id="ovDebtLab-${hc}">${(p.debt>0?'+':'')+fmtM(p.debt)}</b></label>
+        <input type="range" min="-${dLim}" max="${dLim}" step="${SV_STEP}" value="${p.debt}"
+          oninput="document.getElementById('ovDebtLab-${hc}').textContent=(+this.value>0?'+':'')+fmtM(+this.value)"
+          onchange="ovSetLever('${hc}','debt',+this.value)">
+        <span class="surv-base">− = ยืดจ่าย/ขยาย credit term (เงินสด↑ หนี้↑) · + = เร่งจ่าย (เงินสด↓ หนี้↓) · หนี้คงเหลือ ${fmtM(ctx.clbd.total)} จ่ายปกติ ~${fmtM(ctx.clbd.totalPay)}/เดือน · ถ้าเร่งจ่าย: CR ${dir(ctx.ca)} · QR ${dir(ctx.qn)} · Cash ${dir(ctx.cn)} (ยืดจ่าย = กลับทิศ)</span></div>`:''}
+      <div class="tgt-note"><a href="#" onclick="ovResetRow('${hc}');return false">↺ คืนค่าแนะนำของ รพ.นี้</a></div>
+    </div></td></tr>`;
+    return main+sub;
   }).join('');
-  const active=results.filter(x=>x.r.status==='ok');
-  const excluded=results.length-active.length;
-  const niFail=active.filter(x=>x.r.niReq==null).length;
-  const injOnlyOk=active.filter(x=>x.r.injOnly!=null);
-  const sumInjOnly=injOnlyOk.reduce((s,x)=>s+x.r.injOnly,0);
-  const injOnlyFail=active.length-injOnlyOk.length;
-  const mixOk=active.filter(x=>x.r.injMid!=null && x.r.niMid>x.r.run);
-  const sumInjMid=mixOk.reduce((s,x)=>s+x.r.injMid,0);
-  const sumNiMidDelta=mixOk.reduce((s,x)=>s+(x.r.niMid-x.r.run),0);
-  const cards = !active.length
-    ? `<div class="note">ทุกแห่งอยู่ในเกณฑ์เป้าหมายนี้แล้ว หรือเป้าที่เลือก ≥ ระดับปัจจุบันของทุกแห่ง — ไม่มีอะไรต้องประมาณการเพิ่ม</div>`
-    : `<div class="surv-pill down">💪 กำไรอย่างเดียว: ${niFail?`${active.length-niFail}/${active.length} แห่งถึงเป้าได้ (${niFail} แห่งไม่ทันภายใน ${sepLab})`:`ทุกแห่ง (${active.length}) ถึงเป้าได้ด้วยกำไรอย่างเดียว`} — ไม่ต้องใช้เงินก้อนเลย (฿0)</div>
-      <div class="surv-pill up">💰 เติมเงินก้อนอย่างเดียว: รวม <b>${fmtM(sumInjOnly)}</b>${injOnlyFail?` (นับ ${injOnlyOk.length} แห่ง — ${injOnlyFail} แห่งเติมเท่าไหร่ก็ไม่ถึงเป้า)`:` (${injOnlyOk.length} แห่ง)`}</div>
-      <div class="surv-pill">⚖️ แนวทางผสม: รวมเงินก้อน <b>${fmtM(sumInjMid)}</b> + กำไรรวมที่ต้องเพิ่ม <b>${sgnM(sumNiMidDelta)}</b>/เดือน (${mixOk.length} แห่ง)</div>`;
-  document.getElementById('ovResult').innerHTML=`
+  // ── แผนจัดสรรรวม ──
+  const act=items.filter(x=>x.c.m!=='skip');
+  const plan=act.filter(x=>x.c.m!=='already');
+  const bad=plan.filter(x=>!x.c.ok);
+  const sumInj=plan.reduce((s,x)=>s+(x.c.ok?x.c.inj:0),0);
+  const sumNiUp=plan.reduce((s,x)=>s+(x.c.ok?Math.max(0,x.c.ni-x.c.r.run):0),0);
+  const sumAcp=act.reduce((s,x)=>s+(x.c.p.acp||0),0);
+  const byProv={};
+  plan.forEach(x=>{ if(x.c.ok&&x.c.inj>0){ const pv=x.o.h.prov||'?'; byProv[pv]=(byProv[pv]||0)+x.c.inj; } });
+  const provTxt=Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>`${pv} ${fmtM(v)}`).join(' · ');
+  const nBy=m=>plan.filter(x=>x.c.ok&&x.c.m===m).length;
+  const summary=`
+    <div class="tgt-card" style="margin-top:10px"><h4>📋 แผนจัดสรรรวม — เป้าระดับ ≤ ${L} ภายใน ${sepLab} (${act.length} แห่ง${items.length-act.length?` · ${items.length-act.length} แห่งเป้า ≥ ระดับปัจจุบัน ไม่นับ`:''})</h4>
+      <div class="tgt-row">💰 เงินก้อนที่เขต/จังหวัดต้องจัดสรรรวม: <b>${fmtM(sumInj)}</b>${provTxt?` <span class="tgt-note">(${provTxt})</span>`:''}</div>
+      <div class="tgt-row">💪 กำไรที่หน่วยบริการต้องทำเพิ่มรวม: <b>${sgnM(sumNiUp)}</b>/เดือน · วิธีที่เลือก: 💪 ${nBy('ni')} · 💰 ${nBy('inj')} · ⚖️ ${nBy('mix')} แห่ง${act.length-plan.length?` · ✅ ถึงเป้าเองแล้ว ${act.length-plan.length} แห่ง`:''}</div>
+      <div class="tgt-row">🔄 เงินจากการเร่งเก็บลูกหนี้ (หน่วยบริการหาเอง ไม่ใช่เงินเขต): <b>${fmtM(sumAcp)}</b></div>
+      ${bad.length?`<div class="tgt-row"><span class="tgt-warn">⚠️ แผนที่เลือกยังไม่ถึงเป้า ${bad.length} แห่ง: ${bad.map(x=>x.o.h.name).join(', ')} — เปลี่ยนวิธี/เพิ่มคันโยก หรือยอมรับเป้าที่สูงขึ้น</span></div>`:''}
+      <div class="tgt-row"><button type="button" class="tgt-apply" onclick="ovCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="ovCopyMsg"></span></div>
+    </div>`;
+  OV_TSV=ovBuildTSV(items, L, sepLab);
+  box.innerHTML=`
     <div class="acctbl-wrap" style="max-height:none;margin-top:8px">
       <table class="wltbl">
-        <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ปัจจุบัน</th><th>💪 กำไร<br>อย่างเดียว</th><th>💰 เงินก้อน<br>อย่างเดียว</th><th>⚖️ แนวทาง<br>ผสม</th></tr>
+        <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ปัจจุบัน</th><th>วิธีที่เลือก</th><th>เงินก้อน<br>ที่ต้องใช้</th><th>กำไรเป้าหมาย<br>/เดือน</th><th>ผล ณ<br>${sepLab}</th><th></th></tr>
         ${rowsHtml}
       </table>
     </div>
-    <div class="surv-sum" style="margin-top:10px">${cards}</div>
-    ${excluded?`<div class="tgt-row tgt-note" style="border-top:1px dashed var(--line);margin-top:6px">${excluded} แห่งอยู่ในเกณฑ์เป้าหมายแล้ว/เป้า ≥ ระดับปัจจุบัน — ไม่รวมในผลรวมด้านบน</div>`:''}
-    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">สมมติฐานเดียวกับ Target Solver รายโรงพยาบาล (กระแสเงินสด = NI + ค่าเสื่อม run-rate) · ไม่รวมแผนเร่งชำระหนี้/เร่งเก็บลูกหนี้ที่ปรับเองได้รายแห่ง (ค่าเริ่มต้น 0 เท่ากันทุกแห่ง) · คลิกแถวเพื่อดูรายละเอียดเต็มของ รพ.นั้น</div>`;
+    ${summary}
+    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">ความแม่นยำ: เกณฑ์คะแนน (CR/QR/Cash/NWC/NI/SU) ตรงสูตรทางการกองเศรษฐกิจสุขภาพฯ ทุกข้อ — จุดตั้งต้นเดือน 0 ตรง badge ทางการทั้ง ${items.length} แห่ง · สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม run-rate − เร่งชำระหนี้สุทธิ · เร่งเก็บลูกหนี้เพิ่มเฉพาะเงินสด (Cash Ratio) ไม่เพิ่ม CA/NWC · NI สะสมรีเซ็ต ต.ค. · ไม่มี seasonality — เป็นการจำลองเชิงสถานการณ์เพื่อวางแผน ไม่ใช่พยากรณ์</div>`;
+}
+function ovBuildTSV(items, L, sepLab){
+  const M=v=>(v/1e6).toFixed(2);
+  const head=['จังหวัด','โรงพยาบาล','ระดับปัจจุบัน','เป้า','วิธี','เงินก้อนจากเขต(ลบ.)','กำไรเป้าหมาย/เดือน(ลบ.)','กำไรเพิ่มจากปัจจุบัน(ลบ./เดือน)','เร่งเก็บลูกหนี้(ลบ.)','เงินลูกหนี้เข้าเดือนที่','ชำระหนี้สุทธิ/เดือน(ลบ.)','ผลจำลอง ณ '+sepLab].join('\t');
+  const lines=items.map(({o,c})=>{
+    const mm=c.m==='skip'?'ไม่ต้องทำ (เป้า≥ปัจจุบัน)':c.m==='already'?'ถึงเป้าเอง':((c.auto?'อัตโนมัติ→':'')+(OV_MLAB[c.m]||c.m)+(c.ok?'':' (ไม่ถึงเป้า)'));
+    return [o.h.prov||'',o.h.name,o.ctx.official,L,mm,M(c.inj||0),M(c.ni||0),M(Math.max(0,(c.ni||0)-(c.r.run||0))),M(c.p.acp||0),c.p.acp>0?c.p.acpMonth:'-',M(c.p.debt||0),c.sep!=null?c.sep:'-'].join('\t');
+  });
+  const act=items.filter(x=>x.c.m!=='skip'&&x.c.m!=='already'&&x.c.ok);
+  const tot=['รวม','', '', '', '', M(act.reduce((s,x)=>s+x.c.inj,0)), '', M(act.reduce((s,x)=>s+Math.max(0,x.c.ni-x.c.r.run),0)), M(items.filter(x=>x.c.m!=='skip').reduce((s,x)=>s+(x.c.p.acp||0),0)), '', '', ''].join('\t');
+  return [head,...lines,tot].join('\n');
+}
+function ovToggle(hc){ OV_OPEN[hc]=!OV_OPEN[hc]; ovRender(); }
+function ovSetMethod(hc,v){ const o=OV_CTX.find(x=>x.h.hcode===hc); if(!o)return; ovPlanOf(hc,o.ctx).method=v; ovSavePlan(); ovRender(); }
+function ovSetLever(hc,k,v){ const o=OV_CTX.find(x=>x.h.hcode===hc); if(!o)return; ovPlanOf(hc,o.ctx)[k]=v; ovSavePlan(); ovRender(); }
+function ovResetRow(hc){ const o=OV_CTX.find(x=>x.h.hcode===hc); if(!o)return; OV_PLAN[hc]=ovDefaultPlan(o.ctx); ovSavePlan(); ovRender(); }
+function ovCopyTSV(){
+  const done=ok=>{ const el=document.getElementById('ovCopyMsg'); if(el) el.textContent=ok?'คัดลอกแล้ว ✓ วางใน Excel/รายงานได้เลย':'คัดลอกไม่ได้ — เบราว์เซอร์ไม่รองรับ'; };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(OV_TSV).then(()=>done(true),()=>done(false));
+  else done(false);
 }
 
 // ── Reference Panel: กรอบ 4 เสาหลัก + ข้อเสนอเชิงระบบ 3 ระดับ ───────────
@@ -1268,19 +1382,31 @@ function svSolveDown(L){
 }
 // ── ภาพรวม Watchlist: หา 3 แนวทางของ รพ.เดียว ตามเป้า L ใช้ตรรกะเดียวกับ renderTgtCard ──
 // สลับ SURV ชั่วคราวเพื่อใช้ svSolveNI/svSolveInj/svEvalSep ซ้ำได้ตรงๆ (JS single-thread จึงปลอดภัย)
-function solveTargetFor(ctx, L){
-  const prev=SURV; SURV=ctx;
+// opts (ถ้ามี): คันโยกแผนรายแห่ง — acpFreed/acpMonth (เร่งเก็บลูกหนี้→เงินสดเข้าเดือนที่ตั้ง),
+// debtNetMo (+เร่งจ่าย/−ยืดจ่ายหนี้ต่อเดือน), alpha (สมดุลผสม 0=กำไรล้วน..1=เงินก้อนล้วน; 0.5=สูตร midpoint เดิม)
+function ovLeverCtx(ctx, opts){
+  if(!opts) return ctx;
+  return {...ctx, acpFreed:opts.acpFreed||0, acpMonth:opts.acpMonth!=null?opts.acpMonth:1, debtNetMo:opts.debtNetMo||0};
+}
+function solveTargetFor(ctx, L, opts){
+  const prev=SURV; SURV=ovLeverCtx(ctx, opts);
   try{
     const run=ctx.niRun, cur=ctx.official;
-    if(L>=cur) return {status:'skip'};
+    if(L>=cur) return {status:'skip', run};
     if(svEvalSep(run,0).sep<=L) return {status:'already', run};
     const niReq=svSolveNI(L,0);
     const injOnly=svSolveInj(L,run);
     const niHigh=niReq!=null?niReq:run+ctx.niLim;
-    const niMid=Math.round((run+niHigh)/2/SV_STEP)*SV_STEP;
-    const injMid=niMid>run?svSolveInj(L,niMid):null;
+    const alpha=(opts&&opts.alpha!=null)?opts.alpha:0.5;   // 0.5 = midpoint เดิมเป๊ะ
+    const niMid=Math.round((run+(1-alpha)*(niHigh-run))/SV_STEP)*SV_STEP;
+    const injMid=niMid>run?svSolveInj(L,niMid):(alpha>=1?injOnly:null);
     return {status:'ok', run, niReq, injOnly, niMid, injMid};
   } finally { SURV=prev; }
+}
+// คะแนน ณ ก.ย. ของ "แผนที่เลือกจริง" (ni/inj + คันโยก) — ใช้ยืนยันรายแถวว่าแผนถึงเป้า
+function evalPlanFor(ctx, opts, niM, inj){
+  const prev=SURV; SURV=ovLeverCtx(ctx, opts);
+  try{ return svEvalSep(niM, inj).sep; } finally { SURV=prev; }
 }
 function svTarget(L){
   if(!SURV) return;
