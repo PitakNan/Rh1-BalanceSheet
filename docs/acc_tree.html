@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ผังบัญชี 7 ชั้น — เขตสุขภาพที่ 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script>(function(){const t=localStorage.getItem('rh1-theme');if(t)document.documentElement.setAttribute('data-theme',t)})()</script>
+<style>
+:root{--ink:#1a202c;--sub:#374151;--mut:#6b7280;--line:#e5e7eb;--bg:#f3f4f6;--card:#fff;--accent:#2563eb;--green:#16a34a;--red:#dc2626;
+  --hover-bg:#f3f4f6;--shadow:rgba(0,0,0,.04);--hd:#1a202c;--hd-ink:#fff;--accent-bg:#eaf1ff;
+  --cat-asset:#2E6C93;--cat-liability:#B5602E;--cat-equity:#8A7A2E;--cat-revenue:#3F7D52;--cat-expense:#A8433A;--inactive:#9AA3AF}
+@media (prefers-color-scheme: dark){
+  :root{--ink:#e6e9ef;--sub:#c3cad6;--mut:#8b93a3;--line:#2a2f3a;--bg:#0f1115;--card:#181b21;--accent:#5b9dff;--green:#4ade80;--red:#f0685f;
+    --hover-bg:#1c2028;--shadow:rgba(0,0,0,.3);--hd:#0a0c10;--hd-ink:#e6e9ef;--accent-bg:#152238;
+    --cat-asset:#6FA8CC;--cat-liability:#E08A52;--cat-equity:#C9B354;--cat-revenue:#6FBF8B;--cat-expense:#E0766B;--inactive:#6b7280}
+}
+:root[data-theme="dark"]{--ink:#e6e9ef;--sub:#c3cad6;--mut:#8b93a3;--line:#2a2f3a;--bg:#0f1115;--card:#181b21;--accent:#5b9dff;--green:#4ade80;--red:#f0685f;
+  --hover-bg:#1c2028;--shadow:rgba(0,0,0,.3);--hd:#0a0c10;--hd-ink:#e6e9ef;--accent-bg:#152238;
+  --cat-asset:#6FA8CC;--cat-liability:#E08A52;--cat-equity:#C9B354;--cat-revenue:#6FBF8B;--cat-expense:#E0766B;--inactive:#6b7280}
+:root[data-theme="light"]{--ink:#1a202c;--sub:#374151;--mut:#6b7280;--line:#e5e7eb;--bg:#f3f4f6;--card:#fff;--accent:#2563eb;--green:#16a34a;--red:#dc2626;
+  --hover-bg:#f3f4f6;--shadow:rgba(0,0,0,.04);--hd:#1a202c;--hd-ink:#fff;--accent-bg:#eaf1ff;
+  --cat-asset:#2E6C93;--cat-liability:#B5602E;--cat-equity:#8A7A2E;--cat-revenue:#3F7D52;--cat-expense:#A8433A;--inactive:#9AA3AF}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--ink);font-size:14px;transition:background .15s,color .15s}
+.hd{background:var(--hd);color:var(--hd-ink);padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;row-gap:6px}
+.hd h1{font-size:15px;font-weight:700;flex:1;min-width:0}
+.hd a{color:#9ca3af;font-size:12px;text-decoration:none}.hd a:hover{color:var(--hd-ink)}
+#themeBtn{background:none;border:1px solid #80808055;color:var(--hd-ink);border-radius:99px;width:28px;height:28px;font-size:13px;cursor:pointer;flex-shrink:0}
+#themeBtn:hover{background:#80808033}
+
+.wrap{max-width:1040px;margin:0 auto;padding:20px 16px 64px}
+.sub{color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:4px}
+.sub code{font-family:ui-monospace,Consolas,monospace}
+
+.statrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 13px;min-width:100px;box-shadow:0 1px 2px var(--shadow)}
+.stat .v{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:18px;font-weight:700;line-height:1.1}
+.stat .l{font-size:11px;color:var(--mut);margin-top:3px}
+.stat.cat{border-left:3px solid var(--dot);padding-left:11px}
+.stat.cat .v{color:var(--dot)}
+
+.toolbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 0 10px;margin-top:6px;
+  display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line)}
+.searchbox{flex:1 1 240px;position:relative}
+.searchbox input{width:100%;padding:9px 32px 9px 12px;border-radius:8px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);font-family:inherit;font-size:13.5px;outline:none}
+.searchbox input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.searchbox .cnt{position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--mut);pointer-events:none}
+.btn{font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);padding:8px 12px;border-radius:8px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible,input:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.legend{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 2px}
+.chip{font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--line);
+  background:var(--card);padding:5px 10px;border-radius:999px;display:flex;align-items:center;gap:6px;color:var(--mut)}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--dot);flex:none}
+.chip[aria-pressed="true"]{border-color:var(--dot);color:var(--ink);background:var(--accent-bg)}
+.chip.inactive-toggle[aria-pressed="true"]{border-color:var(--inactive);background:var(--hover-bg)}
+
+main.tree{margin-top:6px;background:var(--card);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 1px 2px var(--shadow);overflow:hidden}
+.row{display:flex;align-items:flex-start;gap:8px;padding:6px 12px 6px 6px;border-bottom:1px solid var(--line);
+  cursor:pointer;user-select:none}
+.row:last-child{border-bottom:none}
+.row:hover{background:var(--hover-bg)}
+.row.leaf{cursor:default}
+.twisty{width:18px;height:18px;flex:none;display:flex;align-items:center;justify-content:center;
+  color:var(--mut);font-size:11px;margin-top:2px;transition:transform .12s ease}
+.row.open>.twisty{transform:rotate(90deg)}
+.row.leaf .twisty{visibility:hidden}
+.bar{width:3px;align-self:stretch;border-radius:2px;flex:none;background:var(--dot);opacity:.55;margin-top:2px}
+.rowmain{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
+.code{font-family:ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:12px;color:var(--mut);flex:none}
+.name{font-size:13.5px;color:var(--ink);line-height:1.4}
+.row.leaf .name{color:var(--sub)}
+mark{background:#f6c453;color:#4a3400;border-radius:3px;padding:0 1px}
+.count{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--mut);flex:none;
+  background:var(--hover-bg);border-radius:6px;padding:1px 6px;margin-top:1px}
+.tag-off{font-size:10px;font-weight:600;color:var(--inactive);border:1px solid var(--inactive);
+  border-radius:999px;padding:1px 7px;flex:none;margin-top:1px}
+.kids{display:none}
+.row.open+.kids{display:block}
+.kids .row{padding-left:calc(var(--depth,1) * 16px + 6px)}
+
+.empty{padding:36px 20px;text-align:center;color:var(--mut);font-size:13.5px}
+.loading{padding:36px 20px;text-align:center;color:var(--mut);font-size:13.5px}
+footer{margin-top:20px;color:var(--mut);font-size:11.5px;line-height:1.6}
+footer code{font-family:ui-monospace,Consolas,monospace}
+@media(prefers-reduced-motion:reduce){*{transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>🌳 ผังบัญชี 7 ชั้น — เขตสุขภาพที่ 1</h1>
+  <button id="themeBtn" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">🌙</button>
+  <a href="explorer.html">← Explorer</a>
+</div>
+
+<div class="wrap">
+  <p class="sub">ต้นไม้ผังบัญชีทางการ 991 รหัส จากตาราง <code>acc_hierarchy</code> (นำเข้าจาก AllCodeTbl) — คลิกเพื่อไล่ชั้น หรือค้นหารหัส/ชื่อบัญชีด้านล่าง</p>
+  <div class="statrow" id="statrow"></div>
+
+  <div class="toolbar">
+    <div class="searchbox">
+      <input id="q" type="text" placeholder="ค้นหารหัสบัญชีหรือชื่อบัญชี เช่น 1101 หรือ เงินฝากคลัง" autocomplete="off">
+      <span class="cnt" id="qcnt"></span>
+    </div>
+    <button class="btn" id="expandAll">ขยายทั้งหมด</button>
+    <button class="btn" id="collapseAll">ยุบทั้งหมด</button>
+  </div>
+  <div class="legend" id="legend"></div>
+
+  <main class="tree" id="tree"><div class="loading">กำลังโหลดผังบัญชี…</div></main>
+  <div class="empty" id="emptyMsg" style="display:none">ไม่พบรหัสบัญชีหรือชื่อที่ตรงกับคำค้นหา</div>
+
+  <footer>
+    ที่มา: ตาราง <code>acc_hierarchy</code> ฐานข้อมูล rh1_health (นำเข้าจาก AllCodeTbl.mdb) · แถวสีจาง/ป้าย "ไม่ใช้งาน" หมายถึง UseYN=No ในผังปีปัจจุบัน · จัดกลุ่มสีตาม 5 หมวดบัญชี (สินทรัพย์/หนี้สิน/ทุน/รายได้/ค่าใช้จ่าย)
+  </footer>
+</div>
+
+<script>
+function isDarkNow(){const t=document.documentElement.getAttribute('data-theme');if(t)return t==='dark';return window.matchMedia('(prefers-color-scheme: dark)').matches}
+function syncThemeBtn(){document.getElementById('themeBtn').textContent=isDarkNow()?'☀️':'🌙'}
+function toggleTheme(){const next=isDarkNow()?'light':'dark';document.documentElement.setAttribute('data-theme',next);localStorage.setItem('rh1-theme',next);syncThemeBtn()}
+syncThemeBtn();
+
+const CAT_LABEL = {asset:'สินทรัพย์', liability:'หนี้สิน', equity:'ทุน', revenue:'รายได้', expense:'ค่าใช้จ่าย'};
+const CAT_VAR = {asset:'--cat-asset', liability:'--cat-liability', equity:'--cat-equity', revenue:'--cat-revenue', expense:'--cat-expense'};
+
+let DATA = null;
+let activeCats = new Set(Object.keys(CAT_LABEL));
+let showInactive = true;
+let query = '';
+
+const treeEl = document.getElementById('tree');
+const emptyMsg = document.getElementById('emptyMsg');
+const qInput = document.getElementById('q');
+const qcnt = document.getElementById('qcnt');
+
+fetch('data/acc_hierarchy.json').then(r=>r.json()).then(d=>{
+  DATA = d;
+  buildStatsAndLegend();
+  render();
+}).catch(()=>{ treeEl.innerHTML = '<div class="empty">โหลดข้อมูลผังบัญชีไม่สำเร็จ (data/acc_hierarchy.json)</div>'; });
+
+function buildStatsAndLegend(){
+  const statrow = document.getElementById('statrow');
+  const s = DATA.stats;
+  function statCard(val, label, dotVar){
+    const d = document.createElement('div');
+    d.className = 'stat' + (dotVar ? ' cat' : '');
+    if (dotVar) d.style.setProperty('--dot', `var(${dotVar})`);
+    d.innerHTML = `<div class="v">${val.toLocaleString('en-US')}</div><div class="l">${label}</div>`;
+    return d;
+  }
+  statrow.appendChild(statCard(s.total, 'รหัสบัญชีทั้งหมด'));
+  statrow.appendChild(statCard(s.active, 'ใช้งานอยู่ (UseYN=Yes)'));
+  statrow.appendChild(statCard(s.inactive, 'เลิกใช้ (UseYN=No)'));
+
+  const legend = document.getElementById('legend');
+  s.byCat.forEach(c => {
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.setAttribute('aria-pressed','true');
+    chip.style.setProperty('--dot', `var(${CAT_VAR[c.key]})`);
+    chip.innerHTML = `<span class="dot"></span>${c.name} <span style="color:var(--mut)">${c.count}</span>`;
+    chip.addEventListener('click', () => {
+      if (activeCats.has(c.key)) { activeCats.delete(c.key); chip.setAttribute('aria-pressed','false'); }
+      else { activeCats.add(c.key); chip.setAttribute('aria-pressed','true'); }
+      render();
+    });
+    legend.appendChild(chip);
+  });
+  const offChip = document.createElement('button');
+  offChip.className = 'chip inactive-toggle';
+  offChip.setAttribute('aria-pressed','true');
+  offChip.style.setProperty('--dot','var(--inactive)');
+  offChip.innerHTML = `<span class="dot"></span>รวมบัญชีที่เลิกใช้`;
+  offChip.addEventListener('click', () => {
+    showInactive = !showInactive;
+    offChip.setAttribute('aria-pressed', showInactive ? 'true' : 'false');
+    render();
+  });
+  legend.appendChild(offChip);
+}
+
+function esc(str){ return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function highlight(text, q){
+  if (!q) return esc(text);
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return esc(text);
+  return esc(text.slice(0,idx)) + '<mark>' + esc(text.slice(idx,idx+q.length)) + '</mark>' + esc(text.slice(idx+q.length));
+}
+function countLeaves(node){
+  if (!node.k) return 1;
+  let n = 0;
+  for (const child of node.k) n += countLeaves(child);
+  return n;
+}
+function matches(node, q){
+  if (!q) return true;
+  if (node.c.toLowerCase().includes(q) || node.n.toLowerCase().includes(q)) return true;
+  if (node.k) return node.k.some(ch => matches(ch, q));
+  return false;
+}
+function passesFilters(node, cat){
+  if (!node.k){
+    if (node.x && !showInactive) return false;
+    return true;
+  }
+  if (cat && !activeCats.has(cat)) return false;
+  return true;
+}
+
+function buildRow(node, cat, q){
+  const isLeaf = !node.k;
+  const dotVar = cat ? CAT_VAR[cat] : null;
+  const row = document.createElement('div');
+  row.className = 'row' + (isLeaf ? ' leaf' : ' open');
+  if (dotVar) row.style.setProperty('--dot', `var(${dotVar})`);
+  const twisty = document.createElement('div');
+  twisty.className = 'twisty';
+  twisty.textContent = isLeaf ? '' : '▸';
+  row.appendChild(twisty);
+  if (dotVar){
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    row.appendChild(bar);
+  }
+  const main = document.createElement('div');
+  main.className = 'rowmain';
+  main.innerHTML = `<span class="code">${esc(node.c)}</span><span class="name">${highlight(node.n, q)}</span>`;
+  row.appendChild(main);
+  if (node.x){
+    const tag = document.createElement('span');
+    tag.className = 'tag-off';
+    tag.textContent = 'ไม่ใช้งาน';
+    row.appendChild(tag);
+  }
+  if (!isLeaf){
+    const cnt = document.createElement('span');
+    cnt.className = 'count';
+    cnt.textContent = countLeaves(node).toLocaleString('en-US');
+    row.appendChild(cnt);
+    row.tabIndex = 0;
+    row.addEventListener('click', () => {
+      row.classList.toggle('open');
+      twisty.textContent = row.classList.contains('open') ? '▾' : '▸';
+    });
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); row.click(); }
+    });
+  }
+  return row;
+}
+
+function renderNode(node, depth, cat, q, forceOpen){
+  cat = node.cat || cat;
+  if (!passesFilters(node, cat)) return null;
+  if (q && !matches(node, q)) return null;
+
+  const row = buildRow(node, cat, q);
+  const frag = document.createDocumentFragment();
+  frag.appendChild(row);
+
+  if (node.k){
+    const kidsWrap = document.createElement('div');
+    kidsWrap.className = 'kids';
+    kidsWrap.style.setProperty('--depth', depth+1);
+    let any = false;
+    for (const child of node.k){
+      const childEl = renderNode(child, depth+1, cat, q, forceOpen);
+      if (childEl){ kidsWrap.appendChild(childEl); any = true; }
+    }
+    if (!any) return null;
+    frag.appendChild(kidsWrap);
+    if (q || forceOpen){ row.classList.add('open'); row.querySelector('.twisty').textContent = '▾'; }
+  }
+  const holder = document.createElement('div');
+  holder.appendChild(frag);
+  return holder;
+}
+
+function render(){
+  if (!DATA) return;
+  const q = query.trim().toLowerCase();
+  treeEl.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  let any = false;
+  for (const top of DATA.tree){
+    const el = renderNode(top, 0, null, q, false);
+    if (el){ frag.appendChild(el); any = true; }
+  }
+  treeEl.appendChild(frag);
+  emptyMsg.style.display = any ? 'none' : 'block';
+
+  let n = 0;
+  treeEl.querySelectorAll('.row.leaf').forEach(() => n++);
+  qcnt.textContent = q ? `${n.toLocaleString('en-US')} รายการ` : '';
+}
+
+qInput.addEventListener('input', () => { query = qInput.value; render(); });
+document.getElementById('expandAll').addEventListener('click', () => {
+  treeEl.querySelectorAll('.row:not(.leaf)').forEach(r => { r.classList.add('open'); const t=r.querySelector('.twisty'); if(t) t.textContent='▾'; });
+});
+document.getElementById('collapseAll').addEventListener('click', () => {
+  treeEl.querySelectorAll('.row:not(.leaf)').forEach(r => { r.classList.remove('open'); const t=r.querySelector('.twisty'); if(t) t.textContent='▸'; });
+});
+</script>
+</body>
+</html>
