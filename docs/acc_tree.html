@@ -134,7 +134,7 @@ const CAT_LABEL = {asset:'สินทรัพย์', liability:'หนี้�
 const CAT_VAR = {asset:'--cat-asset', liability:'--cat-liability', equity:'--cat-equity', revenue:'--cat-revenue', expense:'--cat-expense'};
 
 let DATA = null;
-let activeCats = new Set(Object.keys(CAT_LABEL));
+let selectedCat = null; // null = ทั้งหมด (แสดงทุกหมวด) — ไม่ null = เจาะจงหมวดเดียว
 let showInactive = true;
 let query = '';
 
@@ -164,19 +164,38 @@ function buildStatsAndLegend(){
   statrow.appendChild(statCard(s.inactive, 'เลิกใช้ (UseYN=No)'));
 
   const legend = document.getElementById('legend');
+
+  const allChip = document.createElement('button');
+  allChip.className = 'chip';
+  allChip.setAttribute('aria-pressed', 'true');
+  allChip.style.setProperty('--dot', 'var(--accent)');
+  allChip.innerHTML = `<span class="dot"></span>ทั้งหมด <span style="color:var(--mut)">${s.total}</span>`;
+  allChip.addEventListener('click', () => { selectedCat = null; syncCatChips(); render(); });
+  legend.appendChild(allChip);
+
+  const catChips = {};
   s.byCat.forEach(c => {
     const chip = document.createElement('button');
     chip.className = 'chip';
-    chip.setAttribute('aria-pressed','true');
+    chip.setAttribute('aria-pressed','false');
     chip.style.setProperty('--dot', `var(${CAT_VAR[c.key]})`);
     chip.innerHTML = `<span class="dot"></span>${c.name} <span style="color:var(--mut)">${c.count}</span>`;
     chip.addEventListener('click', () => {
-      if (activeCats.has(c.key)) { activeCats.delete(c.key); chip.setAttribute('aria-pressed','false'); }
-      else { activeCats.add(c.key); chip.setAttribute('aria-pressed','true'); }
+      selectedCat = (selectedCat === c.key) ? null : c.key;
+      syncCatChips();
       render();
     });
+    catChips[c.key] = chip;
     legend.appendChild(chip);
   });
+
+  function syncCatChips(){
+    allChip.setAttribute('aria-pressed', selectedCat === null ? 'true' : 'false');
+    Object.entries(catChips).forEach(([key, chip]) => {
+      chip.setAttribute('aria-pressed', selectedCat === key ? 'true' : 'false');
+    });
+  }
+
   const offChip = document.createElement('button');
   offChip.className = 'chip inactive-toggle';
   offChip.setAttribute('aria-pressed','true');
@@ -214,7 +233,7 @@ function passesFilters(node, cat){
     if (node.x && !showInactive) return false;
     return true;
   }
-  if (cat && !activeCats.has(cat)) return false;
+  if (cat && selectedCat && cat !== selectedCat) return false;
   return true;
 }
 
