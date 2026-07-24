@@ -6,6 +6,8 @@ monthly_routine.py — Routine รายเดือน (วันที่ 16):
 flow: HFO scraper (download+process D/MOC/Q) -> คัดลอก D5317.mdb ใหม่เข้า incoming\
       -> import_month_mdb.py -> build_from_mysql.py -> export_json.py
       -> export_anomaly.py -> export_ratio_check.py -> export_acc.py
+      -> export_leaf.py -> export_leaf13.py -> export_code13_prov.py -> export_acc_names.py
+         (แคตตาล็อกบัญชี explorer.html — เพิ่ม 2026-07-24 เดิมตกหล่นรันมือแยก)
       -> export_risk_link.py (หน้า "สาเหตุวิกฤต" risk_drill.html)
 
 ขอบเขตปัจจุบัน: อัพเดตเฉพาะ Balance Sheet Dashboard (รวม risk_drill.html)
@@ -38,11 +40,81 @@ MYSQLD   = Path(r"C:\xampp\mysql\bin\mysqld.exe")
 MYSQL_INI = Path(r"C:\xampp\mysql\bin\my.ini")
 
 
-def run(cmd, cwd):
+# เก็บเวลาแต่ละขั้นตอน (label, วินาที, สถานะ) เพื่อสรุปตอนจบ
+STEPS = []
+
+
+def fmt_dur(sec):
+    m, s = divmod(int(round(sec)), 60)
+    return f"{m}m {s:02d}s" if m else f"{s}s"
+
+
+def timed(label, func, *args, **kwargs):
+    """เรียกฟังก์ชันพร้อมจับเวลา บันทึกลง STEPS (สำหรับขั้นที่ไม่ใช่ subprocess เช่น start MySQL/คัดลอกไฟล์)"""
+    t0 = time.perf_counter()
+    result = func(*args, **kwargs)
+    STEPS.append((label, time.perf_counter() - t0, "ok"))
+    return result
+
+
+def print_summary(year_month, total_sec, done=True):
+    lines = []
+    lines.append("=" * 60)
+    lines.append(f"  สรุปเวลาแต่ละขั้นตอน — Monthly Routine {year_month}")
+    lines.append(f"  จบเมื่อ: {datetime.now():%Y-%m-%d %H:%M:%S}   สถานะ: {'เสร็จสมบูรณ์' if done else 'หยุดกลางคัน (มีขั้นล้มเหลว)'}")
+    lines.append("=" * 60)
+    for label, sec, status in STEPS:
+        mark = "" if status == "ok" else "  <-- ล้มเหลว"
+        lines.append(f"  {label:<34}{fmt_dur(sec):>10}{mark}")
+    lines.append("-" * 60)
+    total_label = "รวมทั้งสิ้น (Start run -> " + ("เสร็จ" if done else "หยุด") + ")"
+    lines.append(f"  {total_label:<34}{fmt_dur(total_sec):>10}")
+    lines.append("=" * 60)
+    text = "\n".join(lines)
+    print("\n" + text)
+    # เซฟลง log ด้วย (สำหรับรอบที่รันอัตโนมัติไม่มีคนเฝ้า — จอจะเลื่อนหาย ต้องมีไฟล์ไว้ดูย้อน)
+    log_path = None
+    try:
+        log_dir = BS_PIPE / "logs"
+        log_dir.mkdir(exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = log_dir / f"routine_{year_month}_{stamp}.log"
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+    except Exception as e:
+        print(f"  (เขียน log ไม่สำเร็จ: {e})")
+    return log_path
+
+
+def notify_email(subject, log_path):
+    """ส่งอีเมลแจ้งผล (best-effort — ส่งไม่ได้ก็ไม่ทำให้ routine พัง). ปิดด้วย --no-email
+    (n8n จะส่งเมลเอง ตอนย้ายไป orchestrate ด้วย n8n ให้ผ่าน --no-email กันเมลซ้ำ)"""
+    if "--no-email" in sys.argv:
+        return
+    sender = HFO_DIR / "send_notify.py"
+    if not (sender.exists() and log_path):
+        return
+    try:
+        subprocess.run([sys.executable, str(sender), subject, "--file", str(log_path)],
+                       cwd=str(HFO_DIR), timeout=90)
+    except Exception as e:
+        print(f"  (ส่งอีเมลไม่สำเร็จ: {e})")
+
+
+def run(cmd, cwd, label=None):
+    if label is None:
+        label = next((Path(c).name for c in cmd if str(c).endswith(".py")), " ".join(cmd[:2]))
     print(f"\n>>> {' '.join(cmd)}   (cwd={cwd})")
+    t0 = time.perf_counter()
     r = subprocess.run(cmd, cwd=str(cwd))
+    dt = time.perf_counter() - t0
+    STEPS.append((label, dt, "ok" if r.returncode == 0 else "fail"))
+    print(f"    [{fmt_dur(dt)}] {label}")
     if r.returncode != 0:
-        print(f"\n*** ล้มเหลว: {' '.join(cmd)} — หยุด Routine (ยังไม่แตะ production) ***")
+        print(f"\n*** ล้มเหลว: {label} ({fmt_dur(dt)}) — หยุด Routine (ยังไม่แตะ production) ***")
+        ym = parse_month()
+        log_path = print_summary(ym, sum(s[1] for s in STEPS), done=False)
+        notify_email(f"[HFO Routine] {ym} ล้มเหลวที่ {label}", log_path)
         sys.exit(1)
 
 
@@ -79,19 +151,24 @@ def parse_month():
 
 
 def main():
+    routine_start = time.perf_counter()
     year_month = parse_month()
     skip_download = "--skip-download" in sys.argv
     print("=" * 60)
-    print(f"  Monthly Routine — {year_month}")
+    print(f"  Monthly Routine — {year_month}  (Start run: {datetime.now():%Y-%m-%d %H:%M:%S})")
     print("=" * 60)
 
-    ensure_mysql_running()
+    timed("เตรียม MySQL", ensure_mysql_running)
 
     # 1) HFO scraper: login + download (D/MOC/Q ทั้งเขต) + process -> Excel/CSV
+    # --force = โหลดทับ ZIP เดิมเสมอ: ถ้าเคยโหลดด่วนดูก่อนหลังวันที่ 10 (ข้อมูลยังไม่ final)
+    # รอบ 16 ต้องโหลดใหม่ทับให้ได้ตัวเต็ม ไม่ skip เพราะเจอไฟล์เดิม (เว้นตอน --skip-download)
     hfo_cmd = [sys.executable, "main.py", "--month", year_month]
     if skip_download:
         hfo_cmd.append("--skip-download")
-    run(hfo_cmd, HFO_DIR)
+    else:
+        hfo_cmd.append("--force")
+    run(hfo_cmd, HFO_DIR, label="HFO ดาวน์โหลด+process (D/MOC/Q)")
 
     # 2) หาไฟล์ D5317.mdb (งบทดลองดิบ) ที่เพิ่งดาวน์โหลด
     candidates = sorted((HFO_DIR / "Output" / year_month / "_extracted").glob("D_*/D5317.mdb"))
@@ -107,7 +184,7 @@ def main():
         old.unlink()
         print(f"  ลบไฟล์เก่า: {old.name}")
     dest = INCOMING / f"D5317_{year_month}.mdb"
-    shutil.copy2(mdb_src, dest)
+    timed("คัดลอก mdb เข้า incoming", shutil.copy2, mdb_src, dest)
     print(f"  คัดลอกเข้า incoming: {dest.name}")
 
     # 4) Balance Sheet pipeline: import -> build -> export (เหมือน update.bat แต่ไม่ push)
@@ -116,7 +193,12 @@ def main():
     run([sys.executable, "export_json.py"], BS_PIPE)
     # export_planfin.py ต้องรัน "หลัง" export_risk_link.py เพราะ merge คีย์ planfin เข้าไฟล์ h/*.json ที่มันสร้าง
     # export_exec.py ต้องรันท้ายสุด (อ่าน h/*.json + summary.json → exec.json แท็บผู้บริหาร)
+    # export_leaf/leaf13/code13_prov/acc_names = แคตตาล็อกบัญชีของ explorer.html (เลือกหน่วยงาน 3 ระดับ
+    # + ชื่อบัญชีจริงราย รพ.) — เดิมรันมือแยก ทำให้ explorer.html ค้าง (พบ 6-12 ก.ค. 69) เพิ่มเข้า routine
+    # ให้อัพเดตทุกเดือนพร้อมกัน. ทั้ง 4 ตัวอ่าน master.parquet/MySQL ที่ build_from_mysql.py สร้างแล้ว
+    # ไม่ขึ้นกับ risk_link/planfin — วางก่อนได้. คง risk_link->planfin->exec ท้ายสุดตามลำดับเดิม
     for opt in ("export_anomaly.py", "export_ratio_check.py", "export_acc.py",
+                "export_leaf.py", "export_leaf13.py", "export_code13_prov.py", "export_acc_names.py",
                 "export_risk_link.py", "export_planfin.py", "export_exec.py"):
         if (BS_PIPE / opt).exists():
             run([sys.executable, opt], BS_PIPE)
@@ -127,6 +209,9 @@ def main():
     print("  ตรวจสอบผล (เช่น เปิด docs/index.html ในเครื่อง หรือดู git diff --stat)")
     print(r"  แล้วรัน push_update.bat เพื่อขึ้นเว็บจริงเมื่อพร้อม")
     print("=" * 60)
+
+    log_path = print_summary(year_month, time.perf_counter() - routine_start, done=True)
+    notify_email(f"[HFO Routine] {year_month} สำเร็จ — พร้อมรีวิว+push", log_path)
 
 
 if __name__ == "__main__":

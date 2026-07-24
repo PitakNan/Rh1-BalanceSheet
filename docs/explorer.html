@@ -812,6 +812,7 @@ async function renderLevelSelects(){
 }
 
 // ระดับที่ 6 — บัญชี 13 หลัก ที่อยู่ภายใต้ fin/accg/sub/budget ที่เลือกไว้ (จากแคตตาล็อกของหน่วยงานที่เลือกไว้ ST.unit)
+let CODE13_REQ_ID=0;
 function renderCode13Select(){
   const sel=document.getElementById('selCode13');
   const hint=document.getElementById('code13Hint');
@@ -827,16 +828,88 @@ function renderCode13Select(){
       const g=META.gfMap[gfId];
       const nm=realName(code)||(g?g.gf:'');
       const o=document.createElement('option');
-      o.value=code; o.textContent=`${code}${nm?` — ${nm}`:''}`;
+      o.value=code; o.dataset.gf=gfId; o.textContent=`${code}${nm?` — ${nm}`:''}`;
       sel.appendChild(o);
     }
     sel.disabled=false;
     hint.style.display=codes.length?'':'none';
+    hint.textContent='เลือกแล้วจะเพิ่มเข้ากราฟทันที สำหรับหน่วยงานที่เลือกไว้ด้านบน — ทำซ้ำได้เรื่อยๆ เปลี่ยนหน่วยงานแล้วเลือกบัญชีต่อได้ · กำลังโหลดมูลค่างวดล่าสุด...';
+    loadCode13Values(codes);
   } else {
     sel.innerHTML=`<option value="">${catalog?'— เลือกงบประมาณก่อน —':'— กำลังโหลด... —'}</option>`;
     sel.disabled=true;
     hint.style.display='none';
   }
+}
+
+// เติมมูลค่างวดล่าสุด (ตามตัวกรอง/หน่วยงานที่เลือกไว้ตอนนี้) ต่อท้ายชื่อบัญชีในดรอปดาวน์ชั้น 6 —
+// โหลดทีหลังแบบ async ไม่บล็อกดรอปดาวน์ (เลือกได้ทันทีตั้งแต่ก่อนโหลดเสร็จ) กันข้อมูลชนกันเมื่อสลับหน่วยงาน/ตัวกรองเร็วๆ ด้วย reqId
+async function loadCode13Values(codes){
+  const reqId=++CODE13_REQ_ID;
+  const values=await fetchCode13Values(codes);
+  if(reqId!==CODE13_REQ_ID) return; // ผู้ใช้เปลี่ยนตัวกรอง/หน่วยงานไปแล้วระหว่างรอโหลด — ทิ้งผลนี้
+  const sel=document.getElementById('selCode13');
+  const hint=document.getElementById('code13Hint');
+  let tMax=null;
+  for(const o of sel.options){
+    if(!o.value) continue;
+    const v=values[o.value];
+    if(v==null) continue;
+    if(tMax==null || v.t>tMax) tMax=v.t;
+    const base=o.textContent.replace(/\s*\(มูลค่า[^)]*\)$/,'');
+    o.textContent=`${base} (มูลค่า ${fmtM(v.bs)})`;
+  }
+  hint.textContent='เลือกแล้วจะเพิ่มเข้ากราฟทันที สำหรับหน่วยงานที่เลือกไว้ด้านบน — ทำซ้ำได้เรื่อยๆ เปลี่ยนหน่วยงานแล้วเลือกบัญชีต่อได้'
+    +(tMax!=null?` · มูลค่าที่แสดง ณ งวด ${tLab(tMax)}`:'');
+}
+
+// ดึงมูลค่างวดล่าสุด (bs) ของแต่ละรหัสบัญชี 13 หลัก ตามหน่วยงานที่เลือกไว้ตอนนี้ (ST.unit) — คืน {code:{bs,t}}
+// ใช้ไฟล์เดียวกับที่ add*Series ใช้จริง (code13_region/code13_prov/leaf) แคชร่วมกันผ่าน CODE13B/PROVC13B/LEAFB เดิม
+async function fetchCode13Values(codes){
+  const u=ST.unit, out={};
+  const latest=rows=>{
+    if(!rows||!rows.length) return null;
+    const m=new Map();
+    for(const r of rows) m.set(r[0],(m.get(r[0])||0)+r[1]);
+    const t=Math.max(...m.keys());
+    return {t,bs:m.get(t)};
+  };
+  if(u.scope==='region'){
+    const bIds=new Set(codes.map(([,gfId])=>META.gfMap[gfId]?META.gfMap[gfId].bId:null).filter(b=>b!=null));
+    await Promise.all([...bIds].map(async bId=>{
+      if(!(bId in CODE13B)){
+        try{ CODE13B[bId]=await fetch(`${D}code13_region/b${bId}.json`).then(r=>r.json()); }
+        catch(e){ CODE13B[bId]=null; }
+      }
+    }));
+    for(const [code,gfId] of codes){
+      const bId=META.gfMap[gfId]?META.gfMap[gfId].bId:null;
+      out[code]=latest(bId!=null && CODE13B[bId] ? CODE13B[bId][code] : null);
+    }
+  } else if(u.scope==='province'){
+    if(!u.name) return out;
+    const bIds=new Set(codes.map(([,gfId])=>META.gfMap[gfId]?META.gfMap[gfId].bId:null).filter(b=>b!=null));
+    await Promise.all([...bIds].map(async bId=>{
+      const key=`${u.name}|${bId}`;
+      if(!(key in PROVC13B)){
+        try{ PROVC13B[key]=await fetch(`${D}code13_prov/${encodeURIComponent(u.name)}/b${bId}.json`).then(r=>r.json()); }
+        catch(e){ PROVC13B[key]=null; }
+      }
+    }));
+    for(const [code,gfId] of codes){
+      const bId=META.gfMap[gfId]?META.gfMap[gfId].bId:null;
+      const key=bId!=null?`${u.name}|${bId}`:null;
+      out[code]=latest(key && PROVC13B[key] ? PROVC13B[key][code] : null);
+    }
+  } else if(u.scope==='hospital'){
+    if(!u.id) return out;
+    if(!(u.id in LEAFB)){
+      try{ LEAFB[u.id]=await fetch(`${D}leaf/${u.id}.json`).then(r=>r.json()); }
+      catch(e){ LEAFB[u.id]=null; }
+    }
+    for(const [code] of codes) out[code]=latest(LEAFB[u.id]?LEAFB[u.id][code]:null);
+  }
+  return out;
 }
 
 async function onLvlCode13Change(code){

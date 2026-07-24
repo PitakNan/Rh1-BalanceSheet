@@ -132,6 +132,9 @@ table.acctbl td:nth-child(1),table.acctbl td:nth-child(2){text-align:left;white-
 @media(max-width:640px){.nibridge-row{grid-template-columns:1fr}}
 table.wltbl{width:100%;border-collapse:collapse;font-size:12.5px}
 table.wltbl th{background:var(--th-bg);color:var(--mut);font-weight:600;padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.wltbl th.exsortth{cursor:pointer;user-select:none}
+table.wltbl th.exsortth:hover{color:var(--ink)}
+table.wltbl th.exsortth.on{color:var(--blue)}
 table.wltbl td{padding:8px;border-bottom:1px solid var(--row-strip);vertical-align:top}
 table.wltbl tr.click{cursor:pointer}
 table.wltbl tr.click:hover{background:var(--hover)}
@@ -827,7 +830,23 @@ function ovCopyTSV(){
 // + Solver เงินสนับสนุนขั้นต่ำรายแห่งให้ถึงเป้าระดับวิกฤต ≤ เป้า และเงินสดไม่หมด
 // ══════════════════════════════════════════════════════════════════════
 let EX=null, EXST=null, EXOPEN={}, EXTJ=null, EXROWS=null, EX_TSV='';
+let EXSORT={col:null,dir:-1};
 const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
+const EX_SORT_GETTERS={
+  prov:x=>x.h.prov||'', name:x=>x.h.name||'',
+  risk0:x=>x.h.risk??-1, moe:x=>x.r0.moeMo||0, ni:x=>x.r0.niM||0,
+  cash:x=>x.r0.cashOut==null?Infinity:x.r0.cashOut,
+  sep0:x=>x.r0.sepRisk??-1, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
+};
+function exSetSort(col){
+  if(EXSORT.col===col) EXSORT.dir*=-1;
+  else { EXSORT.col=col; EXSORT.dir=(col==='prov'||col==='name')?1:-1; }
+  exRender();
+}
+function exSortTh(label,col){
+  const on=EXSORT.col===col, arrow=on?(EXSORT.dir>0?' ▲':' ▼'):'';
+  return `<th class="exsortth${on?' on':''}" onclick="exSetSort('${col}')">${label}${arrow}</th>`;
+}
 function exKey(p,seg){ return p+'|'+seg; }
 function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
 function exDefaultState(){
@@ -1211,7 +1230,14 @@ function exRender(){
     const inj=exInjOf(h, need);
     const r0=exSimPath(h,0), r1=(inj>0?exSimPath(h,inj):r0);
     return {h, need, inj, r0, r1, manual:EXST.inj[h.hcode]!=null};
-  }).sort((a,b)=>((b.h.risk||0)-(a.h.risk||0)) || ((b.need||0)-(a.need||0)));
+  });
+  const exSortGet=EX_SORT_GETTERS[EXSORT.col];
+  if(exSortGet){
+    items.sort((a,b)=>{ const va=exSortGet(a), vb=exSortGet(b);
+      return typeof va==='string' ? EXSORT.dir*va.localeCompare(vb,'th') : EXSORT.dir*((va||0)-(vb||0)); });
+  } else {
+    items.sort((a,b)=>((b.h.risk||0)-(a.h.risk||0)) || ((b.need||0)-(a.need||0)));
+  }
   const sumNeed=items.reduce((s,x)=>s+(x.inj||0),0);
   const nHelp=items.filter(x=>(x.inj||0)>0).length;
   const nFail=items.filter(x=>x.need==null).length;
@@ -1270,7 +1296,7 @@ function exRender(){
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
     <div class="acctbl-wrap" style="max-height:none">
       <table class="wltbl">
-        <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>ระดับ<br>ตอนนี้</th><th>MOE<br>/เดือน</th><th>NI จำลอง<br>/เดือน</th><th>เงินสด<br>จะหมด?</th><th>ระดับ ${sepLab}<br>ก่อนช่วย</th><th>เงินสนับสนุน<br>ที่ต้องใช้</th><th>ระดับ<br>หลังช่วย</th><th></th></tr>
+        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
         ${rowsHtml}
       </table>
     </div>
