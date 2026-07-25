@@ -836,7 +836,7 @@ const EX_SORT_GETTERS={
   prov:x=>x.h.prov||'', name:x=>x.h.name||'',
   risk0:x=>x.h.risk??-1, moe:x=>x.r0.moeMo||0, ni:x=>x.r0.niM||0,
   cash:x=>x.r0.cashOut==null?Infinity:x.r0.cashOut,
-  sep0:x=>x.r0.sepRisk??-1, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
+  sep0:x=>x.r0.sepRisk??-1, give:x=>x.give||0, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
 };
 function exSetSort(col){
   if(EXSORT.col===col) EXSORT.dir*=-1;
@@ -901,6 +901,19 @@ function exTjCalc(){
   }
   return {debtors:new Set(debtors.map(h=>h.hcode)), shares, byProv,
           total:debtors.reduce((s,h)=>s+h.tj.payIn,0), uncovered};
+}
+// ── เงินที่ "ยกให้/ได้รับ" ต่อ รพ. จาก Option ตามจ่าย (เฉพาะโหมด "ยกหนี้" ที่เป็นการยกให้เปล่าจริง) ──
+// รพช. (ลูกหนี้) = ได้รับการยกหนี้ (h.tj.payIn) · รพศ./รพท. (เจ้าหนี้) = ยกหนี้ให้ตามสัดส่วนที่เกลี่ย (shares)
+// โหมด "จ่ายจริง"/"ไม่ใช้" = 0 (ไม่มีการยกให้ เป็นการชำระเงินสดหรือไม่ทำอะไร)
+function exTjGive(h){
+  if(!EXTJ || EXST.tj.mode!=='forgive') return 0;
+  if(EXTJ.debtors.has(h.hcode)) return h.tj.payIn;
+  return EXTJ.shares[h.hcode]||0;
+}
+function exTjRole(h){
+  if(!EXTJ || EXST.tj.mode!=='forgive') return '';
+  if(EXTJ.debtors.has(h.hcode)) return 'got';
+  return (EXTJ.shares[h.hcode]||0)>0?'give':'';
 }
 // ── NI จำลอง/เดือน (บัญชี) = Σรายรับ×(1+%) − MOE − ค่าเสื่อม run-rate ──
 // revOff/moeOff: ปิดรายการทั้งเขต (ไม่นับรวมเข้าคำนวณเลย) — คนละแกนกับ % ปรับ (ปิดแล้วเปิดใหม่ค่า % เดิมยังอยู่)
@@ -1229,7 +1242,7 @@ function exRender(){
     const need=exSolve(h);
     const inj=exInjOf(h, need);
     const r0=exSimPath(h,0), r1=(inj>0?exSimPath(h,inj):r0);
-    return {h, need, inj, r0, r1, manual:EXST.inj[h.hcode]!=null};
+    return {h, need, inj, r0, r1, manual:EXST.inj[h.hcode]!=null, give:exTjGive(h), role:exTjRole(h)};
   });
   const exSortGet=EX_SORT_GETTERS[EXSORT.col];
   if(exSortGet){
@@ -1246,7 +1259,7 @@ function exRender(){
   const hist=lv=>{ const c={}; items.forEach(x=>{ const v=lv(x); if(v!=null) c[v]=(c[v]||0)+1; });
     return [7,6,5,4,3,2,1,0].filter(L=>c[L]).map(L=>`<span class="b" style="background:${riskColor(L)}">${L}×${c[L]}</span>`).join(''); };
   const rowsHtml=items.map(x=>{
-    const {h,need,inj,r0,r1}=x, hc=h.hcode, open=!!EXOPEN[hc];
+    const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc];
     const main=`<tr>
       <td>${h.prov||''}</td>
       <td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.cls?' '+h.cls:''}</span> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a></td>
@@ -1255,6 +1268,7 @@ function exRender(){
       <td style="color:${r0.niM<0?'var(--red)':'var(--green)'}">${sgnM(r0.niM)}</td>
       <td>${r0.cashOut!=null?`<span class="tgt-warn">${r0.cashOut===0?'ติดลบแล้ว':'เดือน '+r0.cashOut+' ('+tLab(addMo(h.bs.t,r0.cashOut))+')'}</span>`:'<span style="color:var(--green)">ไม่หมด</span>'}</td>
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
+      <td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>
       <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<b>฿0</b>')}</td>
       <td><span class="badge" style="background:${riskColor(r1.sepRisk)}">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
@@ -1263,7 +1277,7 @@ function exRender(){
     const segs=[];
     for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
       for(const g of ['op','ip','pp','oth']){ if(r[g]) segs.push({p,g,v:r[g]}); } }
-    const sub=`<tr class="ovsub"><td colspan="10"><div class="ovsub-box">
+    const sub=`<tr class="ovsub"><td colspan="11"><div class="ovsub-box">
       <div class="fld"><label>💰 เงินสนับสนุนกำหนดเอง (ล้านบาท — เว้นว่าง = ใช้ค่า Solver อัตโนมัติ):
         <input type="number" class="exnum" step="0.5" min="0" value="${x.manual?(EXST.inj[hc]/1e6):''}" placeholder="อัตโนมัติ"
           onchange="exSetInj('${hc}',this.value)"></label></div>
@@ -1296,7 +1310,7 @@ function exRender(){
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
     <div class="acctbl-wrap" style="max-height:none">
       <table class="wltbl">
-        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
+        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
         ${rowsHtml}
       </table>
     </div>
@@ -1304,6 +1318,7 @@ function exRender(){
       <h4 style="margin:0">📋 สรุประดับเขต</h4>
       <div class="tgt-row">ช่วย ${nHelp} แห่ง จาก ${rows.length} แห่งที่เลือก${nFail?` · <span class="tgt-warn">⚠️ ${nFail} แห่งเงินก้อนอย่างเดียวไม่ถึงเป้า (ต้องแก้ NI/รายรับร่วมด้วย)</span>`:''}${Object.keys(byProv).length?` · <span class="tgt-note">${Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')}</span>`:''}</div>
       <div class="tgt-row">ระดับวิกฤต ณ ${sepLab}: ก่อนช่วย <span class="exhist">${hist(x=>x.r0.sepRisk)}</span> → หลังช่วย <span class="exhist">${hist(x=>x.r1.sepRisk)}</span></div>
+      ${EXST.tj.mode==='forgive'&&EXTJ.total>0?`<div class="tgt-row">💛 เงินที่ยกให้รวม (Option ยกหนี้): <b>${fmtM(EXTJ.total)}</b> <span class="tgt-note">— รพช. ${EXTJ.debtors.size} แห่งได้รับการยกหนี้ (รพศ./รพท. ฝั่งเจ้าหนี้ยกให้ตามสัดส่วน)${EXTJ.uncovered>1?` · เกลี่ยไม่ได้ ${fmtM(EXTJ.uncovered)}`:''}</span></div>`:''}
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
       <div class="tgt-row tgt-note"><b>ที่มา:</b> ระดับตอนนี้ = Risk Score ทางการงวด ${EX.periodLabel} (badge เดียวกับหน้าหลัก) · MOE = นิยามกองเศรษฐกิจสุขภาพ (ดูรายบัญชีใน panel MOE) · เงินสนับสนุน = ผล Solver หาค่าต่ำสุดที่ทำให้ระดับ ณ ${horLab} ≤ ${EXST.tgt} และเงินสดไม่หมดระหว่างทาง (ปรับเองรายแห่งได้ในปุ่ม "ปรับรายแห่ง")</div>
     </div>`;
@@ -1311,9 +1326,9 @@ function exRender(){
 }
 function exBuildTSV(items, horLab){
   const M=v=>v==null?'':(v/1e6).toFixed(2);
-  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','รายรับจำลอง/เดือน(ลบ.)','MOE กองเศรษฐฯ/เดือน(ลบ.)','คชจ.นอกนิยาม/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
-  const lines=items.map(({h,need,inj,r0,r1})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',M(r0.revMo),M(r0.moeMo),M(r0.xmoeMo),M(r0.niM),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
-  const tot=['รวม','','','','','','','','','',M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
+  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','รายรับจำลอง/เดือน(ลบ.)','MOE กองเศรษฐฯ/เดือน(ลบ.)','คชจ.นอกนิยาม/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินที่ยกให้(ลบ. · +ได้รับ/−ยกให้)','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
+  const lines=items.map(({h,need,inj,r0,r1,give,role})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',M(r0.revMo),M(r0.moeMo),M(r0.xmoeMo),M(r0.niM),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',give>0?((role==='give'?'-':'')+(give/1e6).toFixed(2)):'',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
+  const tot=['รวม','','','','','','','','','',M(items.filter(x=>x.role==='got').reduce((s,x)=>s+x.give,0)),M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
   return [head,...lines,tot].join('\n');
 }
 function exCopyTSV(){
