@@ -1,3 +1,4 @@
 master.parquet
 *.pyc
 __pycache__/
+mapping_review_for_accounting.csv
