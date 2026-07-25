@@ -1016,11 +1016,6 @@ async function renderExec(){
           <button id="exCall" class="${EXST.crisis==='all'?'on':''}" onclick="exSet('crisis','all')">ทุกระดับ</button>
         </span>
         ${['รพศ.','รพท.','รพช.'].map(t=>`<label><input type="checkbox" ${EXST.types[t]?'checked':''} onchange="exSetType('${t}',this.checked)"> ${t}</label>`).join('')}
-        <label>จังหวัด:
-          <select onchange="exSet('prov',this.value)">
-            <option value="all" ${EXST.prov==='all'?'selected':''}>ทุกจังหวัด</option>
-            ${exProvs().map(p=>`<option value="${p}" ${EXST.prov===p?'selected':''}>${p}</option>`).join('')}
-          </select></label>
         <label>ช่วงจำลอง:
           <select onchange="exSet('ext',+this.value)">
             <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${sepLab} (สิ้นปีงบ)</option>
@@ -1315,6 +1310,14 @@ function exRender(){
   EX_TSV=exBuildTSV(items, horLab);
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
+    <div class="exctl" style="margin:0 0 8px 0">
+      <label>🔎 กรองจังหวัด:
+        <select onchange="exSet('prov',this.value)">
+          <option value="all" ${EXST.prov==='all'?'selected':''}>ทุกจังหวัด</option>
+          ${exProvs().map(p=>`<option value="${p}" ${EXST.prov===p?'selected':''}>${p}</option>`).join('')}
+        </select></label>
+      ${EXST.prov!=='all'?`<button type="button" class="ovbulkbtn" onclick="exSet('prov','all')">↺ ทุกจังหวัด</button> <span class="tgt-note">แสดงเฉพาะ ${EXST.prov} (${rows.length} แห่ง)</span>`:''}
+    </div>
     <div class="acctbl-wrap" style="max-height:none">
       <table class="wltbl">
         <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
