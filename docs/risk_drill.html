@@ -361,26 +361,29 @@ tr.ovsub td{background:var(--hover);padding:10px 14px}
   .dwrap{padding:14px 12px}
   .dhead h2{font-size:16px}
   .decomp-row,.nibridge-row,.pillar-grid{grid-template-columns:1fr}
-  /* Watchlist: ตาราง 7 คอลัมน์ → การ์ดต่อ รพ. (ไม่ต้องปัดซ้าย-ขวา) */
-  table.wltbl{display:block}
-  table.wltbl tbody{display:block}
-  table.wltbl tr:first-child{display:none}
-  table.wltbl tr.click{display:flex;flex-direction:column;position:relative;
+  /* Watchlist: ตาราง 7 คอลัมน์ → การ์ดต่อ รพ. (ไม่ต้องปัดซ้าย-ขวา) — เฉพาะ .wl-card เท่านั้น
+     ตาราง .wltbl อื่น (แท็บผู้บริหาร: ผลจำลอง/Option/MOE/รายรับ) คงเป็นตารางปกติ เลื่อนแนวนอนใน wrap */
+  table.wltbl.wl-card{display:block}
+  table.wltbl.wl-card tbody{display:block}
+  table.wltbl.wl-card tr:first-child{display:none}
+  table.wltbl.wl-card tr.click{display:flex;flex-direction:column;position:relative;
     border:1px solid var(--line);border-radius:12px;margin:0 0 10px;padding:10px 52px 10px 12px;background:var(--card)}
-  table.wltbl tr.click:hover{background:var(--hover)}
-  table.wltbl td{display:block;border:none;padding:2px 0;white-space:normal}
-  table.wltbl td:nth-child(1){order:2;font-size:11.5px;color:var(--mut)}
-  table.wltbl td:nth-child(1)::before{content:'จ.'}
-  table.wltbl td:nth-child(2){order:1;font-size:14px}
-  table.wltbl td:nth-child(3){position:absolute;top:10px;right:12px;padding:0}
-  table.wltbl td:nth-child(4){order:3;font-size:12.5px}
-  table.wltbl td:nth-child(4)::before{content:'Cash ratio: ';color:var(--mut);font-size:11.5px}
-  table.wltbl td:nth-child(5){order:4;font-size:12.5px}
-  table.wltbl td:nth-child(5)::before{content:'เงินบำรุงสุทธิ: ';color:var(--mut);font-size:11.5px}
-  table.wltbl td:nth-child(6){order:5;margin-top:6px}
-  table.wltbl td:nth-child(6)::before{content:'สาเหตุ/ประเด็นชี้ปัญหา';display:block;font-weight:700;font-size:11.5px;color:var(--mut);margin-bottom:2px}
-  table.wltbl td:nth-child(7){order:6;margin-top:6px}
-  table.wltbl td:nth-child(7)::before{content:'คำแนะนำเฉพาะ รพ.';display:block;font-weight:700;font-size:11.5px;color:var(--mut);margin-bottom:2px}
+  table.wltbl.wl-card tr.click:hover{background:var(--hover)}
+  table.wltbl.wl-card td{display:block;border:none;padding:2px 0;white-space:normal}
+  table.wltbl.wl-card td:nth-child(1){order:2;font-size:11.5px;color:var(--mut)}
+  table.wltbl.wl-card td:nth-child(1)::before{content:'จ.'}
+  table.wltbl.wl-card td:nth-child(2){order:1;font-size:14px}
+  table.wltbl.wl-card td:nth-child(3){position:absolute;top:10px;right:12px;padding:0}
+  table.wltbl.wl-card td:nth-child(4){order:3;font-size:12.5px}
+  table.wltbl.wl-card td:nth-child(4)::before{content:'Cash ratio: ';color:var(--mut);font-size:11.5px}
+  table.wltbl.wl-card td:nth-child(5){order:4;font-size:12.5px}
+  table.wltbl.wl-card td:nth-child(5)::before{content:'เงินบำรุงสุทธิ: ';color:var(--mut);font-size:11.5px}
+  table.wltbl.wl-card td:nth-child(6){order:5;margin-top:6px}
+  table.wltbl.wl-card td:nth-child(6)::before{content:'สาเหตุ/ประเด็นชี้ปัญหา';display:block;font-weight:700;font-size:11.5px;color:var(--mut);margin-bottom:2px}
+  table.wltbl.wl-card td:nth-child(7){order:6;margin-top:6px}
+  table.wltbl.wl-card td:nth-child(7)::before{content:'คำแนะนำเฉพาะ รพ.';display:block;font-weight:700;font-size:11.5px;color:var(--mut);margin-bottom:2px}
+  /* ตาราง .wltbl ที่เหลือบนมือถือ: เลื่อนแนวนอนได้ ไม่ล้นจอ */
+  .acctbl-wrap{overflow-x:auto}
   /* Gap-to-Target: ตาราง 6 คอลัมน์ → การ์ดต่อเกณฑ์ (ไม่ต้องปัดซ้าย-ขวา) */
   table.gaptbl{display:block}
   table.gaptbl tbody{display:block}
@@ -598,7 +601,7 @@ function renderWatchlist(){
         <div class="note">คลิกแถวเพื่อดูรายละเอียดสาเหตุเต็มรูปแบบ (เทรนด์/waterfall/บัญชี GL) ของ รพ.นั้น</div>
         <div class="panel">
           <div class="acctbl-wrap" style="max-height:none">
-            <table class="wltbl">
+            <table class="wltbl wl-card">
               <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>Risk</th><th>Cash<br>ratio</th><th>เงินบำรุง<br>สุทธิ</th><th>สาเหตุ/ประเด็นชี้ปัญหา</th><th>คำแนะนำเฉพาะ รพ.</th></tr>
               ${rows.map(h=>`<tr class="click" onclick="location.hash='h/${h.hcode}'">
                 <td>${h.prov||''}</td>
@@ -830,6 +833,7 @@ function ovCopyTSV(){
 // + Solver เงินสนับสนุนขั้นต่ำรายแห่งให้ถึงเป้าระดับวิกฤต ≤ เป้า และเงินสดไม่หมด
 // ══════════════════════════════════════════════════════════════════════
 let EX=null, EXST=null, EXOPEN={}, EXTJ=null, EXROWS=null, EX_TSV='';
+let _refundCache={sig:null, refund:null};   // cache ผล solver "ยกหนี้เจาะจง" (คำนวณใหม่เฉพาะตอน state กระทบ sim เปลี่ยน)
 let EXSORT={col:null,dir:-1};
 const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
 const EX_SORT_GETTERS={
@@ -843,9 +847,11 @@ function exSetSort(col){
   else { EXSORT.col=col; EXSORT.dir=(col==='prov'||col==='name')?1:-1; }
   exRender();
 }
+let EX_COLDEF_MAP={};   // col -> คำอธิบาย/สมการ (single source: ใช้ทั้ง title hover + แผงกางบนมือถือ) ตั้งใน exRender
 function exSortTh(label,col,title){
   const on=EXSORT.col===col, arrow=on?(EXSORT.dir>0?' ▲':' ▼'):'';
-  return `<th class="exsortth${on?' on':''}"${title?` title="${title}"`:''} onclick="exSetSort('${col}')">${label}${arrow}</th>`;
+  const t=title||EX_COLDEF_MAP[col]||'';
+  return `<th class="exsortth${on?' on':''}"${t?` title="${t}"`:''} onclick="exSetSort('${col}')">${label}${arrow}</th>`;
 }
 function exKey(p,seg){ return p+'|'+seg; }
 function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
@@ -1121,7 +1127,11 @@ function exRender(){
   const exScrollEl=document.getElementById('right');
   const exScrollTop=exScrollEl?exScrollEl.scrollTop:0;
   EXTJ=exTjCalc();
-  if(EXST.tj.mode==='smart') exTjSolveRefunds();   // เติม EXTJ.refund ต่อ รพช. ก่อนเรียก exSimPath
+  if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
+    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe});
+    if(_refundCache.sig===sig && _refundCache.refund) EXTJ.refund=_refundCache.refund;
+    else { exTjSolveRefunds(); _refundCache={sig, refund:EXTJ.refund}; }
+  }
   const rows=exRows();
   const mo=EX.monthsElapsed, left=12-mo;
   const horLab=exHorLab(), sepLab=tLab(exSepT());
@@ -1254,8 +1264,9 @@ function exRender(){
     :`<div class="tgt-row" style="margin-top:8px">${EXST.tj.mode==='smart'
       ?`🎯 คืนเงินเจาะจงรวม: <b>${fmtM(refundTot)}</b> ให้ รพช. ${nRefund} แห่ง <span class="tgt-note">(เฉพาะที่ระดับ >3 ณ ${sepLab} หลังจ่าย · ที่ระดับ ≤3 ไม่ได้รับ · ยอดจ่ายเต็มก่อนคืน ${fmtM(EXTJ.total)} จาก ${EXTJ.debtors.size} แห่ง)</span>`
       :`ยอดหนี้ที่เคลียร์: <b>${fmtM(EXTJ.total)}</b> จาก รพช. ${EXTJ.debtors.size} แห่ง <span class="tgt-note">(${Object.entries(EXTJ.byProv).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')})</span>${EXTJ.uncovered>1?` <span class="tgt-warn">⚠️ ${fmtM(EXTJ.uncovered)} เกลี่ยไม่ได้ (ลูกหนี้ฝั่งรับในจังหวัดไม่พอ/ไม่มี)</span>`:''}`}</div>
-    <div class="acctbl-wrap" style="max-height:260px;margin-top:6px">
-      <table class="wltbl">
+    <div class="note" style="margin-top:6px"><b>ภาระที่รับ</b> = min( ลูกหนี้ตัวเอง , รพช.ค้างรวมจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมจังหวัด ) — <b>ต่างจาก "ลูกหนี้นอก CUP"</b> เพราะฝั่ง รพช.(ค้าง) กับฝั่ง รพศ./รพท.(ลูกหนี้) บันทึกแยกเล่ม ยอดไม่ตรงกัน จึงเกลี่ยได้แค่เท่าที่ รพช. ยอมรับว่าค้าง</div>
+    <div class="acctbl-wrap" style="max-height:260px;margin-top:6px;overflow-x:auto">
+      <table class="wltbl" style="min-width:640px">
         <tr><th title="โรงพยาบาลเจ้าหนี้ (รพศ./รพท.) ที่รับภาระหนี้ค่ารักษาตามจ่ายจาก รพช. ที่ส่งต่อคนไข้เข้ามารักษา">ผู้รับภาระ (เจ้าหนี้เดิม)</th><th title="เกลี่ยหนี้เฉพาะระหว่าง รพช. ↔ รพศ./รพท. ในจังหวัดเดียวกัน">จังหวัด</th><th title="ยอดที่เจ้าหนี้บันทึกเองว่าถูกค้างชำระ (บัญชี 1102050101.203 + 1102050194.204) = สิ่งที่ รพศ./รพท. คิดว่าควรได้">ลูกหนี้นอก CUP</th><th title="ส่วนแบ่งหนี้ที่ รพช. ค้างจริง (2101020199.202) เกลี่ยมาให้เจ้าหนี้นี้ = min(ลูกหนี้ตัวเอง, ยอด รพช.ค้างรวมในจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมในจังหวัด) — ต่างจากลูกหนี้เพราะสองฝั่งบันทึกแยกเล่ม ยอดไม่ตรงกัน">ภาระที่รับ</th><th title="ผลต่องบเจ้าหนี้ — จ่ายจริง/เจาะจง: ได้เงินสดเข้า · ยกหนี้: ตัดลูกหนี้เป็นค่าใช้จ่ายอุดหนุน (ไม่ได้เงินสด)">ผลกระทบ</th><th title="ระดับวิกฤตของเจ้าหนี้ ก่อน → หลัง รับภาระตาม Option ที่เลือก">ระดับ ณ ${sepLab}</th></tr>
         ${creds.map(h=>{ const S=EXTJ.shares[h.hcode]; const r=exSimPath(h,0);
           return `<tr><td><b>${h.name}</b> <span class="tgt-note">${h.type}</span></td><td>${h.prov}</td><td>${fmtM(h.tj.arIn)}</td><td><b>${fmtM(S)}</b></td>
@@ -1337,6 +1348,21 @@ function exRender(){
   EX_TSV=exBuildTSV(items, horLab);
   // tooltip ที่มาบัญชีของคอลัมน์ "เงินสด+เทียบเท่า" (จาก EX.cashDef ที่ export_exec.py ดึงตามผัง 1003X)
   const cashTitle=(EX.cashDef?EX.cashDef.item+' — ประกอบด้วย '+EX.cashDef.n+' บัญชี:\n'+EX.cashDef.groups.map(gp=>'• '+gp.g+': '+gp.accs.map(a=>a.n).join(', ')).join('\n'):'เงินสดและรายการเทียบเท่าเงินสด (ตัวเศษ Cash ratio)').replace(/"/g,'&quot;');
+  // single source ของคำอธิบาย/สมการหัวคอลัมน์ — ใช้ทั้ง title (hover เดสก์ท็อป) + แผงกาง (แตะบนมือถือ)
+  EX_COLDEF_MAP={
+    prov:'จังหวัดที่ตั้งของโรงพยาบาล',
+    name:'ชื่อ + ประเภท (รพศ./รพท./รพช.) และระดับบริการ · คลิก "เปิดหน้าเต็ม" ดูรายละเอียดราย รพ.',
+    risk0:'ระดับวิกฤตการเงิน (Risk Score ทางการ) งวดล่าสุด — 0 ดีสุด ถึง 7 วิกฤตสุด',
+    moe:'ค่าใช้จ่ายจำเป็นต่อเดือน (นิยามกองเศรษฐกิจสุขภาพ) = Σ(ยอดจ่ายจริงสะสม ÷ เดือน) × (1 + %ปรับรายหมวด)',
+    ni:'กำไร/ขาดทุนสุทธิจำลอง/เดือน = รายรับกองทุน×(1+%) − MOE − ค่าใช้จ่ายนอกนิยาม(run-rate) − รายการไม่ใช่เงินสด',
+    cashbal:cashTitle,
+    cash:'เดือนที่เงินสดจะติดลบระหว่างจำลอง (ไม่หมด = ไม่ติดลบตลอดช่วง) · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด',
+    sep0:'ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก)',
+    give:'เงินยกหนี้/คืน จาก Option ตามจ่าย · ยกหนี้: รพช.รับเต็ม, รพศ./รพท.ยกให้ · ยกหนี้เจาะจง: เงินคืนขั้นต่ำให้ระดับ ≤3 · ไม่ใช้/จ่ายจริง: ไม่มี',
+    need:'เงินก้อนขั้นต่ำ (เติมครั้งเดียวเดือน 0) ให้ระดับ ณ '+sepLab+' ≤ เป้าที่ตั้ง และเงินสดไม่หมด — หาด้วย Solver (binary search)',
+    sep1:'ระดับวิกฤต ณ '+sepLab+' หลังเติมเงินสนับสนุนแล้ว',
+  };
+  const colInfoRows=[['risk0','ระดับตอนนี้'],['moe','MOE/เดือน'],['ni','NI จำลอง/เดือน'],['cashbal','เงินสด+เทียบเท่า'],['cash','เงินสดจะหมด?'],['sep0','ระดับ '+sepLab+' ก่อนช่วย'],['give','เงินที่ยกให้'],['need','เงินสนับสนุนที่ต้องใช้'],['sep1','ระดับหลังช่วย']];
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
     <div class="exctl" style="margin:0 0 8px 0">
@@ -1347,9 +1373,12 @@ function exRender(){
         </select></label>
       ${EXST.prov!=='all'?`<button type="button" class="ovbulkbtn" onclick="exSet('prov','all')">↺ ทุกจังหวัด</button> <span class="tgt-note">แสดงเฉพาะ ${EXST.prov} (${rows.length} แห่ง)</span>`:''}
     </div>
-    <div class="acctbl-wrap" style="max-height:none">
-      <table class="wltbl">
-        <tr>${exSortTh('จังหวัด','prov','จังหวัดที่ตั้งของโรงพยาบาล')}${exSortTh('โรงพยาบาล','name','ชื่อ + ประเภท (รพศ./รพท./รพช.) และระดับบริการ · คลิก "เปิดหน้าเต็ม" ดูรายละเอียดราย รพ.')}${exSortTh('ระดับ<br>ตอนนี้','risk0','ระดับวิกฤตการเงิน (Risk Score ทางการ) งวดล่าสุด — 0 ดีสุด ถึง 7 วิกฤตสุด')}${exSortTh('MOE<br>/เดือน','moe','ค่าใช้จ่ายจำเป็นต่อเดือน (นิยามกองเศรษฐกิจสุขภาพ) = Σ(ยอดจ่ายจริงสะสม ÷ เดือน) × (1 + %ปรับรายหมวด)')}${exSortTh('NI จำลอง<br>/เดือน','ni','กำไร/ขาดทุนสุทธิจำลอง/เดือน = รายรับกองทุน×(1+%) − MOE − ค่าใช้จ่ายนอกนิยาม(run-rate) − รายการไม่ใช่เงินสด')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal',cashTitle)}${exSortTh('เงินสด<br>จะหมด?','cash','เดือนที่เงินสดจะติดลบระหว่างจำลอง (ไม่หมด = ไม่ติดลบตลอดช่วง) · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0','ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก)')}${exSortTh('เงินที่<br>ยกให้','give','เงินยกหนี้/คืน จาก Option ตามจ่าย · ยกหนี้: รพช.รับเต็ม, รพศ./รพท.ยกให้ · ยกหนี้เจาะจง: เงินคืนขั้นต่ำให้ระดับ ≤3 · ไม่ใช้/จ่ายจริง: ไม่มี')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need','เงินก้อนขั้นต่ำ (เติมครั้งเดียวเดือน 0) ให้ระดับ ณ เป้า ≤ ที่ตั้งไว้ และเงินสดไม่หมด — หาด้วย Solver (binary search)')}${exSortTh('ระดับ<br>หลังช่วย','sep1','ระดับวิกฤต ณ '+sepLab+' หลังเติมเงินสนับสนุนแล้ว')}<th></th></tr>
+    <details class="colinfo" style="margin:0 0 8px"><summary style="cursor:pointer;font-weight:700;font-size:12.5px;color:var(--blue)">ⓘ ความหมาย/สมการแต่ละคอลัมน์ (แตะดู — บนมือถือก็เห็น)</summary>
+      <div class="note" style="margin-top:4px;line-height:1.7">${colInfoRows.map(([c,l])=>`<div><b>${l}:</b> ${(EX_COLDEF_MAP[c]||'').replace(/\n/g,'<br>&nbsp;&nbsp;')}</div>`).join('')}</div>
+    </details>
+    <div class="acctbl-wrap" style="max-height:none;overflow-x:auto">
+      <table class="wltbl" style="min-width:820px">
+        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
         ${rowsHtml}
       </table>
     </div>
@@ -1359,6 +1388,8 @@ function exRender(){
       <div class="tgt-row">ระดับวิกฤต ณ ${sepLab}: ก่อนช่วย <span class="exhist">${hist(x=>x.r0.sepRisk)}</span> → หลังช่วย <span class="exhist">${hist(x=>x.r1.sepRisk)}</span></div>
       ${EXST.tj.mode==='forgive'&&EXTJ.total>0?`<div class="tgt-row">💛 เงินที่ยกให้รวม (Option ยกหนี้): <b>${fmtM(EXTJ.total)}</b> <span class="tgt-note">— รพช. ${EXTJ.debtors.size} แห่งได้รับการยกหนี้ (รพศ./รพท. ฝั่งเจ้าหนี้ยกให้ตามสัดส่วน)${EXTJ.uncovered>1?` · เกลี่ยไม่ได้ ${fmtM(EXTJ.uncovered)}`:''}</span></div>`
       :EXST.tj.mode==='smart'&&refundTot>0?`<div class="tgt-row">🎯 เงินคืนเจาะจงรวม (Option ยกหนี้เจาะจง): <b>${fmtM(refundTot)}</b> <span class="tgt-note">— คืนให้ รพช. ${nRefund} แห่งที่ระดับ >3 ณ ${sepLab} หลังจ่าย พอให้ลงถึง ≤3 (ที่ระดับ ≤3 อยู่แล้วไม่ได้รับ)</span></div>`:''}
+      ${EXST.tj.mode==='smart'?`<div class="tgt-row" style="font-weight:600">💵 เขตต้องใช้เงินรวม ≈ คืนเจาะจง ${fmtM(refundTot)} + สนับสนุน ${fmtM(sumNeed)} = <b style="color:var(--blue)">${fmtM(refundTot+sumNeed)}</b></div>`
+      :EXST.tj.mode==='forgive'?`<div class="tgt-row" style="font-weight:600">💵 รวมความช่วยเหลือ ≈ ยกหนี้ ${fmtM(EXTJ.total)} + สนับสนุน ${fmtM(sumNeed)} = <b style="color:var(--blue)">${fmtM(EXTJ.total+sumNeed)}</b> <span class="tgt-note" style="font-weight:400">(ยกหนี้ = เคลียร์หนี้ระหว่าง รพ. ในเขต · เงินสดใหม่จากเขต = สนับสนุน ${fmtM(sumNeed)})</span></div>`:''}
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
       <div class="tgt-row tgt-note"><b>ที่มา:</b> ระดับตอนนี้ = Risk Score ทางการงวด ${EX.periodLabel} (badge เดียวกับหน้าหลัก) · MOE = นิยามกองเศรษฐกิจสุขภาพ (ดูรายบัญชีใน panel MOE) · เงินสนับสนุน = ผล Solver หาค่าต่ำสุดที่ทำให้ระดับ ณ ${horLab} ≤ ${EXST.tgt} และเงินสดไม่หมดระหว่างทาง (ปรับเองรายแห่งได้ในปุ่ม "ปรับรายแห่ง")</div>
     </div>`;
