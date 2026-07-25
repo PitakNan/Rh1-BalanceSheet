@@ -120,12 +120,19 @@ def acc_root(a):
     p, _, rest = a.partition("."); dd = rest.replace(".", "")
     return p + "." + dd[:3] if dd else a
 
-def main():
-    planfin_map = load_planfin_map()
-    def planfin_code(root):
-        p = planfin_map.get(root)
-        return p if p is not None else planfin_code_fallback(root)
+_PLANFIN_MAP = None
 
+def planfin_code(root):
+    """โค้ด Planfin (Pxx) ของรหัสบัญชี — lookup Mapping_Clean.xlsx ก่อน ไม่เจอค่อย fallback (โครงสร้าง MOPH).
+    ย้ายกลับเป็น module-level 2026-07-25 ให้ export_exec.py import ได้ (โหลด map ครั้งเดียว cache) — ค่าไม่เปลี่ยน
+    (เดิม 2026-07-21 ถูกย้ายเข้า main() เป็น closure → export_exec.py import ไม่ได้ = บั๊กที่ orchestrator จับได้)"""
+    global _PLANFIN_MAP
+    if _PLANFIN_MAP is None:
+        _PLANFIN_MAP = load_planfin_map()
+    p = _PLANFIN_MAP.get(root)
+    return p if p is not None else planfin_code_fallback(root)
+
+def main():
     conn = pymysql.connect(host="localhost", user="root", db="rh1_health", charset="utf8mb4")
     items = pd.read_sql("SELECT RatioItemID,CodeL1 FROM ratio_items WHERE UseYN='Yes' "
                         "AND RatioItemID IN ('3006Y','3010X')", conn)
