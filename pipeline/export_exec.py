@@ -100,6 +100,12 @@ def main():
     conn = pymysql.connect(host="localhost", user="root", db="rh1_health", charset="utf8mb4")
     items = pd.read_sql("SELECT RatioItemID,CodeL1 FROM ratio_items WHERE UseYN='Yes' "
                         "AND RatioItemID IN ('3006Y','3010X')", conn)
+    # 1003X = เงินสดและรายการเทียบเท่าเงินสด (ตัวเศษ Cash ratio) — ดึงชื่อบัญชีจากผัง acc_hierarchy
+    # สำหรับ tooltip "ที่มา" ในตารางผลจำลอง (แสดงว่าเงินสดมาจากบัญชีอะไรบ้าง) — ผันแปรตามผังจริงเสมอ
+    cash_df = pd.read_sql(
+        "SELECT r.CodeL1 AS code, h.Account1 AS nm, h.Name2 AS grp "
+        "FROM ratio_items r JOIN acc_hierarchy h ON h.CodeL1=r.CodeL1 "
+        "WHERE r.RatioItemID='1003X' AND r.UseYN='Yes' ORDER BY r.CodeL1", conn)
     conn.close()
     rev_codes = set(items.loc[items.RatioItemID == "3006Y", "CodeL1"])
     exp_codes = set(items.loc[items.RatioItemID == "3010X", "CodeL1"])
@@ -177,9 +183,15 @@ def main():
     moe_meta = [{"id": gid, "name": gname,
                  "accs": [{"a": a, "n": names.get(a, "?")} for a in accs]}
                 for gid, gname, accs in MOE_GROUPS]
+    # cashDef: ที่มาบัญชีของ "เงินสดและรายการเทียบเท่าเงินสด" (bs.cn) จัดกลุ่มตาม Name2 ของผัง
+    cash_df = cash_df.drop_duplicates("code")
+    cash_groups = [{"g": gname, "accs": [{"a": r.code, "n": r.nm} for _, r in gdf.iterrows()]}
+                   for gname, gdf in cash_df.groupby("grp", sort=False)]
+    cash_def = {"item": "เงินสดและรายการเทียบเท่าเงินสด (ตัวเศษ Cash ratio · RatioItemID 1003X ตามผัง)",
+                "n": int(cash_df.shape[0]), "groups": cash_groups}
     out = {"period": tmax, "periodLabel": summ.get("periodLabel"), "monthsElapsed": tmax % 100,
            "pn": PN, "revOrder": REV_ORDER, "expOrder": EXP_ORDER,
-           "moeGroups": moe_meta, "hosp": hosp}
+           "moeGroups": moe_meta, "cashDef": cash_def, "hosp": hosp}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     kb = os.path.getsize(OUT) / 1024

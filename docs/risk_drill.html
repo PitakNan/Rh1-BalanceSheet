@@ -835,7 +835,7 @@ const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
 const EX_SORT_GETTERS={
   prov:x=>x.h.prov||'', name:x=>x.h.name||'',
   risk0:x=>x.h.risk??-1, moe:x=>x.r0.moeMo||0, ni:x=>x.r0.niM||0,
-  cash:x=>x.r0.cashOut==null?Infinity:x.r0.cashOut,
+  cash:x=>x.r0.cashOut==null?Infinity:x.r0.cashOut, cashbal:x=>x.h.bs.cn||0,
   sep0:x=>x.r0.sepRisk??-1, give:x=>x.give||0, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
 };
 function exSetSort(col){
@@ -843,9 +843,9 @@ function exSetSort(col){
   else { EXSORT.col=col; EXSORT.dir=(col==='prov'||col==='name')?1:-1; }
   exRender();
 }
-function exSortTh(label,col){
+function exSortTh(label,col,title){
   const on=EXSORT.col===col, arrow=on?(EXSORT.dir>0?' ▲':' ▼'):'';
-  return `<th class="exsortth${on?' on':''}" onclick="exSetSort('${col}')">${label}${arrow}</th>`;
+  return `<th class="exsortth${on?' on':''}"${title?` title="${title}"`:''} onclick="exSetSort('${col}')">${label}${arrow}</th>`;
 }
 function exKey(p,seg){ return p+'|'+seg; }
 function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
@@ -1268,6 +1268,7 @@ function exRender(){
       <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span></td>
       <td>${fmtM(r0.moeMo)}</td>
       <td style="color:${r0.niM<0?'var(--red)':'var(--green)'}">${sgnM(r0.niM)}</td>
+      <td${h.bs.cn<=0?' style="color:var(--red);font-weight:700"':''}>${fmtM(h.bs.cn)}</td>
       <td>${r0.cashOut!=null?`<span class="tgt-warn">${r0.cashOut===0?'ติดลบแล้ว':'เดือน '+r0.cashOut+' ('+tLab(addMo(h.bs.t,r0.cashOut))+')'}</span>`:'<span style="color:var(--green)">ไม่หมด</span>'}</td>
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
       <td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>
@@ -1279,7 +1280,7 @@ function exRender(){
     const segs=[];
     for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
       for(const g of ['op','ip','pp','oth']){ if(r[g]) segs.push({p,g,v:r[g]}); } }
-    const sub=`<tr class="ovsub"><td colspan="11"><div class="ovsub-box">
+    const sub=`<tr class="ovsub"><td colspan="12"><div class="ovsub-box">
       <div class="fld"><label>💰 เงินสนับสนุนกำหนดเอง (ล้านบาท — เว้นว่าง = ใช้ค่า Solver อัตโนมัติ):
         <input type="number" class="exnum" step="0.5" min="0" value="${x.manual?(EXST.inj[hc]/1e6):''}" placeholder="อัตโนมัติ"
           onchange="exSetInj('${hc}',this.value)"></label></div>
@@ -1308,6 +1309,8 @@ function exRender(){
     return main+sub;
   }).join('');
   EX_TSV=exBuildTSV(items, horLab);
+  // tooltip ที่มาบัญชีของคอลัมน์ "เงินสด+เทียบเท่า" (จาก EX.cashDef ที่ export_exec.py ดึงตามผัง 1003X)
+  const cashTitle=(EX.cashDef?EX.cashDef.item+' — ประกอบด้วย '+EX.cashDef.n+' บัญชี:\n'+EX.cashDef.groups.map(gp=>'• '+gp.g+': '+gp.accs.map(a=>a.n).join(', ')).join('\n'):'เงินสดและรายการเทียบเท่าเงินสด (ตัวเศษ Cash ratio)').replace(/"/g,'&quot;');
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
     <div class="exctl" style="margin:0 0 8px 0">
@@ -1320,7 +1323,7 @@ function exRender(){
     </div>
     <div class="acctbl-wrap" style="max-height:none">
       <table class="wltbl">
-        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
+        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal',cashTitle)}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
         ${rowsHtml}
       </table>
     </div>
@@ -1336,9 +1339,9 @@ function exRender(){
 }
 function exBuildTSV(items, horLab){
   const M=v=>v==null?'':(v/1e6).toFixed(2);
-  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','รายรับจำลอง/เดือน(ลบ.)','MOE กองเศรษฐฯ/เดือน(ลบ.)','คชจ.นอกนิยาม/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินที่ยกให้(ลบ. · +ได้รับ/−ยกให้)','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
-  const lines=items.map(({h,need,inj,r0,r1,give,role})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',M(r0.revMo),M(r0.moeMo),M(r0.xmoeMo),M(r0.niM),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',give>0?((role==='give'?'-':'')+(give/1e6).toFixed(2)):'',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
-  const tot=['รวม','','','','','','','','','',M(items.filter(x=>x.role==='got').reduce((s,x)=>s+x.give,0)),M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
+  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','รายรับจำลอง/เดือน(ลบ.)','MOE กองเศรษฐฯ/เดือน(ลบ.)','คชจ.นอกนิยาม/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสด+เทียบเท่า(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินที่ยกให้(ลบ. · +ได้รับ/−ยกให้)','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
+  const lines=items.map(({h,need,inj,r0,r1,give,role})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',M(r0.revMo),M(r0.moeMo),M(r0.xmoeMo),M(r0.niM),M(h.bs.cn),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',give>0?((role==='give'?'-':'')+(give/1e6).toFixed(2)):'',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
+  const tot=['รวม','','','','','','','',M(items.reduce((s,x)=>s+(x.h.bs.cn||0),0)),'','',M(items.filter(x=>x.role==='got').reduce((s,x)=>s+x.give,0)),M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
   return [head,...lines,tot].join('\n');
 }
 function exCopyTSV(){
