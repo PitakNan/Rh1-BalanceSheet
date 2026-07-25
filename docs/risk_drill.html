@@ -402,6 +402,22 @@ tr.ovsub td{background:var(--hover);padding:10px 14px}
   table.gaptbl td:nth-child(5){margin-top:4px}
   table.gaptbl td:nth-child(6){position:absolute;top:9px;right:11px;font-size:15px;padding:0}
 }
+/* ── Print / บันทึก PDF (แท็บผู้บริหาร) — ซ่อน chrome+ตัวปรับแต่ง เก็บตาราง/ค่า แล้ว window.print() ── */
+.print-head{display:none}
+@media print{
+  header,.left,#menuBtn{display:none!important}
+  .main{display:block!important;overflow:visible!important;height:auto!important}
+  .right{overflow:visible!important;height:auto!important}
+  .dwrap{max-width:100%!important;padding:0!important;gap:10px!important}
+  .panel{overflow:visible!important;box-shadow:none!important;break-inside:avoid;page-break-inside:avoid}
+  .acctbl-wrap{max-height:none!important;overflow:visible!important}
+  table.wltbl{min-width:0!important;font-size:9.5px!important}
+  input[type=range],.ovbulkbtn,.ovtgl,.tgt-apply,.exnum,.colinfo,.no-print,select,#themeBtn,.lvlbtns{display:none!important}
+  details:not([open])>summary{display:none}
+  body{background:#fff!important}
+  .print-head{display:block!important;margin-bottom:8px;border-bottom:2px solid #333;padding-bottom:6px}
+  @page{size:A4 landscape;margin:9mm}
+}
 </style>
 </head>
 <body>
@@ -1033,6 +1049,10 @@ async function renderExec(){
   const sepLab=tLab(exSepT());
   document.getElementById('right').innerHTML=`
   <div class="dwrap" style="max-width:1200px">
+    <div class="print-head">
+      <div style="font-size:16px;font-weight:800">รายงานแนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง ${sepLab} (โมเดล MOE)</div>
+      <div style="font-size:11px;color:#555">เขตสุขภาพที่ 1 · งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} · พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH')}</div>
+    </div>
     <div class="panel">
       <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง <span id="exHorLab2">${sepLab}</span> ด้วยโมเดล MOE</h3>
       <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + Risk Score ทางการ</div>
@@ -1047,6 +1067,7 @@ async function renderExec(){
             <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${sepLab} (สิ้นปีงบ)</option>
             ${[3,6,12].map(x=>`<option value="${x}" ${+EXST.ext===x?'selected':''}>+${x} เดือน (${tLab(addMo(exSepT(),x))})</option>`).join('')}
           </select></label>
+        <button type="button" class="no-print ovbulkbtn" style="margin-left:auto" onclick="window.print()" title="เปิดกล่องพิมพ์ของเบราว์เซอร์ → เลือก 'Save as PDF' เพื่อบันทึกเป็นไฟล์รายงาน">🖨️ บันทึก PDF / พิมพ์</button>
       </div>
       <div class="tgt-title" style="margin-top:12px">🎯 ตั้งเป้าระดับวิกฤตไม่เกิน ภายใน <b id="exHorLab3">${exHorLab()}</b> (ใช้กับ <span id="exTgtCount">${exRows().length}</span> แห่งที่เลือก) — กดเลขระดับที่ต้องการ</div>
       <div class="tgt-legend">เลข 0-6 = ต้องทำกำไร/เติมเงินก้อนเท่าไหร่ถึงจะลดลงถึงเป้าภายในกำหนด · เลข 7 = ไม่จำกัดระดับวิกฤต (7 คือระดับสูงสุดอยู่แล้ว) ดูเฉพาะเงินสนับสนุนขั้นต่ำกันเงินสดหมดเท่านั้น</div>
