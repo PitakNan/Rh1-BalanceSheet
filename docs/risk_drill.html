@@ -852,7 +852,7 @@ function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
 function exDefaultState(){
   // moePct: % ปรับรายกลุ่ม MOE จากค่าเฉลี่ย (default 0% = ตาม run-rate) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
   // adjAll/moePctAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
-  return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, ext:0, tgt:6,
+  return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, prov:'all', ext:0, tgt:6,
           moePct:{}, moePctAll:0, moeOff:{}, moeOvr:{}, xmoe:true, adj:{}, adjAll:0, revOff:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
@@ -881,8 +881,10 @@ function exMoePctFor(hc,g){
 function exXmoeOn(){ return EXST.xmoe!==false; }   // ค่าใช้จ่ายนอกนิยาม MOE (run-rate)
 // รพ. ที่แสดงตามฟิลเตอร์
 function exRows(){
-  return EX.hosp.filter(h=>EXST.types[h.type] && (EXST.crisis==='all' || (h.risk||0)>=6));
+  return EX.hosp.filter(h=>EXST.types[h.type] && (EXST.crisis==='all' || (h.risk||0)>=6) && (EXST.prov==='all' || h.prov===EXST.prov));
 }
+// รายชื่อจังหวัดในเขต (unique จาก EX.hosp) เรียงตามอักษรไทย — สำหรับตัวกรองจังหวัด
+function exProvs(){ return [...new Set(EX.hosp.map(h=>h.prov))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'th')); }
 // ── ตามจ่าย: เกลี่ยภาระฝั่งเจ้าหนี้ (รพศ./รพท.) ตามสัดส่วนลูกหนี้นอก CUP ในจังหวัดเดียวกัน ──
 function exTjCalc(){
   if(EXST.tj.mode==='off') return {debtors:new Set(), shares:{}, byProv:{}, total:0, uncovered:0};
@@ -1014,6 +1016,11 @@ async function renderExec(){
           <button id="exCall" class="${EXST.crisis==='all'?'on':''}" onclick="exSet('crisis','all')">ทุกระดับ</button>
         </span>
         ${['รพศ.','รพท.','รพช.'].map(t=>`<label><input type="checkbox" ${EXST.types[t]?'checked':''} onchange="exSetType('${t}',this.checked)"> ${t}</label>`).join('')}
+        <label>จังหวัด:
+          <select onchange="exSet('prov',this.value)">
+            <option value="all" ${EXST.prov==='all'?'selected':''}>ทุกจังหวัด</option>
+            ${exProvs().map(p=>`<option value="${p}" ${EXST.prov===p?'selected':''}>${p}</option>`).join('')}
+          </select></label>
         <label>ช่วงจำลอง:
           <select onchange="exSet('ext',+this.value)">
             <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${sepLab} (สิ้นปีงบ)</option>
