@@ -294,6 +294,8 @@ tr.ovsub td{background:var(--hover);padding:10px 14px}
 .exctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px}
 .exctl label{display:flex;align-items:center;gap:5px;cursor:pointer}
 .exctl select{font-family:inherit;font-size:12px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:4px 6px}
+.optgrp{border:1px solid var(--line);border-radius:10px;padding:6px 12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:var(--bg)}
+.optgrp-lbl{font-weight:700;color:var(--mut);font-size:11px;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px}
 .exhist{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap}
 .exhist .b{min-width:26px;text-align:center;border-radius:7px;color:#fff;font-weight:800;font-size:11.5px;padding:3px 4px}
 .exnum{font-family:inherit;font-size:12px;width:90px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
@@ -1273,13 +1275,18 @@ function exRender(){
   document.getElementById('exTjBox').innerHTML=`
     <h3 style="margin:0 0 6px">🔁 Option พิเศษ: ปรับหนี้ค่ารักษาตามจ่าย รพช. ↔ รพศ./รพท.</h3>
     <div class="exctl">
-      <label><input type="radio" name="extj" ${EXST.tj.mode==='off'?'checked':''} onchange="exSetTj('mode','off')"> ไม่ใช้</label>
-      <label><input type="radio" name="extj" ${EXST.tj.mode==='forgive'?'checked':''} onchange="exSetTj('mode','forgive')"> 🤝 ยกหนี้ (เงินให้เปล่าตามหนี้ค้าง → เคลียร์กัน)</label>
-      <label><input type="radio" name="extj" ${EXST.tj.mode==='pay'?'checked':''} onchange="exSetTj('mode','pay')"> 💵 รพช. จ่ายชำระจริง</label>
-      <label><input type="radio" name="extj" ${EXST.tj.mode==='smart'?'checked':''} onchange="exSetTj('mode','smart')"> 🎯 ยกหนี้เจาะจง (จ่ายก่อน → คืนเฉพาะที่จำเป็นให้ระดับ ≤3)</label>
-      <span style="border-left:1px solid var(--line);padding-left:14px">ขอบเขต:
-        <label style="display:inline-flex"><input type="radio" name="extjs" ${EXST.tj.scope==='crisis'?'checked':''} onchange="exSetTj('scope','crisis')"> เฉพาะ รพช. วิกฤต 6-7</label>
-        <label style="display:inline-flex;margin-left:8px"><input type="radio" name="extjs" ${EXST.tj.scope==='all'?'checked':''} onchange="exSetTj('scope','all')"> รพช. ทุกแห่ง</label></span>
+      <div class="optgrp">
+        <span class="optgrp-lbl">วิธี</span>
+        <label><input type="radio" name="extj" ${EXST.tj.mode==='off'?'checked':''} onchange="exSetTj('mode','off')"> ไม่ใช้</label>
+        <label><input type="radio" name="extj" ${EXST.tj.mode==='forgive'?'checked':''} onchange="exSetTj('mode','forgive')"> 🤝 ยกหนี้ (เงินให้เปล่าตามหนี้ค้าง → เคลียร์กัน)</label>
+        <label><input type="radio" name="extj" ${EXST.tj.mode==='pay'?'checked':''} onchange="exSetTj('mode','pay')"> 💵 รพช. จ่ายชำระจริง</label>
+        <label><input type="radio" name="extj" ${EXST.tj.mode==='smart'?'checked':''} onchange="exSetTj('mode','smart')"> 🎯 ยกหนี้เจาะจง (จ่ายก่อน → คืนเฉพาะที่จำเป็นให้ระดับ ≤3)</label>
+      </div>
+      <div class="optgrp">
+        <span class="optgrp-lbl">ขอบเขต</span>
+        <label><input type="radio" name="extjs" ${EXST.tj.scope==='crisis'?'checked':''} onchange="exSetTj('scope','crisis')"> เฉพาะ รพช. วิกฤต 6-7</label>
+        <label><input type="radio" name="extjs" ${EXST.tj.scope==='all'?'checked':''} onchange="exSetTj('scope','all')"> รพช. ทุกแห่ง</label>
+      </div>
     </div>
     ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า · <b>🎯 ยกหนี้เจาะจง</b>: สมมติ รพช. จ่ายจริงก่อน แล้ว<b>เขตคืนเงินเฉพาะเท่าที่จำเป็น</b>ให้ระดับ ณ ${sepLab} ≤3 — รพช. ที่ยังไหว (≤3 หลังจ่าย) ไม่ได้รับ, ที่ >3 คืนขั้นต่ำพอลงถึง 3 (ไม่เกินยอดที่จ่าย) · เจ้าหนี้ได้รับชำระครบ — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่ง รพศ./รพท. ${fmtM(EX.hosp.filter(h=>h.type!=='รพช.').reduce((s,h)=>s+h.tj.arIn,0))}</div>`
     :`<div class="tgt-row" style="margin-top:8px">${EXST.tj.mode==='smart'
