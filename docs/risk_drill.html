@@ -1383,7 +1383,7 @@ function exRender(){
     need:'เงินก้อนขั้นต่ำ (เติมครั้งเดียวเดือน 0) ให้ระดับ ณ '+sepLab+' ≤ เป้าที่ตั้ง และเงินสดไม่หมด — หาด้วย Solver (binary search)',
     sep1:'ระดับวิกฤต ณ '+sepLab+' หลังเติมเงินสนับสนุนแล้ว',
   };
-  const colInfoRows=[['risk0','ระดับตอนนี้'],['moe','MOE/เดือน'],['ni','NI จำลอง/เดือน'],['cashbal','เงินสด+เทียบเท่า'],['cash','เงินสดจะหมด?'],['sep0','ระดับ '+sepLab+' ก่อนช่วย'],['give','เงินที่ยกให้'],['need','เงินสนับสนุนที่ต้องใช้'],['sep1','ระดับหลังช่วย']];
+  const colInfoRows=[['risk0','ระดับตอนนี้'],['moe','MOE/เดือน'],['ni','NI จำลอง/เดือน'],['cashbal','เงินสด+เทียบเท่า'],['cash','เงินสดจะหมด?'],['sep0','ระดับ '+sepLab+' ก่อนช่วย'],['give','เงินที่ยกให้'],['need','เงินสนับสนุนที่ต้องใช้'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
     <div class="exctl" style="margin:0 0 8px 0">
@@ -1399,7 +1399,7 @@ function exRender(){
     </details>
     <div class="acctbl-wrap" style="max-height:none;overflow-x:auto">
       <table class="wltbl" style="min-width:820px">
-        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ<br>หลังช่วย','sep1')}<th></th></tr>
+        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>
         ${rowsHtml}
       </table>
     </div>
