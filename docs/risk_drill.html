@@ -1845,7 +1845,7 @@ let SURV=null;
 function survLimits(h){
   const m=(h.grp||'').match(/\.(A|S|M1|M2|F1|F2|F3)(?=\s|$)/)||(h.grp||'').match(/(A|S|M1|M2|F1|F2|F3)/);
   const cls=m?m[1]:null;
-  const T={A:[500,100],S:[300,80],M1:[150,60],M2:[100,40],F1:[60,30],F2:[40,25],F3:[25,15]};
+  const T={A:[500,100],S:[300,100],M1:[150,100],M2:[100,100],F1:[60,100],F2:[40,100],F3:[25,100]};
   const [ni,inj]=T[cls]||[100,40];
   return {niLim:ni*1e6, injMax:inj*1e6, cls};
 }
