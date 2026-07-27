@@ -299,6 +299,13 @@ table.brktbl .brk-ok{color:var(--green);font-weight:600}
 table.brktbl .brk-no{color:var(--red);font-weight:600}
 table.brktbl .brk-d{display:block;font-size:10.5px;font-weight:400;color:var(--mut)}
 table.brktbl tr.brk-tot td{border-top:1.5px solid var(--line);border-bottom:none;font-size:13px}
+/* ตาราง "ปัจจัยที่จะทำให้ตกระดับ" — คนละชุดคอลัมน์กับตารางเกณฑ์ จึงล้าง override ของ brktbl ทิ้ง */
+table.risktbl th,table.risktbl td{text-align:right}
+table.risktbl th:nth-child(n),table.risktbl td:nth-child(n){border-left:none;background:none;white-space:nowrap}
+table.risktbl th:first-child,table.risktbl td:first-child{text-align:center}
+table.risktbl td.l,table.risktbl th.l{text-align:left;white-space:normal}
+table.risktbl th{font-size:11.5px;line-height:1.35;vertical-align:bottom}
+table.risktbl td:last-child{font-size:11.5px;white-space:normal}
 /* ── Executive tab (แนวทางสำหรับผู้บริหาร) ── */
 .extbl input[type=range]{width:150px;max-width:38vw;accent-color:var(--blue);cursor:pointer;vertical-align:middle}
 .exchip{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
@@ -1009,9 +1016,16 @@ function exNiMo(h){ return exRevMo(h)-exMoeMo(h)-(exXmoeOn()?exXmoeMo(h):0)-h.bs
 // รับรู้เข้า NI ด้วย (2026-07-27 ตามที่ CFO กำหนด): เงินสนับสนุนจากเขต = "รายได้เงินอุดหนุนจาก
 // หน่วยงานภาครัฐ" ตามผัง MOPH จึงเข้า NI เหมือน Option ยกหนี้ (4301020105.256) ที่ทำอยู่แล้ว
 // ฝั่งกลับกัน inj ติดลบ = ใช้เงินเกินแผน → เป็นค่าใช้จ่าย ทำให้ NI ลดลง — ถูกหลักทั้งสองทิศทาง
-function exSimPath(h, inj){
+// sc (optional) = สถานการณ์เสี่ยงสำหรับตาราง "ปัจจัยที่ทำให้ตกระดับ" — คนละช่องทางบัญชีกับ inj
+//   {ap:d} ก่อหนี้ค้างจ่าย d บาท (ยังไม่จ่ายเงิน): หนี้สินหมุนเวียน +d · NI −d · เงินสดไม่ลด (ตัวส่วนโตขึ้น)
+//   {ar:d} ลูกหนี้เก็บไม่ได้/ถูกตัดรายได้ d บาท: CA+สินทรัพย์เร็ว −d · NI −d · เงินสดไม่ลด
+function exSimPath(h, inj, sc){
   const bs=h.bs;
   let st={cca:bs.ca+inj, ccl:bs.cl, cqn:bs.qn+inj, ccn:bs.cn+inj, ni:bs.ni+inj, mo:bs.mo};
+  if(sc){
+    if(sc.ap){ st.ccl+=sc.ap; st.ni-=sc.ap; }                    // ค่าใช้จ่ายค้างจ่าย → เจ้าหนี้เพิ่ม
+    if(sc.ar){ st.cca-=sc.ar; st.cqn-=sc.ar; st.ni-=sc.ar; }     // ตัดลูกหนี้/รายได้ที่ตั้งไว้แต่ไม่ได้เงิน
+  }
   if(EXST.tj.mode!=='off'){
     if(EXTJ.debtors.has(h.hcode)){
       const D=h.tj.payIn;
@@ -1064,10 +1078,12 @@ function exSolveFor(h, L){
 }
 function exInjOf(h, need){ const m=EXST.inj[h.hcode]; return m!=null?m:(need!=null?need:0); }
 // ── ฝั่งขาลง: เป้าสูงกว่าระดับที่จะเป็นอยู่แล้ว = "เพดาน" ไม่ใช่แผนเติมเงิน ──
-// หาเงินที่ใช้เกินแผน (เงินหายไปจากที่คาด) น้อยสุดที่จะทำให้ระดับ ณ ก.ย. ตกถึง L
-// คืน null = ปลอดภัย ไม่ตกถึงระดับนั้นแม้เงินหมดเกลี้ยง · แนวคิดเดียวกับ svSolveDown ของ Simulator เดิม
-function exSolveDown(h, L){
-  const hit=d=>{ const r=exSimPath(h,-d); return r.sepRisk!=null && r.sepRisk>=L; };
+// หาขนาดปัจจัยเสี่ยงน้อยสุดที่จะทำให้ระดับ ณ ก.ย. ตกถึง L — คืน null = ไม่ตกถึงระดับนั้นแม้สุดขีด
+// ch = ช่องทางบัญชีของปัจจัย: 'cash' (จ่ายเงินสด/เงินไม่เข้า · ค่าเริ่มต้น) · 'ap' (ก่อหนี้ค้างจ่าย) · 'ar' (ลูกหนี้เก็บไม่ได้)
+// แนวคิดเดียวกับ svSolveDown ของ Simulator เดิม
+function exSolveDown(h, L, ch){
+  const sim=d=>ch==='ap'?exSimPath(h,0,{ap:d}):ch==='ar'?exSimPath(h,0,{ar:d}):exSimPath(h,-d);
+  const hit=d=>{ const r=sim(d); return r.sepRisk!=null && r.sepRisk>=L; };
   if(hit(0)) return 0;
   const HI=Math.max(4*h.bs.cl, 1000e6);
   if(!hit(HI)) return null;
@@ -1156,32 +1172,50 @@ function exBrkHtml(x, sepLab){
   // → Δ = เงินก้อน ÷ CL เท่ากันทั้งสาม · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 (ตัวเลข Δ ที่โชว์คิดจากค่าจริง)
   const ratioNote=(b1&&injL>0)?`<div class="note" style="margin-top:4px">🧮 <b>ทำไม CR/QR/Cash ขยับเท่ากันทั้งสามตัว:</b> เงินก้อน ${fmtM(injL)} บวกเข้าทั้งสามตัวเศษ (สินทรัพย์หมุนเวียน · สินทรัพย์เร็ว · เงินสด) พร้อมกัน โดยตัวส่วนคือหนี้สินหมุนเวียน ${fmtM(bs.cl)} เท่าเดิม → ทั้งสามเพิ่มขึ้น <b>+${(injL/bs.cl).toFixed(4)}</b> เท่ากันเป๊ะ (= ${fmtM(injL)} ÷ ${fmtM(bs.cl)}) · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 — เลข Δ ที่แสดงคิดจากค่าจริงก่อนปัด · <b>NWC และ NI เพิ่มขึ้นเท่าเงินก้อนพอดี</b> เพราะรับรู้เงินสนับสนุนเป็น<b>รายได้เงินอุดหนุนจากหน่วยงานภาครัฐ</b> ตามผัง MOPH (หลักเดียวกับ Option ยกหนี้)</div>`:'';
   const anchorNote=(h.risk!==rawN)?`<div class="note" style="margin-top:4px">📎 badge ปัจจุบันแสดง ${h.risk} ขณะที่ผลรวมเกณฑ์จากงบทดลองคำนวณได้ ${rawN} — ระบบยึด Risk Score ทางการงวด ${nowLab} เป็นจุดตั้งต้น (anchor) แล้วบวก/ลบส่วนต่างที่จำลองได้ ตัวเลขในคอลัมน์จำลองจึงอ่านเป็น "ทิศทางการเปลี่ยนแปลง" เทียบกับ badge ทางการ</div>`:'';
+  // ── ตาราง "ปัจจัยที่จะทำให้ตกระดับ" — ทุกระดับที่แย่กว่าระดับที่จะเป็น (sep0+1 … 7) × 3 ช่องทางบัญชี ──
+  // ตอบคำถาม: ใช้เงินเพิ่มกี่บาท / รายได้ลดกี่บาท / ทั้งสองปัจจัยรวมกันเท่าไหร่ ถึงจะตกไปแต่ละระดับ
+  // 3 ช่องทางให้ตัวเลขต่างกันจริงเพราะกระทบ ratio ต่างจุด (เงินสดลด vs ตัวส่วนโต vs สินทรัพย์เร็วลด)
+  const riskTbl=(sep0!=null&&sep0<7)?(()=>{
+    const moLeft=Math.max(1,12-bs.mo), lv=[];
+    for(let L=sep0+1;L<=7;L++){
+      const dc=exSolveDown(h,L), da=exSolveDown(h,L,'ap'), dr=exSolveDown(h,L,'ar');
+      if(dc==null&&da==null&&dr==null) continue;
+      const bd=(dc!=null)?exSimPath(h,-dc).sepBreak:null;
+      const flip=bd?EX_CRIT.filter(c=>c.ok(b0)&&!c.ok(bd)).map(c=>c.n):[];
+      if(bd&&bd.su>b0.su) flip.push(`SU ${b0.su}→${bd.su}`);
+      lv.push({L,dc,da,dr,flip});
+    }
+    if(!lv.length) return '';
+    const cell=v=>v==null?'<span class="tgt-note">ไม่ตกถึงระดับนี้</span>'
+      :`<b>${fmtM(v)}</b><span class="brk-d">≈ ${fmtM(v/moLeft)}/ด.</span>`;
+    return `<div class="tgt-row" style="font-weight:600;margin-top:6px">⚠️ ปัจจัยที่จะทำให้ตกไประดับแย่กว่านี้ (ภายใน ${sepLab})</div>
+      <div class="acctbl-wrap" style="max-height:none">
+        <table class="acctbl brktbl risktbl">
+          <tr><th>ตกไปเป็น<br>ระดับ</th>
+            <th>① ใช้จ่ายเกินเป้า<br><span class="tgt-note">หรือรายได้เงินสดไม่เข้า</span></th>
+            <th>② ค่าใช้จ่ายเพิ่ม<br><span class="tgt-note">แบบก่อหนี้ค้างจ่าย</span></th>
+            <th>③ รายได้หาย<br><span class="tgt-note">แบบตัดลูกหนี้ที่เก็บไม่ได้</span></th>
+            <th>เกณฑ์ที่จะพลิก<br><span class="tgt-note">(กรณี ①)</span></th></tr>
+          ${lv.map(x=>`<tr><td class="l"><span class="badge" style="background:${riskColor(x.L)}">${x.L}</span></td>
+            <td>${cell(x.dc)}</td><td>${cell(x.da)}</td><td>${cell(x.dr)}</td>
+            <td class="l">${x.flip.length?'<span class="brk-no">'+x.flip.join(' · ')+'</span>':'<span class="tgt-note">–</span>'}</td></tr>`).join('')}
+        </table>
+      </div>
+      ${(()=>{
+        const same=lv.every(x=>x.dc===x.da&&x.da===x.dr);
+        const f=lv[0];
+        const mix=f.dc!=null?`เช่น ตกระดับ ${f.L} ที่ ${fmtM(f.dc)} — จ่ายเกินเป้า ${fmtM(Math.round(f.dc*0.6/SV_STEP)*SV_STEP)} <b>บวก</b> รายได้ไม่เข้า ${fmtM(f.dc-Math.round(f.dc*0.6/SV_STEP)*SV_STEP)} ก็ตกเท่ากัน`:'';
+        return `<div class="note">📐 <b>ถ้าเกิดหลายปัจจัยพร้อมกัน</b> ให้รวมยอดเทียบกับคอลัมน์ที่ตรงกับช่องทางนั้น ${mix} (ทั้งสองลดเงินสดและกำไรเท่ากัน จึงบวกกันได้ตรงๆ)
+        · ${same?'<b>รพ.นี้ทั้ง 3 ช่องทางให้ตัวเลขเท่ากัน</b> เพราะเกณฑ์ที่พลิกเป็นกลุ่ม NWC/NI/SU ซึ่งลดลงเท่ากันทุกช่องทาง — จะต่างกันเมื่อเกณฑ์ที่พลิกเป็น CR/QR/Cash ratio ที่ไวต่อ<i>จุด</i>ที่เงินหายไป':'ตัวเลข 3 คอลัมน์ต่างกันเพราะกระทบอัตราส่วนคนละจุด: ① เงินสดลด (กระทบ Cash ratio ตรงๆ) · ② หนี้สินหมุนเวียนซึ่งเป็น<i>ตัวส่วน</i>โตขึ้น · ③ สินทรัพย์เร็วลดแต่เงินสดคงเดิม'}</div>`;
+      })()}`;
+  })():'';
   // ── กล่องสรุปตามโหมด ──
   const tjHint=(bs&&h.tj&&h.tj.payIn>0)?` · ลดได้ด้วย<b>การยกหนี้ค่ารักษาตามจ่าย</b> (มีเจ้าหนี้ตามจ่ายอยู่ ${fmtM(h.tj.payIn)}) — เลือก Option "ยกหนี้" ในแผงด้านบน`:'';
   let modeBox;
   if(mode==='atlevel'){
-    // บอกระยะห่างไประดับที่แย่กว่าถัดไปให้เห็นในกล่องนี้เลย (ไม่ต้องกดปุ่มอื่นดู)
-    // ใช้จ่ายเกินเป้า กับ รายได้ต่ำกว่าเป้า มีผลเท่ากันในโมเดล — ทั้งคู่ทำให้เงินสดและ NI ลดเท่ากัน
-    const nextL=(sep0!=null&&sep0<7)?sep0+1:null;
-    const dn=(nextL!=null)?exSolveDown(h,nextL):null;
-    const moLeft=Math.max(1,12-bs.mo);
-    let gapLine;
-    if(nextL==null){
-      gapLine=`<div class="note">📌 ระดับ 7 เป็นระดับสูงสุดของเกณฑ์แล้ว — ไม่มีระดับที่แย่ไปกว่านี้ให้ตก</div>`;
-    } else if(dn==null){
-      gapLine=`<div class="note">🛡️ ไม่ตกไประดับ ${nextL} ภายใน ${sepLab} แม้ใช้จ่ายเกินแผนจนเงินหมดเกลี้ยง</div>`;
-    } else {
-      const bd=exSimPath(h,-dn).sepBreak;
-      const flip=bd?EX_CRIT.filter(c=>c.ok(b0)&&!c.ok(bd)).map(c=>c.n):[];
-      const suF=(bd&&bd.su>b0.su)?`SU (${b0.su}→${bd.su})`:null;
-      const fl=[...flip,...(suF?[suF]:[])];
-      gapLine=`<div class="tgt-row">📉 <b>ระยะห่างก่อนตกไประดับ ${nextL}:</b> ถ้า<b>ใช้จ่ายเกินเป้า</b> หรือ<b>รายได้ไม่เข้าตามเป้า</b> รวมกันเกิน <b style="color:var(--red)">${fmtM(dn)}</b> จะตกเป็นระดับ ${nextL} ภายใน ${sepLab}
-        <span class="tgt-note">(≈ ${fmtM(dn/moLeft)}/เดือน ถ้าเฉลี่ยตลอด ${moLeft} เดือนที่เหลือ · ทั้งสองกรณีมีผลเท่ากัน เพราะทำให้เงินสดและกำไรลดเท่ากัน)</span></div>
-        <div class="note">${fl.length?`เกณฑ์ที่จะพลิกเป็นไม่ผ่าน: <b>${fl.join(' · ')}</b>`:'ระดับขยับจากการ anchor คะแนนทางการ'} — กดเลข ${nextL} ดูค่าทุกเกณฑ์ในสถานการณ์นั้นได้</div>`;
-    }
     modeBox=`<div class="tgt-row" style="font-weight:600">🎯 ระดับ ${L} คือระดับที่จะเป็นอยู่แล้ว ณ ${sepLab} — <b style="color:var(--blue)">ไม่ต้องเติมเงิน</b>
       <span class="tgt-note">เป้าเท่ากับผลที่จะเกิดขึ้นเองอยู่แล้ว จึงไม่ต้องใช้เงินเพื่อ "ลด" ระดับ — กดเลขต่ำกว่านี้เพื่อดูเงินที่ต้องใช้จริง${tjHint}</span></div>
-      ${gapLine}
+      ${riskTbl||`<div class="note">📌 ระดับ 7 เป็นระดับสูงสุดของเกณฑ์แล้ว — ไม่มีระดับที่แย่ไปกว่านี้ให้ตก</div>`}
       ${r0.cashOut!=null?`<div class="note tgt-warn">หมายเหตุ: เงินสดจะติดลบเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))}) — ถึงระดับไม่เปลี่ยน แต่ยังต้องมีเงินหมุนจ่ายเงินเดือน/เจ้าหนี้</div>`:''}`;
   } else if(mode==='ceiling'){
     if(down==null){
@@ -1198,7 +1232,8 @@ function exBrkHtml(x, sepLab){
       modeBox=`<div class="tgt-row" style="font-weight:600">🛡️ เพดานก่อนตกไประดับ ${L}: ใช้เงินเกินแผนได้ถึง <b style="color:var(--red)">−${fmtM(down)}</b>
         <span class="tgt-note">— ไม่ใช่เงินสนับสนุน แต่เป็น "ระยะห่าง" ถ้าใช้เงินเกินคาดการณ์เกิน ${fmtM(down)} จะตกจากระดับ ${sep0} ไปเป็น ${L} ภายใน ${sepLab}</span></div>
       <div class="tgt-row">${flipTxt.length?`📉 <b>เกณฑ์ที่จะพลิกเป็นไม่ผ่าน:</b> ${flipTxt.join(' · ')} <span class="tgt-note">(ดูค่าก่อน/หลังในคอลัมน์ที่ 3 กับ 5)</span>`:`<span class="tgt-note">ระดับขยับจากการ anchor คะแนนทางการ — ไม่มีเกณฑ์ใดพลิกสถานะในช่วงนี้</span>`}</div>
-      <div class="note">💡 อ่านค่านี้เป็น <b>วินัยการใช้เงิน</b>: ${fmtM(down)} คือส่วนที่ยังรองรับได้ ถ้าเบิกจ่าย/ลงทุนเกินกว่านี้ (หรือรายรับเข้าช้ากว่าคาด) ระดับวิกฤตจะแย่ลงทันที</div>`;
+      <div class="note">💡 อ่านค่านี้เป็น <b>วินัยการใช้เงิน</b>: ${fmtM(down)} คือส่วนที่ยังรองรับได้ ถ้าเบิกจ่าย/ลงทุนเกินกว่านี้ (หรือรายรับเข้าช้ากว่าคาด) ระดับวิกฤตจะแย่ลงทันที</div>
+      ${riskTbl}`;
     }
   } else if(noFit){
     modeBox=`<div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>
