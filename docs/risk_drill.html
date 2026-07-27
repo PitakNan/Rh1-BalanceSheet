@@ -1007,19 +1007,22 @@ function exSimPath(h, inj){
   const base=scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo).risk;
   const anc=v=>Math.max(0,Math.min(7,(h.risk!=null?h.risk:0)+(v-base)));
   const months=(12-bs.mo)+(+EXST.ext||0);
-  let r=anc(scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo).risk);
+  let sc0=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
+  let r=anc(sc0.risk);
   let sepRisk=(bs.mo===12?r:null), endRisk=r, cashOut=st.ccn<=0?0:null;
+  let sepBreak=(bs.mo===12?{...sc0,ni:st.ni}:null);   // เกณฑ์ย่อย (cr/qr/cash/nwc/ni/li/st/su) ณ เดือน ก.ย. — ใช้อธิบายเหตุผลรายตัวใน exNeedTip
   for(let k=1;k<=months;k++){
     if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;
     st.ni+=niM;
     const c=niM+depMo;
     st.cca+=c; st.cqn+=c; st.ccn+=c;
-    r=anc(scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo).risk);
-    if(st.mo===12 && sepRisk==null) sepRisk=r;   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
+    const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
+    r=anc(sc.risk);
+    if(st.mo===12 && sepRisk==null){ sepRisk=r; sepBreak={...sc,ni:st.ni}; }   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     endRisk=r;
   }
-  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:exMoeMo(h),xmoeMo:exXmoeOn()?exXmoeMo(h):0};
+  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:exMoeMo(h),xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak};
 }
 // ── Solver: เงินก้อนขั้นต่ำ (เดือน 0) ให้ ระดับ ณ ก.ย.≤เป้า และปลาย horizon≤เป้า และเงินสดไม่หมด ──
 function exSolve(h){
@@ -1040,17 +1043,27 @@ function exInjOf(h, need){ const m=EXST.inj[h.hcode]; return m!=null?m:(need!=nu
 // อธิบายต่อ รพ.: ทำไมต้องสนับสนุนเงินก้อนนี้ + เงินก้อนนี้ทำให้ระดับวิกฤตลดลงถึง ก.ย.69 ได้อย่างไร (ไอคอน ⓘ คอลัมน์ "เงินสนับสนุนที่ต้องใช้")
 function exNeedTip(x, sepLab){
   const {h,inj,r0,r1}=x, bs=h.bs;
-  const cr=bs.cl?bs.ca/bs.cl:null, qr=bs.cl?bs.qn/bs.cl:null, cash=bs.cl?bs.cn/bs.cl:null, nwc=bs.ca-bs.cl;
-  const why=[];
-  if(cr!=null&&cr<1.5) why.push(`CR ${fmtR(cr)}<1.5`);
-  if(qr!=null&&qr<1.0) why.push(`QR ${fmtR(qr)}<1.0`);
-  if(cash!=null&&cash<0.8) why.push(`Cash ${fmtR(cash)}<0.8`);
-  if(nwc<0) why.push(`NWC ติดลบ ${fmtM(nwc)}`);
-  if(r0.niM<0) why.push(`NI จำลอง ${fmtM(r0.niM)}/ด. ยังขาดทุน`);
-  const cashTxt=r0.cashOut!=null?` · เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))})`:'';
-  return `**ทำไมต้องช่วย**: ${why.length?why.join(' · '):'ยังไม่เข้าเกณฑ์สภาพคล่อง/กำไร'}${cashTxt} → ระดับก่อนช่วย ${r0.sepRisk!=null?r0.sepRisk:'–'}\n`+
-    `**วิธีที่ช่วย**: เติมเงิน ${fmtM(inj)} เข้าสินทรัพย์หมุนเวียน+สินทรัพย์เร็ว+เงินสด (ca/qn/cn) พร้อมกันตั้งแต่เดือน 0 → ดัน CR/QR/Cash ratio และ NWC ให้พ้นเกณฑ์ทันที กันเงินสดไม่ให้หมดตลอดช่วงจำลองถึง ${sepLab}\n`+
-    `**ผล**: ระดับ ${sepLab} ${r0.sepRisk!=null?r0.sepRisk:'–'} → ${r1.sepRisk!=null?r1.sepRisk:'–'} — เป็นก้อนต่ำสุดที่ Solver หาได้ (เติมน้อยกว่านี้ระดับจะยังเกินเป้า)`;
+  const b0=r0.sepBreak, b1=r1.sepBreak;
+  const cashTxt=r0.cashOut!=null?`เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))}) เป็นอีกสาเหตุที่ต้องช่วย\n`:'';
+  if(!b0||!b1){   // กันกรณีไม่มี breakdown (ไม่ควรเกิด — เผื่อ edge case)
+    return `${cashTxt}เติมเงิน ${fmtM(inj)} → ระดับ ${sepLab} ${r0.sepRisk!=null?r0.sepRisk:'–'} → ${r1.sepRisk!=null?r1.sepRisk:'–'}`;
+  }
+  const R=v=>v==null?'–':v.toFixed(2);
+  const crit=[
+    {lbl:'CR (สินทรัพย์หมุนเวียน÷หนี้สินหมุนเวียน) ≥1.5',v0:b0.cr,v1:b1.cr,ok0:b0.cr>=1.5,ok1:b1.cr>=1.5,f:R},
+    {lbl:'QR (สินทรัพย์เร็ว÷หนี้สินหมุนเวียน) ≥1.0',v0:b0.qr,v1:b1.qr,ok0:b0.qr>=1.0,ok1:b1.qr>=1.0,f:R},
+    {lbl:'Cash ratio (เงินสด+เทียบเท่า÷หนี้สินหมุนเวียน) ≥0.8',v0:b0.cash,v1:b1.cash,ok0:b0.cash>=0.8,ok1:b1.cash>=0.8,f:R},
+    {lbl:'NWC (สินทรัพย์หมุนเวียน−หนี้สินหมุนเวียน) ≥0',v0:b0.nwc,v1:b1.nwc,ok0:b0.nwc>=0,ok1:b1.nwc>=0,f:fmtM},
+    {lbl:'NI สะสมทั้งปีงบ ≥0',v0:b0.ni,v1:b1.ni,ok0:b0.ni>=0,ok1:b1.ni>=0,f:fmtM},
+  ];
+  const critLines=crit.map(c=>{
+    const flip=c.ok0!==c.ok1?(c.ok1?' ✅พ้นเกณฑ์(−1)':' ⚠️หลุดเกณฑ์(+1)'):'';
+    return `• ${c.lbl}: ${c.f(c.v0)}${c.ok0?'✓':'✗'} → ${c.f(c.v1)}${c.ok1?'✓':'✗'}${flip}`;
+  }).join('\n');
+  const suLine=`• SU (ระดับความอยู่รอด NWC เทียบ NI — 0 ดีสุด/2 แย่สุด): ${b0.su} → ${b1.su}${b0.su!==b1.su?' (ดีขึ้น)':' (คงที่)'}`;
+  const delta=Math.max(0,(b0.li+b0.st+b0.su)-(b1.li+b1.st+b1.su));
+  return `${cashTxt}**เกณฑ์ทีละตัว ณ ${sepLab} — ก่อน→หลังเติมเงิน**:\n${critLines}\n${suLine}\n\n`+
+    `**สรุป**: เติมเงิน ${fmtM(inj)} เข้า ca/qn/cn (สินทรัพย์หมุนเวียน+สินทรัพย์เร็ว+เงินสด) พร้อมกันตั้งแต่เดือน 0 → เกณฑ์ที่ไม่ผ่านลดลง ${delta} จุด (จากสูตรเดียวกับ Risk Score ทางการ) → ระดับ ${sepLab} ${r0.sepRisk!=null?r0.sepRisk:'–'} → ${r1.sepRisk!=null?r1.sepRisk:'–'}`;
 }
 function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }
 function exHorLab(){ return (+EXST.ext||0)>0 ? tLab(addMo(exSepT(), +EXST.ext)) : tLab(exSepT()); }
