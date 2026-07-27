@@ -1160,9 +1160,29 @@ function exBrkHtml(x, sepLab){
   const tjHint=(bs&&h.tj&&h.tj.payIn>0)?` · ลดได้ด้วย<b>การยกหนี้ค่ารักษาตามจ่าย</b> (มีเจ้าหนี้ตามจ่ายอยู่ ${fmtM(h.tj.payIn)}) — เลือก Option "ยกหนี้" ในแผงด้านบน`:'';
   let modeBox;
   if(mode==='atlevel'){
+    // บอกระยะห่างไประดับที่แย่กว่าถัดไปให้เห็นในกล่องนี้เลย (ไม่ต้องกดปุ่มอื่นดู)
+    // ใช้จ่ายเกินเป้า กับ รายได้ต่ำกว่าเป้า มีผลเท่ากันในโมเดล — ทั้งคู่ทำให้เงินสดและ NI ลดเท่ากัน
+    const nextL=(sep0!=null&&sep0<7)?sep0+1:null;
+    const dn=(nextL!=null)?exSolveDown(h,nextL):null;
+    const moLeft=Math.max(1,12-bs.mo);
+    let gapLine;
+    if(nextL==null){
+      gapLine=`<div class="note">📌 ระดับ 7 เป็นระดับสูงสุดของเกณฑ์แล้ว — ไม่มีระดับที่แย่ไปกว่านี้ให้ตก</div>`;
+    } else if(dn==null){
+      gapLine=`<div class="note">🛡️ ไม่ตกไประดับ ${nextL} ภายใน ${sepLab} แม้ใช้จ่ายเกินแผนจนเงินหมดเกลี้ยง</div>`;
+    } else {
+      const bd=exSimPath(h,-dn).sepBreak;
+      const flip=bd?EX_CRIT.filter(c=>c.ok(b0)&&!c.ok(bd)).map(c=>c.n):[];
+      const suF=(bd&&bd.su>b0.su)?`SU (${b0.su}→${bd.su})`:null;
+      const fl=[...flip,...(suF?[suF]:[])];
+      gapLine=`<div class="tgt-row">📉 <b>ระยะห่างก่อนตกไประดับ ${nextL}:</b> ถ้า<b>ใช้จ่ายเกินเป้า</b> หรือ<b>รายได้ไม่เข้าตามเป้า</b> รวมกันเกิน <b style="color:var(--red)">${fmtM(dn)}</b> จะตกเป็นระดับ ${nextL} ภายใน ${sepLab}
+        <span class="tgt-note">(≈ ${fmtM(dn/moLeft)}/เดือน ถ้าเฉลี่ยตลอด ${moLeft} เดือนที่เหลือ · ทั้งสองกรณีมีผลเท่ากัน เพราะทำให้เงินสดและกำไรลดเท่ากัน)</span></div>
+        <div class="note">${fl.length?`เกณฑ์ที่จะพลิกเป็นไม่ผ่าน: <b>${fl.join(' · ')}</b>`:'ระดับขยับจากการ anchor คะแนนทางการ'} — กดเลข ${nextL} ดูค่าทุกเกณฑ์ในสถานการณ์นั้นได้</div>`;
+    }
     modeBox=`<div class="tgt-row" style="font-weight:600">🎯 ระดับ ${L} คือระดับที่จะเป็นอยู่แล้ว ณ ${sepLab} — <b style="color:var(--blue)">ไม่ต้องเติมเงิน</b>
       <span class="tgt-note">เป้าเท่ากับผลที่จะเกิดขึ้นเองอยู่แล้ว จึงไม่ต้องใช้เงินเพื่อ "ลด" ระดับ — กดเลขต่ำกว่านี้เพื่อดูเงินที่ต้องใช้จริง${tjHint}</span></div>
-      <div class="note">กดเลข<b>ต่ำกว่า ${L}</b> เพื่อดูเงินก้อนที่ต้องใช้เพื่อลดระดับ · กดเลข<b>สูงกว่า ${L}</b> เพื่อดูเพดานว่าใช้เงินเกินแผนได้เท่าไหร่ก่อนจะตกไประดับนั้น${r0.cashOut!=null?` · <span class="tgt-warn">หมายเหตุ: เงินสดจะติดลบเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))}) — ถึงระดับไม่เปลี่ยน แต่ยังต้องมีเงินหมุนจ่ายเงินเดือน/เจ้าหนี้</span>`:''}</div>`;
+      ${gapLine}
+      ${r0.cashOut!=null?`<div class="note tgt-warn">หมายเหตุ: เงินสดจะติดลบเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))}) — ถึงระดับไม่เปลี่ยน แต่ยังต้องมีเงินหมุนจ่ายเงินเดือน/เจ้าหนี้</div>`:''}`;
   } else if(mode==='ceiling'){
     if(down==null){
       // ตกไม่ถึงระดับนี้: เกณฑ์ที่ยังไม่ผ่านเต็มเพดานแล้ว (SU ตันที่ 2) หรือคะแนนสูงสุดที่ทำได้ยังไม่ถึง L
