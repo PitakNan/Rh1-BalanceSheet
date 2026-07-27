@@ -292,6 +292,9 @@ tr.ovsub td{background:var(--hover);padding:10px 14px}
 .brk-head{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .brk-lvl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 table.brktbl th:nth-child(2),table.brktbl td:nth-child(2){text-align:center;color:var(--mut);font-size:11.5px}
+table.brktbl th:nth-child(3),table.brktbl td:nth-child(3){border-left:1px solid var(--line)}
+table.brktbl th:nth-child(5),table.brktbl td:nth-child(5){background:var(--mid-bg)}
+table.brktbl th:nth-child(6),table.brktbl td:nth-child(6){border-left:1px solid var(--line);font-size:11.5px;white-space:nowrap}
 table.brktbl .brk-ok{color:var(--green);font-weight:600}
 table.brktbl .brk-no{color:var(--red);font-weight:600}
 table.brktbl tr.brk-tot td{border-top:1.5px solid var(--line);border-bottom:none;font-size:13px}
@@ -1073,49 +1076,51 @@ function exSuMonths(b){
   const a=b.ni/m; return {lbl:'เดือนที่กำไรดัน NWC กลับเป็นบวก',v:a?(-b.nwc)/a:null};
 }
 function exBrkHtml(x, sepLab){
-  const {h,r0}=x, hc=h.hcode, L=EXBRK[hc];
+  const {h,r0}=x, hc=h.hcode, L=EXBRK[hc], bs=h.bs, nowLab=EX.periodLabel;
   const injL=exSolveFor(h,L), rL=(injL!=null?exSimPath(h,injL):null);
+  // bN = ค่าปัจจุบันจากงบทดลองงวดล่าสุด (ยังไม่จำลองอะไรเลย) · b0 = จำลองถึง ก.ย. โดยไม่ช่วย · b1 = จำลองถึง ก.ย. หลังช่วยตามเป้า L
+  const bN=(bs.cl?{...scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo),ni:bs.ni,mo:bs.mo}:null);
   const b0=r0.sepBreak, b1=rL?rL.sepBreak:null;
   const lvlBtns=[0,1,2,3,4,5,6,7].map(l=>`<button type="button" class="lvlbtn${l===L?' on':''}" data-l="${l}" style="background:${riskColor(l)};width:30px;height:30px;font-size:13px;border-radius:8px" onclick="exBrkLvl('${hc}',${l})">${l}</button>`).join('');
-  const head=`<div class="brk-head">🔍 <b>${h.name}</b> — เกณฑ์ Risk Score ทั้ง 7 คะแนน ณ ${sepLab}
-    <span class="tgt-note">(ค่าที่จำลองได้ ณ ${sepLab} ไม่ใช่ค่าปัจจุบัน)</span></div>
+  const head=`<div class="brk-head">🔍 <b>${h.name}</b> — เกณฑ์ Risk Score ทั้ง 7 คะแนน: ปัจจุบัน (${nowLab}) → ${sepLab} ก่อนช่วย → ${sepLab} หลังช่วย</div>
     <div class="brk-lvl"><span class="tgt-note">🎯 เลือกระดับเป้าที่ต้องการดู (เฉพาะ รพ.นี้ ไม่กระทบเป้าทั้งเขต):</span> <span class="lvlbtns" style="margin:0;gap:5px">${lvlBtns}</span></div>`;
-  if(!b0) return `<div class="ovsub-box">${head}<div class="note">งวดนี้ข้อมูลไม่พอสำหรับจำลอง (ไม่มีค่าดิบงบดุล)</div></div>`;
-  if(injL==null||!b1) return `<div class="ovsub-box">${head}
-    <div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>
-    <div class="note">ค่า ณ ${sepLab} ถ้าไม่ช่วยเลย: ${EX_CRIT.map(c=>`${c.n} ${c.f(c.v(b0))}${c.ok(b0)?'✓':'✗'}`).join(' · ')} · SU ${b0.su} → ระดับ ${r0.sepRisk!=null?r0.sepRisk:'–'}</div></div>`;
-  const pt=(ok)=>ok?'0':'1';
+  if(!b0||!bN) return `<div class="ovsub-box">${head}<div class="note">งวดนี้ข้อมูลไม่พอสำหรับจำลอง (ไม่มีค่าดิบงบดุล)</div></div>`;
+  const suTxt=b=>{ const s=exSuMonths(b); return s&&s.v!=null&&isFinite(s.v)?`${s.lbl} ≈ ${s.v.toFixed(1)} ด.`:(b.nwc>=0&&b.ni>=0?'NWC และ NI เป็นบวกทั้งคู่ = ปลอดภัย':'NWC และ NI ติดลบทั้งคู่ = แย่สุด'); };
+  const cell=(c,b)=>b?`<td class="${c.ok(b)?'brk-ok':'brk-no'}">${c.f(c.v(b))} ${c.ok(b)?'✓':'✗'}</td>`:'<td class="tgt-note">–</td>';
+  const suCell=b=>b?`<td class="${b.su===0?'brk-ok':'brk-no'}">${suTxt(b)}</td>`:'<td class="tgt-note">–</td>';
+  const pt=ok=>ok?'0':'1';
+  const noFit=(injL==null||!b1);   // เป้านี้เงินก้อนอย่างเดียวไม่พอ — ยังแสดง 2 คอลัมน์แรก คอลัมน์ "หลังช่วย" เป็น –
   const rows=EX_CRIT.map(c=>{
-    const ok0=c.ok(b0), ok1=c.ok(b1), flip=ok0!==ok1;
+    const okN=c.ok(bN), ok0=c.ok(b0), ok1=b1?c.ok(b1):null;
+    const scoreTxt=b1?`${pt(okN)} → ${pt(ok0)} → ${pt(ok1)}${ok0!==ok1?(ok1?' <span class="brk-ok">✅ −1</span>':' <span class="brk-no">⚠️ +1</span>'):''}`
+                     :`${pt(okN)} → ${pt(ok0)} → –`;
     return `<tr>
       <td class="l"><b>${c.n}</b> <span class="tgt-note">${c.d}</span></td>
       <td>${c.th}</td>
-      <td class="${ok0?'brk-ok':'brk-no'}">${c.f(c.v(b0))} ${ok0?'✓':'✗'}</td>
-      <td class="${ok1?'brk-ok':'brk-no'}">${c.f(c.v(b1))} ${ok1?'✓':'✗'}</td>
-      <td>${pt(ok0)} → ${pt(ok1)}${flip?(ok1?' <span class="brk-ok">✅ −1</span>':' <span class="brk-no">⚠️ +1</span>'):''}</td></tr>`;
+      ${cell(c,bN)}${cell(c,b0)}${cell(c,b1)}
+      <td>${scoreTxt}</td></tr>`;
   }).join('');
-  const su0=exSuMonths(b0), su1=exSuMonths(b1);
-  const suTxt=b=>{ const s=exSuMonths(b); return s&&s.v!=null&&isFinite(s.v)?`${s.lbl} ≈ ${s.v.toFixed(1)} ด.`:(b.nwc>=0&&b.ni>=0?'NWC และ NI เป็นบวกทั้งคู่ = ปลอดภัย':'NWC และ NI ติดลบทั้งคู่ = แย่สุด'); };
   const suRow=`<tr>
     <td class="l"><b>SU</b> <span class="tgt-note">ระดับความอยู่รอด — 4 quadrant จาก NWC เทียบ NI (คิดได้ 0–2 คะแนน)</span></td>
     <td>0 คะแนน</td>
-    <td class="${b0.su===0?'brk-ok':'brk-no'}">${suTxt(b0)}</td>
-    <td class="${b1.su===0?'brk-ok':'brk-no'}">${suTxt(b1)}</td>
-    <td>${b0.su} → ${b1.su}${b1.su<b0.su?` <span class="brk-ok">✅ −${b0.su-b1.su}</span>`:(b1.su>b0.su?` <span class="brk-no">⚠️ +${b1.su-b0.su}</span>`:'')}</td></tr>`;
-  const raw0=b0.li+b0.st+b0.su, raw1=b1.li+b1.st+b1.su;
-  const anchorNote=(r0.sepRisk!==raw0)?`<div class="note" style="margin-top:4px">📎 badge แสดง ${r0.sepRisk} ขณะที่ผลรวมเกณฑ์จำลองได้ ${raw0} — เพราะจุดตั้งต้นถูก anchor ให้ตรงกับ Risk Score ทางการงวด ${EX.periodLabel} (ระบบยึด badge ทางการเป็นหลัก แล้วบวก/ลบส่วนต่างที่จำลองได้)</div>`:'';
+    ${suCell(bN)}${suCell(b0)}${suCell(b1)}
+    <td>${bN.su} → ${b0.su} → ${b1?b1.su:'–'}${b1&&b1.su<b0.su?` <span class="brk-ok">✅ −${b0.su-b1.su}</span>`:(b1&&b1.su>b0.su?` <span class="brk-no">⚠️ +${b1.su-b0.su}</span>`:'')}</td></tr>`;
+  const rawN=bN.li+bN.st+bN.su, raw0=b0.li+b0.st+b0.su, raw1=b1?b1.li+b1.st+b1.su:null;
+  const anchorNote=(h.risk!==rawN)?`<div class="note" style="margin-top:4px">📎 badge ปัจจุบันแสดง ${h.risk} ขณะที่ผลรวมเกณฑ์จากงบทดลองคำนวณได้ ${rawN} — ระบบยึด Risk Score ทางการงวด ${nowLab} เป็นจุดตั้งต้น (anchor) แล้วบวก/ลบส่วนต่างที่จำลองได้ ตัวเลขในคอลัมน์จำลองจึงอ่านเป็น "ทิศทางการเปลี่ยนแปลง" เทียบกับ badge ทางการ</div>`:'';
   return `<div class="ovsub-box">${head}
     <div class="acctbl-wrap" style="max-height:none">
       <table class="acctbl brktbl">
-        <tr><th>เกณฑ์ (7 คะแนนเต็ม)</th><th>ผ่านเมื่อ</th><th>ก่อนช่วย ณ ${sepLab}</th><th>หลังช่วย ณ ${sepLab}</th><th>คะแนน</th></tr>
+        <tr><th>เกณฑ์ (7 คะแนนเต็ม)</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน<br>(${nowLab})</th><th>ณ ${sepLab}<br>ก่อนช่วย</th><th>ณ ${sepLab}<br>หลังช่วย+มาตรการ</th><th>คะแนน<br>ปัจจุบัน→ก่อน→หลัง</th></tr>
         ${rows}${suRow}
         <tr class="brk-tot"><td class="l"><b>รวมคะแนนความเสี่ยง</b></td><td>เป้า ≤ ${L}</td>
+          <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> <span class="tgt-note">ทางการ</span></td>
           <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
-          <td><span class="badge" style="background:${riskColor(rL.sepRisk)}">${rL.sepRisk!=null?rL.sepRisk:'–'}</span></td>
-          <td><b>${raw0} → ${raw1}</b></td></tr>
+          <td>${b1?`<span class="badge" style="background:${riskColor(rL.sepRisk)}">${rL.sepRisk!=null?rL.sepRisk:'–'}</span>`:'<span class="tgt-note">–</span>'}</td>
+          <td><b>${rawN} → ${raw0} → ${raw1!=null?raw1:'–'}</b></td></tr>
       </table>
     </div>
-    <div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)'}</b>${injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>
+    ${noFit?`<div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>`:''}
+    <div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${noFit?'เงินก้อนอย่างเดียวไม่พอ':(injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)')}</b>${!noFit&&injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>
     ${anchorNote}
     <div class="note">${r0.cashOut!=null?`⚠️ ถ้าไม่ช่วย เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(h.bs.t,r0.cashOut))}) · `:''}NI จำลอง ${fmtM(r0.niM)}/เดือน — เกณฑ์ NWC/NI/SU ขยับตามกำไรรายเดือนด้วย ไม่ใช่แค่เงินก้อน</div>
   </div>`;
