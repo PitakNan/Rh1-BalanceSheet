@@ -299,6 +299,9 @@ table.brktbl .brk-ok{color:var(--green);font-weight:600}
 table.brktbl .brk-no{color:var(--red);font-weight:600}
 table.brktbl .brk-d{display:block;font-size:10.5px;font-weight:400;color:var(--mut)}
 table.brktbl tr.brk-tot td{border-top:1.5px solid var(--line);border-bottom:none;font-size:13px}
+/* แถวเงินสดสำรอง MOE — ไม่ใช่เกณฑ์คะแนน จึงคุมโทนให้ต่างจากแถวเกณฑ์ */
+table.brktbl tr.brk-res td{border-top:1px dashed var(--line);font-size:12px;color:var(--mut)}
+table.brktbl tr.brk-res td b{color:var(--ink)}
 /* ตาราง "ปัจจัยที่จะทำให้ตกระดับ" — คนละชุดคอลัมน์กับตารางเกณฑ์ จึงล้าง override ของ brktbl ทิ้ง */
 table.risktbl th,table.risktbl td{text-align:right}
 table.risktbl th:nth-child(n),table.risktbl td:nth-child(n){border-left:none;background:none;white-space:nowrap}
@@ -1021,10 +1024,36 @@ function exNiMo(h){ return exRevMo(h)-exMoeMo(h)-(exXmoeOn()?exXmoeMo(h):0)-h.bs
 //   {ar:d} ลูกหนี้เก็บไม่ได้/ถูกตัดรายได้ d บาท: CA+สินทรัพย์เร็ว −d · NI −d · เงินสดไม่ลด
 function exSimPath(h, inj, sc){
   const bs=h.bs;
-  let st={cca:bs.ca+inj, ccl:bs.cl, cqn:bs.qn+inj, ccn:bs.cn+inj, ni:bs.ni+inj, mo:bs.mo};
+  let st={cca:bs.ca, ccl:bs.cl, cqn:bs.qn, ccn:bs.cn, ni:bs.ni, mo:bs.mo};
+  // ── กลไกเงินสดไม่พอ ตามหลักเกณฑ์คงค้าง (CFO กำหนด 28 ก.ค. 69) ──────────────────
+  // ยอดคงเหลือติดลบเป็นไปไม่ได้ทางบัญชี (เงินสดติดลบ = ไม่มีเงินจ่ายแต่ยังจ่าย) และ รพ. ต้อง
+  // กันเงินสดไว้จ่าย "ค่าใช้จ่ายจำเป็น (MOE)" ของเดือนที่เหลือถึงสิ้นปีงบก่อนเสมอ
+  // รายจ่ายที่จ่ายไม่ได้ → ค้างเป็นเจ้าหนี้ (หนี้สินหมุนเวียนโต) ไม่ใช่ปล่อยเงินสดติดลบ
+  const moeMoV=exMoeMo(h);
+  let owedAdd=0;                                    // เจ้าหนี้ที่เพิ่มจากการจ่ายไม่ได้ (แสดงในแผงเจาะเกณฑ์)
+  const resNeed=m=>moeMoV*Math.max(0,12-m);         // เงินสำรอง MOE ที่ต้องกัน ณ เดือน m (ลดลงตามเดือนที่เดินไป)
+  // ดึงเงินสดออก amt บาท · useRes=false → ห้ามแตะเงินสำรอง (รายจ่ายนอกแผน/ปัจจัยเสี่ยง)
+  //                        useRes=true  → ใช้เงินสำรองได้ (การดำเนินงานปกติ ซึ่ง MOE อยู่ในนั้นเอง)
+  const drain=(amt,useRes)=>{
+    if(amt<=0) return;
+    const avail=Math.max(0, st.ccn-(useRes?0:resNeed(st.mo)));
+    const paid=Math.max(0,Math.min(amt,avail));
+    st.ccn-=paid; st.cca-=paid; st.cqn-=paid;
+    const owe=amt-paid; st.ccl+=owe; owedAdd+=owe;   // ส่วนที่จ่ายไม่ได้ = เจ้าหนี้ค้างจ่าย
+  };
+  const resNeed0=resNeed(bs.mo), cashAvail0=Math.max(0,bs.cn-resNeed0);
+  if(inj>=0){ st.cca+=inj; st.cqn+=inj; st.ccn+=inj; } else drain(-inj,false);
+  st.ni+=inj;                                       // เงินอุดหนุน = รายได้ · ใช้เกินแผน = ค่าใช้จ่าย
   if(sc){
-    if(sc.ap){ st.ccl+=sc.ap; st.ni-=sc.ap; }                    // ค่าใช้จ่ายค้างจ่าย → เจ้าหนี้เพิ่ม
-    if(sc.ar){ st.cca-=sc.ar; st.cqn-=sc.ar; st.ni-=sc.ar; }     // ตัดลูกหนี้/รายได้ที่ตั้งไว้แต่ไม่ได้เงิน
+    if(sc.ap){ st.ccl+=sc.ap; st.ni-=sc.ap; owedAdd+=sc.ap; }    // ค่าใช้จ่ายค้างจ่าย → เจ้าหนี้เพิ่ม
+    if(sc.ar){
+      // ตัดลูกหนี้/รายได้ที่ตั้งไว้แต่เก็บไม่ได้ — ตัดได้ไม่เกินยอดลูกหนี้ที่มีจริง
+      // (สินทรัพย์เร็ว − เงินสด) · ส่วนที่เกินยอดลูกหนี้ถือเป็นรายได้เงินสดที่ไม่เข้า → เข้ากลไก drain
+      const arAvail=Math.max(0, st.cqn-st.ccn);
+      const cut=Math.min(sc.ar, arAvail);
+      st.cca-=cut; st.cqn-=cut; st.ni-=sc.ar;
+      if(sc.ar>cut) drain(sc.ar-cut, false);
+    }
   }
   if(EXST.tj.mode!=='off'){
     if(EXTJ.debtors.has(h.hcode)){
@@ -1039,6 +1068,9 @@ function exSimPath(h, inj, sc){
       else { st.cca-=S; st.cqn-=S; st.ni-=S; }          // ยกหนี้ = ตัดลูกหนี้ + คชจ.อุดหนุน (5107) เข้า NI
     }
   }
+  // Option ตามจ่าย/ยกหนี้ด้านบนอาจดันเงินสดต่ำกว่า 0 ได้ (กรณี "จ่ายจริง" ที่เงินไม่พอ)
+  // → ย้ายส่วนที่จ่ายไม่ได้กลับเป็นเจ้าหนี้ ด้วยหลักเดียวกัน (ไม่ปล่อยยอดติดลบ)
+  if(st.ccn<0){ const d=-st.ccn; st.ccn=0; st.cca+=d; st.cqn+=d; st.ccl+=d; owedAdd+=d; }
   const niM=exNiMo(h), depMo=bs.depMo;
   const base=scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo).risk;
   const anc=v=>Math.max(0,Math.min(7,(h.risk!=null?h.risk:0)+(v-base)));
@@ -1050,15 +1082,18 @@ function exSimPath(h, inj, sc){
   for(let k=1;k<=months;k++){
     if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;
     st.ni+=niM;
-    const c=niM+depMo;
-    st.cca+=c; st.cqn+=c; st.ccn+=c;
+    const c=niM+depMo;                               // กระแสเงินสดของเดือน (NI + รายการไม่ใช่เงินสด)
+    // ขาดดุลรายเดือนใช้เงินสำรองได้ (เป็นการดำเนินงานปกติที่เงินสำรองมีไว้เพื่อสิ่งนี้)
+    // แต่ยังห้ามเงินสดติดลบ — ส่วนที่จ่ายไม่ได้ค้างเป็นเจ้าหนี้
+    if(c>=0){ st.cca+=c; st.cqn+=c; st.ccn+=c; } else drain(-c,true);
     const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
     r=anc(sc.risk);
     if(st.mo===12 && sepRisk==null){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     endRisk=r;
   }
-  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:exMoeMo(h),xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak};
+  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:moeMoV,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
+          owedAdd,resNeed0,cashAvail0,cnEnd:st.ccn,clEnd:st.ccl};
 }
 // ── Solver: เงินก้อนขั้นต่ำ (เดือน 0) ให้ ระดับ ณ ก.ย.≤เป้า และปลาย horizon≤เป้า และเงินสดไม่หมด ──
 function exSolve(h){ return exSolveFor(h, EXST.tgt); }
@@ -1163,6 +1198,16 @@ function exBrkHtml(x, sepLab){
     <td>0 คะแนน</td>
     ${suCell(bN)}${suCell(b0)}${suCell(bX)}
     <td>${bN.su} → ${b0.su} → ${bX?bX.su:'–'}${bX&&bX.su<b0.su?` <span class="brk-ok">✅ −${b0.su-bX.su}</span>`:(bX&&bX.su>b0.su?` <span class="brk-no">⚠️ +${bX.su-b0.su}</span>`:'')}</td></tr>`;
+  // แถวเสริม (ไม่ใช่เกณฑ์คะแนน): สถานะเงินสดสำรอง MOE ที่ต้องกันไว้จ่ายถึงสิ้นปีงบ
+  // และเจ้าหนี้ที่เพิ่มขึ้นเมื่อจ่ายเงินสดไม่ได้ — ตามหลักเกณฑ์คงค้างที่ CFO กำหนด
+  const rX=(mode==='ceiling')?rDown:rL;
+  const resRow=`<tr class="brk-res">
+    <td class="l">💧 <b>เงินสดสำรอง MOE</b> <span class="tgt-note">ต้องกันไว้จ่ายค่าใช้จ่ายจำเป็นถึงสิ้นปีงบ = MOE ${fmtM(r0.moeMo)}/ด. × ${Math.max(0,12-bs.mo)} ด. — ไม่ใช่เกณฑ์คะแนน</span></td>
+    <td>ต้องมี ≥</td>
+    <td>${fmtM(r0.resNeed0)}<span class="brk-d">มีเงินสด ${fmtM(bs.cn)}${bs.cn<r0.resNeed0?' · <span class="brk-no">ขาด '+fmtM(r0.resNeed0-bs.cn)+'</span>':' · <span class="brk-ok">พอ</span>'}</span></td>
+    <td>${fmtM(r0.cnEnd)}<span class="brk-d">เงินสดปลายงวด${r0.owedAdd>0?' · ค้างจ่าย '+fmtM(r0.owedAdd):''}</span></td>
+    <td>${rX?`${fmtM(rX.cnEnd)}<span class="brk-d">${rX.owedAdd>0?'<span class="brk-no">เจ้าหนี้เพิ่ม '+fmtM(rX.owedAdd)+'</span>':'ไม่มีค้างจ่าย'}</span>`:'<span class="tgt-note">–</span>'}</td>
+    <td class="l"><span class="tgt-note">จ่ายไม่ได้ → ค้างเป็นเจ้าหนี้</span></td></tr>`;
   const rawN=bN.li+bN.st+bN.su, raw0=b0.li+b0.st+b0.su, rawX=bX?bX.li+bX.st+bX.su:null;
   const risk5=(mode==='ceiling')?(rDown?rDown.sepRisk:null):(rL?rL.sepRisk:null);
   // เกณฑ์ที่พลิกจาก "ผ่าน→ไม่ผ่าน" ตอนใช้เงินเกินแผน — ตอบว่า Score ตัวไหนเปลี่ยนจากปัจจัยนี้
@@ -1180,10 +1225,10 @@ function exBrkHtml(x, sepLab){
     for(let L=sep0+1;L<=7;L++){
       const dc=exSolveDown(h,L), da=exSolveDown(h,L,'ap'), dr=exSolveDown(h,L,'ar');
       if(dc==null&&da==null&&dr==null) continue;
-      const bd=(dc!=null)?exSimPath(h,-dc).sepBreak:null;
+      const rd=(dc!=null)?exSimPath(h,-dc):null, bd=rd?rd.sepBreak:null;
       const flip=bd?EX_CRIT.filter(c=>c.ok(b0)&&!c.ok(bd)).map(c=>c.n):[];
       if(bd&&bd.su>b0.su) flip.push(`SU ${b0.su}→${bd.su}`);
-      lv.push({L,dc,da,dr,flip});
+      lv.push({L,dc,da,dr,flip,owed:rd?rd.owedAdd:null});
     }
     if(!lv.length) return '';
     const cell=v=>v==null?'<span class="tgt-note">ไม่ตกถึงระดับนี้</span>'
@@ -1195,9 +1240,11 @@ function exBrkHtml(x, sepLab){
             <th>① ใช้จ่ายเกินเป้า<br><span class="tgt-note">หรือรายได้เงินสดไม่เข้า</span></th>
             <th>② ค่าใช้จ่ายเพิ่ม<br><span class="tgt-note">แบบก่อหนี้ค้างจ่าย</span></th>
             <th>③ รายได้หาย<br><span class="tgt-note">แบบตัดลูกหนี้ที่เก็บไม่ได้</span></th>
+            <th>เจ้าหนี้ที่จะเพิ่ม<br><span class="tgt-note">(กรณี ① ส่วนที่จ่ายไม่ได้)</span></th>
             <th>เกณฑ์ที่จะพลิก<br><span class="tgt-note">(กรณี ①)</span></th></tr>
           ${lv.map(x=>`<tr><td class="l"><span class="badge" style="background:${riskColor(x.L)}">${x.L}</span></td>
             <td>${cell(x.dc)}</td><td>${cell(x.da)}</td><td>${cell(x.dr)}</td>
+            <td>${x.owed==null?'<span class="tgt-note">–</span>':(x.owed>0?'<span class="brk-no">'+fmtM(x.owed)+'</span>':'<span class="tgt-note">จ่ายสดได้ทั้งหมด</span>')}</td>
             <td class="l">${x.flip.length?'<span class="brk-no">'+x.flip.join(' · ')+'</span>':'<span class="tgt-note">–</span>'}</td></tr>`).join('')}
         </table>
       </div>
@@ -1209,6 +1256,14 @@ function exBrkHtml(x, sepLab){
         · ${same?'<b>รพ.นี้ทั้ง 3 ช่องทางให้ตัวเลขเท่ากัน</b> เพราะเกณฑ์ที่พลิกเป็นกลุ่ม NWC/NI/SU ซึ่งลดลงเท่ากันทุกช่องทาง — จะต่างกันเมื่อเกณฑ์ที่พลิกเป็น CR/QR/Cash ratio ที่ไวต่อ<i>จุด</i>ที่เงินหายไป':'ตัวเลข 3 คอลัมน์ต่างกันเพราะกระทบอัตราส่วนคนละจุด: ① เงินสดลด (กระทบ Cash ratio ตรงๆ) · ② หนี้สินหมุนเวียนซึ่งเป็น<i>ตัวส่วน</i>โตขึ้น · ③ สินทรัพย์เร็วลดแต่เงินสดคงเดิม'}</div>`;
       })()}`;
   })():'';
+  // อธิบายกลไกเงินสดไม่พอ → เจ้าหนี้ (แสดงเมื่อมีการค้างจ่ายเกิดขึ้นจริงในสถานการณ์ที่กำลังดู)
+  const cashNote=(()=>{
+    const rr=(mode==='ceiling')?rDown:rL;
+    if(!rr||!(rr.owedAdd>0)) return '';
+    const tight=bs.cn<r0.resNeed0;
+    return `<div class="note" style="margin-top:4px">💧 <b>กลไกเมื่อเงินไม่พอ (เกณฑ์คงค้าง):</b> เงินสด ${fmtM(bs.cn)} ต้องกันไว้จ่าย MOE อีก ${Math.max(0,12-bs.mo)} เดือน (${fmtM(r0.moeMo)}/ด. = <b>${fmtM(r0.resNeed0)}</b>) จึงใช้จ่ายอย่างอื่นได้ ${tight?'<b class="brk-no">0 บาท</b> (เงินสดยังน้อยกว่าเงินสำรองที่ต้องกัน '+fmtM(r0.resNeed0-bs.cn)+')':'<b>'+fmtM(r0.cashAvail0)+'</b>'}
+      → ส่วนที่จ่ายไม่ได้ <b class="brk-no">${fmtM(rr.owedAdd)}</b> ค้างเป็น<b>เจ้าหนี้</b> (หนี้สินหมุนเวียน ${fmtM(bs.cl)} → ${fmtM(rr.clEnd)}) ไม่ใช่ปล่อยให้เงินสดติดลบ — ยอดคงเหลือติดลบเป็นไปไม่ได้ทางบัญชี</div>`;
+  })();
   // ── กล่องสรุปตามโหมด ──
   const tjHint=(bs&&h.tj&&h.tj.payIn>0)?` · ลดได้ด้วย<b>การยกหนี้ค่ารักษาตามจ่าย</b> (มีเจ้าหนี้ตามจ่ายอยู่ ${fmtM(h.tj.payIn)}) — เลือก Option "ยกหนี้" ในแผงด้านบน`:'';
   let modeBox;
@@ -1245,7 +1300,7 @@ function exBrkHtml(x, sepLab){
     <div class="acctbl-wrap" style="max-height:none">
       <table class="acctbl brktbl">
         <tr><th>เกณฑ์ (7 คะแนนเต็ม)</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน<br>(${nowLab})</th><th>ณ ${sepLab}<br>ก่อนช่วย</th><th>${col5}</th><th>${scoreHd}</th></tr>
-        ${rows}${suRow}
+        ${rows}${suRow}${resRow}
         <tr class="brk-tot"><td class="l"><b>รวมคะแนนความเสี่ยง</b></td><td>${mode==='ceiling'?'ดูระดับ '+L:'เป้า ≤ '+L}</td>
           <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> <span class="tgt-note">ทางการ</span></td>
           <td><span class="badge" style="background:${riskColor(sep0)}">${sep0!=null?sep0:'–'}</span></td>
@@ -1254,6 +1309,7 @@ function exBrkHtml(x, sepLab){
       </table>
     </div>
     ${modeBox}
+    ${cashNote}
     ${anchorNote}
     ${ratioNote}
     <div class="note">${r0.cashOut!=null?`⚠️ ถ้าไม่ช่วย เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(h.bs.t,r0.cashOut))}) · `:''}NI จำลอง ${fmtM(r0.niM)}/เดือน — เกณฑ์ NWC/NI/SU ขยับตามกำไรรายเดือนด้วย ไม่ใช่แค่เงินก้อน</div>
