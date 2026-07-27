@@ -906,8 +906,11 @@ function exPct(hc,p,seg){
   if(o && o[k]!=null) return o[k];
   return EXST.adj[k]!=null?EXST.adj[k]:0;
 }
-// P24/P241/EADJ = non-cash bundle (ตรง exp−e33y ของสูตรทางการ) — หักใน NI อัตโนมัติผ่าน depMo
-const EX_NONCASH={P24:1,P241:1,EADJ:1};
+// non-cash bundle = ค่าเสื่อม/ตัดจำหน่าย (P24) + หนี้สูญและสงสัยจะสูญ (P241) — หักใน NI ผ่าน depMo
+// ต้องเป็นชุดเดียวกับ NONCASH_P ใน export_exec.py เป๊ะ ไม่งั้น NI จะเพี้ยน (ลบ non-cash ชุดหนึ่ง
+// แต่บวกกลับอีกชุดหนึ่ง) · เดิมมี EADJ ด้วยแต่ไม่มีอยู่จริงในข้อมูล (ยอด 0 ทุกแห่ง) จึงถอดออก 2026-07-27
+// ⚠️ ห้ามใส่ P25/P251 (ค่าใช้จ่ายระหว่างหน่วยงาน 5209*/5210*) — เป็นรายการเงินสด นับใน exXmoeMo แล้ว
+const EX_NONCASH={P24:1,P241:1};
 // MOE ทางการ: กลุ่มบัญชี 59 ตัวตามนิยามกองเศรษฐกิจสุขภาพ (EX.moeGroups จาก export_exec.py)
 // % ปรับต่อกลุ่ม (−100% = งดจ่ายทั้งหมด · 0% = ตาม run-rate ค่าเฉลี่ยจริง · +100% = จ่ายเพิ่มเป็นสองเท่า)
 function exMoePct(g){ return EXST.moePct[g]!=null?EXST.moePct[g]:0; }
