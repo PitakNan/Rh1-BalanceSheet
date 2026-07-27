@@ -1056,6 +1056,22 @@ function exSolveFor(h, L){
   return hi;
 }
 function exInjOf(h, need){ const m=EXST.inj[h.hcode]; return m!=null?m:(need!=null?need:0); }
+// ── ฝั่งขาลง: เป้าสูงกว่าระดับที่จะเป็นอยู่แล้ว = "เพดาน" ไม่ใช่แผนเติมเงิน ──
+// หาเงินที่ใช้เกินแผน (เงินหายไปจากที่คาด) น้อยสุดที่จะทำให้ระดับ ณ ก.ย. ตกถึง L
+// คืน null = ปลอดภัย ไม่ตกถึงระดับนั้นแม้เงินหมดเกลี้ยง · แนวคิดเดียวกับ svSolveDown ของ Simulator เดิม
+function exSolveDown(h, L){
+  const hit=d=>{ const r=exSimPath(h,-d); return r.sepRisk!=null && r.sepRisk>=L; };
+  if(hit(0)) return 0;
+  const HI=Math.max(4*h.bs.cl, 1000e6);
+  if(!hit(HI)) return null;
+  let lo=0, hi=HI;
+  while(hi-lo>SV_STEP){
+    const mid=Math.round((lo+hi)/2/SV_STEP)*SV_STEP;
+    if(mid<=lo||mid>=hi) break;
+    if(hit(mid)) hi=mid; else lo=mid;
+  }
+  return hi;
+}
 // ── แผงเจาะเกณฑ์ 7 คะแนน ณ ก.ย. (คลิก badge คอลัมน์ "ระดับ ก.ย.69 หลังช่วย") ──
 // EXBRK[hcode] = ระดับเป้าที่กำลังดูอยู่ในแผง (undefined = แผงปิด) — เป็นการดูรายแห่ง ไม่กระทบเป้าทั้งเขต (EXST.tgt)
 function exBrkToggle(hc){ if(EXBRK[hc]!=null) delete EXBRK[hc]; else EXBRK[hc]=EXST.tgt; exRender(); }
@@ -1078,12 +1094,20 @@ function exSuMonths(b){
 }
 function exBrkHtml(x, sepLab){
   const {h,r0}=x, hc=h.hcode, L=EXBRK[hc], bs=h.bs, nowLab=EX.periodLabel;
-  const injL=exSolveFor(h,L), rL=(injL!=null?exSimPath(h,injL):null);
+  const sep0=r0.sepRisk;
+  // 3 โหมดตามความสัมพันธ์ระหว่างเป้า L กับระดับที่จะเป็น ณ ก.ย. ถ้าไม่ช่วย (sep0) — ตรงกับ semantic ของ Simulator เดิม
+  //   L < sep0 : แผนลดวิกฤต (หาเงินก้อนขั้นต่ำ)
+  //   L = sep0 : อยู่ระดับนี้พอดีอยู่แล้ว → ไม่ต้องเติมเงิน
+  //   L > sep0 : เพดาน — ใช้เงินเกินแผนได้เท่าไหร่ก่อนตกถึงระดับนั้น (เงินก้อน "ติดลบ")
+  const mode=(sep0==null)?'plan':(L<sep0?'plan':(L===sep0?'atlevel':'ceiling'));
+  const injL=(mode==='plan')?exSolveFor(h,L):0, rL=(mode==='plan'&&injL!=null?exSimPath(h,injL):null);
+  const down=(mode==='ceiling')?exSolveDown(h,L):null;              // เงินที่ใช้เกินแผนขั้นต่ำถึงจะตกถึง L
+  const rDown=(mode==='ceiling'&&down!=null)?exSimPath(h,-down):null;
   // bN = ค่าปัจจุบันจากงบทดลองงวดล่าสุด (ยังไม่จำลองอะไรเลย) · b0 = จำลองถึง ก.ย. โดยไม่ช่วย · b1 = จำลองถึง ก.ย. หลังช่วยตามเป้า L
   const bN=(bs.cl?{...scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo),ni:bs.ni,mo:bs.mo}:null);
   const b0=r0.sepBreak, b1=rL?rL.sepBreak:null;
   const lvlBtns=[0,1,2,3,4,5,6,7].map(l=>`<button type="button" class="lvlbtn${l===L?' on':''}" data-l="${l}" style="background:${riskColor(l)};width:30px;height:30px;font-size:13px;border-radius:8px" onclick="exBrkLvl('${hc}',${l})">${l}</button>`).join('');
-  const head=`<div class="brk-head">🔍 <b>${h.name}</b> — เกณฑ์ Risk Score ทั้ง 7 คะแนน: ปัจจุบัน (${nowLab}) → ${sepLab} ก่อนช่วย → ${sepLab} หลังช่วย</div>
+  const head=`<div class="brk-head">🔍 <b>${h.name}</b> — เกณฑ์ Risk Score ทั้ง 7 คะแนน: ปัจจุบัน (${nowLab}) → ${sepLab} ก่อนช่วย → ${mode==='ceiling'?`${sepLab} ถ้าใช้เงินเกินแผน`:`${sepLab} หลังช่วย`}</div>
     <div class="brk-lvl"><span class="tgt-note">🎯 เลือกระดับเป้าที่ต้องการดู (เฉพาะ รพ.นี้ ไม่กระทบเป้าทั้งเขต):</span> <span class="lvlbtns" style="margin:0;gap:5px">${lvlBtns}</span></div>`;
   if(!b0||!bN) return `<div class="ovsub-box">${head}<div class="note">งวดนี้ข้อมูลไม่พอสำหรับจำลอง (ไม่มีค่าดิบงบดุล)</div></div>`;
   const suTxt=b=>{ const s=exSuMonths(b); return s&&s.v!=null&&isFinite(s.v)?`${s.lbl} ≈ ${s.v.toFixed(1)} ด.`:(b.nwc>=0&&b.ni>=0?'NWC และ NI เป็นบวกทั้งคู่ = ปลอดภัย':'NWC และ NI ติดลบทั้งคู่ = แย่สุด'); };
@@ -1096,41 +1120,81 @@ function exBrkHtml(x, sepLab){
       <span class="brk-d">${dz?'เท่าเดิม':(d>0?'+':'−')+c.f(Math.abs(d))}</span></td>`; };
   const suCell=b=>b?`<td class="${b.su===0?'brk-ok':'brk-no'}">${suTxt(b)}</td>`:'<td class="tgt-note">–</td>';
   const pt=ok=>ok?'0':'1';
-  const noFit=(injL==null||!b1);   // เป้านี้เงินก้อนอย่างเดียวไม่พอ — ยังแสดง 2 คอลัมน์แรก คอลัมน์ "หลังช่วย" เป็น –
+  const noFit=(mode==='plan'&&(injL==null||!b1));   // เป้านี้เงินก้อนอย่างเดียวไม่พอ — คอลัมน์ที่ 5 เป็น –
+  // คอลัมน์ที่ 5 เปลี่ยนความหมายตามโหมด: แผน=หลังช่วย · เพดาน=ถ้าใช้เงินเกินแผน · atlevel=ไม่มี (เท่าก่อนช่วย)
+  const bX=(mode==='ceiling')?(rDown?rDown.sepBreak:null):b1;
+  const col5=(mode==='ceiling')?`ณ ${sepLab}<br>ถ้าใช้เงินเกินแผน`:(mode==='atlevel'?`ณ ${sepLab}<br>หลังช่วย`:`ณ ${sepLab}<br>หลังช่วย+มาตรการ`);
+  const scoreHd=(mode==='ceiling')?'คะแนน<br>ปัจจุบัน→ก่อน→ถ้าเกินแผน':'คะแนน<br>ปัจจุบัน→ก่อน→หลัง';
   const rows=EX_CRIT.map(c=>{
-    const okN=c.ok(bN), ok0=c.ok(b0), ok1=b1?c.ok(b1):null;
-    const scoreTxt=b1?`${pt(okN)} → ${pt(ok0)} → ${pt(ok1)}${ok0!==ok1?(ok1?' <span class="brk-ok">✅ −1</span>':' <span class="brk-no">⚠️ +1</span>'):''}`
+    const okN=c.ok(bN), ok0=c.ok(b0), okX=bX?c.ok(bX):null;
+    const scoreTxt=bX?`${pt(okN)} → ${pt(ok0)} → ${pt(okX)}${ok0!==okX?(okX?' <span class="brk-ok">✅ −1</span>':' <span class="brk-no">⚠️ +1</span>'):''}`
                      :`${pt(okN)} → ${pt(ok0)} → –`;
     return `<tr>
       <td class="l"><b>${c.n}</b> <span class="tgt-note">${c.d}</span></td>
       <td>${c.th}</td>
-      ${cell(c,bN)}${cell(c,b0)}${cellD(c,b0,b1)}
+      ${cell(c,bN)}${cell(c,b0)}${cellD(c,b0,bX)}
       <td>${scoreTxt}</td></tr>`;
   }).join('');
   const suRow=`<tr>
     <td class="l"><b>SU</b> <span class="tgt-note">ระดับความอยู่รอด — 4 quadrant จาก NWC เทียบ NI (คิดได้ 0–2 คะแนน)</span></td>
     <td>0 คะแนน</td>
-    ${suCell(bN)}${suCell(b0)}${suCell(b1)}
-    <td>${bN.su} → ${b0.su} → ${b1?b1.su:'–'}${b1&&b1.su<b0.su?` <span class="brk-ok">✅ −${b0.su-b1.su}</span>`:(b1&&b1.su>b0.su?` <span class="brk-no">⚠️ +${b1.su-b0.su}</span>`:'')}</td></tr>`;
-  const rawN=bN.li+bN.st+bN.su, raw0=b0.li+b0.st+b0.su, raw1=b1?b1.li+b1.st+b1.su:null;
+    ${suCell(bN)}${suCell(b0)}${suCell(bX)}
+    <td>${bN.su} → ${b0.su} → ${bX?bX.su:'–'}${bX&&bX.su<b0.su?` <span class="brk-ok">✅ −${b0.su-bX.su}</span>`:(bX&&bX.su>b0.su?` <span class="brk-no">⚠️ +${bX.su-b0.su}</span>`:'')}</td></tr>`;
+  const rawN=bN.li+bN.st+bN.su, raw0=b0.li+b0.st+b0.su, rawX=bX?bX.li+bX.st+bX.su:null;
+  const risk5=(mode==='ceiling')?(rDown?rDown.sepRisk:null):(rL?rL.sepRisk:null);
+  // เกณฑ์ที่พลิกจาก "ผ่าน→ไม่ผ่าน" ตอนใช้เงินเกินแผน — ตอบว่า Score ตัวไหนเปลี่ยนจากปัจจัยนี้
+  const flipped=bX?EX_CRIT.filter(c=>c.ok(b0)&&!c.ok(bX)).map(c=>c.n):[];
+  const suFlip=(bX&&bX.su>b0.su)?`SU (${b0.su}→${bX.su})`:null;
   // ทำไม CR/QR/Cash ขยับเท่ากันเป๊ะ: เงินก้อนบวกเข้าทั้ง 3 ตัวเศษ (CA/สินทรัพย์เร็ว/เงินสด) ตัวส่วน (CL) ไม่เปลี่ยน
   // → Δ = เงินก้อน ÷ CL เท่ากันทั้งสาม · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 (ตัวเลข Δ ที่โชว์คิดจากค่าจริง)
   const ratioNote=(b1&&injL>0)?`<div class="note" style="margin-top:4px">🧮 <b>ทำไม CR/QR/Cash ขยับเท่ากันทั้งสามตัว:</b> เงินก้อน ${fmtM(injL)} บวกเข้าทั้งสามตัวเศษ (สินทรัพย์หมุนเวียน · สินทรัพย์เร็ว · เงินสด) พร้อมกัน โดยตัวส่วนคือหนี้สินหมุนเวียน ${fmtM(bs.cl)} เท่าเดิม → ทั้งสามเพิ่มขึ้น <b>+${(injL/bs.cl).toFixed(4)}</b> เท่ากันเป๊ะ (= ${fmtM(injL)} ÷ ${fmtM(bs.cl)}) · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 — เลข Δ ที่แสดงคิดจากค่าจริงก่อนปัด · NWC เพิ่มเท่าเงินก้อนพอดี ส่วน NI ไม่เปลี่ยน เพราะเงินก้อนเป็นรายการทางงบดุล ไม่ใช่รายได้</div>`:'';
   const anchorNote=(h.risk!==rawN)?`<div class="note" style="margin-top:4px">📎 badge ปัจจุบันแสดง ${h.risk} ขณะที่ผลรวมเกณฑ์จากงบทดลองคำนวณได้ ${rawN} — ระบบยึด Risk Score ทางการงวด ${nowLab} เป็นจุดตั้งต้น (anchor) แล้วบวก/ลบส่วนต่างที่จำลองได้ ตัวเลขในคอลัมน์จำลองจึงอ่านเป็น "ทิศทางการเปลี่ยนแปลง" เทียบกับ badge ทางการ</div>`:'';
+  // ── กล่องสรุปตามโหมด ──
+  const tjHint=(bs&&h.tj&&h.tj.payIn>0)?` · ลดได้ด้วย<b>การยกหนี้ค่ารักษาตามจ่าย</b> (มีเจ้าหนี้ตามจ่ายอยู่ ${fmtM(h.tj.payIn)}) — เลือก Option "ยกหนี้" ในแผงด้านบน`:'';
+  let modeBox;
+  if(mode==='atlevel'){
+    modeBox=`<div class="tgt-row" style="font-weight:600">🎯 ระดับ ${L} คือระดับที่จะเป็นอยู่แล้ว ณ ${sepLab} — <b style="color:var(--blue)">ไม่ต้องเติมเงิน</b>
+      <span class="tgt-note">เงินก้อนจะไม่ช่วยลดระดับ เพราะเป้าเท่ากับผลที่จะเกิดขึ้นเองอยู่แล้ว${L>=7?' (ระดับ 7 คือเพดานสูงสุด เติมเท่าไหร่ก็ไม่ต่ำกว่านี้ด้วยเงินก้อนเพียงอย่างเดียว)':''}${tjHint}</span></div>
+      <div class="note">กดเลข<b>ต่ำกว่า ${L}</b> เพื่อดูเงินก้อนที่ต้องใช้เพื่อลดระดับ · กดเลข<b>สูงกว่า ${L}</b> เพื่อดูเพดานว่าใช้เงินเกินแผนได้เท่าไหร่ก่อนจะตกไประดับนั้น${r0.cashOut!=null?` · <span class="tgt-warn">หมายเหตุ: เงินสดจะติดลบเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))}) — ถึงระดับไม่เปลี่ยน แต่ยังต้องมีเงินหมุนจ่ายเงินเดือน/เจ้าหนี้</span>`:''}</div>`;
+  } else if(mode==='ceiling'){
+    if(down==null){
+      // อธิบายว่าติดที่ไหน: เงินก้อน (บวกหรือลบ) แตะได้แค่ CR/QR/Cash/NWC — NI เป็นตัวเดียวที่ต้องมาจากกำไร/รายรับ
+      const cashCrit=EX_CRIT.filter(c=>c.n!=='NI');
+      const allCashFail=cashCrit.every(c=>!c.ok(b0));
+      const niOk=b0.ni>=0;
+      const why=allCashFail&&niOk
+        ? `เกณฑ์ที่เงินสด/สินทรัพย์หมุนเวียนกระทบได้ (CR · QR · Cash ratio · NWC) <b>ไม่ผ่านครบทั้ง 4 ตัวอยู่แล้ว</b> — ส่วนที่ยังผ่านคือ <b>NI ${fmtM(b0.ni)}</b> ซึ่งการใช้เงินเกินแผนไม่ทำให้เปลี่ยน (NI มาจากรายรับ−ค่าใช้จ่าย ไม่ใช่ยอดคงเหลือ) จึงตกได้สูงสุดแค่ระดับ ${sep0}`
+        : niOk
+        ? `ส่วนที่ยังผ่านคือ <b>NI ${fmtM(b0.ni)}</b> ซึ่งเงินก้อนไม่กระทบ — ถ้าจะถึงระดับ ${L} ต้องให้ขาดทุน (NI ติดลบ) ด้วย ซึ่งมาจากรายรับ/ค่าใช้จ่าย ไม่ใช่ยอดเงินคงเหลือ`
+        : `โครงสร้างงบดุลยังห่างจากระดับ ${L} เกินกว่าที่ยอดเงินสด/สินทรัพย์หมุนเวียนจะพาไปถึงได้ภายใน ${sepLab}`;
+      modeBox=`<div class="tgt-row" style="font-weight:600">🛡️ ระดับ ${L} — <b style="color:var(--green)">ไม่ตกถึงระดับนี้</b> แม้ใช้เงินเกินแผนจนหมดเกลี้ยง</div>
+        <div class="note">${why}</div>`;
+    } else {
+      const flipTxt=[...flipped,...(suFlip?[suFlip]:[])];
+      modeBox=`<div class="tgt-row" style="font-weight:600">🛡️ เพดานก่อนตกไประดับ ${L}: ใช้เงินเกินแผนได้ถึง <b style="color:var(--red)">−${fmtM(down)}</b>
+        <span class="tgt-note">— ไม่ใช่เงินสนับสนุน แต่เป็น "ระยะห่าง" ถ้าใช้เงินเกินคาดการณ์เกิน ${fmtM(down)} จะตกจากระดับ ${sep0} ไปเป็น ${L} ภายใน ${sepLab}</span></div>
+      <div class="tgt-row">${flipTxt.length?`📉 <b>เกณฑ์ที่จะพลิกเป็นไม่ผ่าน:</b> ${flipTxt.join(' · ')} <span class="tgt-note">(ดูค่าก่อน/หลังในคอลัมน์ที่ 3 กับ 5)</span>`:`<span class="tgt-note">ระดับขยับจากการ anchor คะแนนทางการ — ไม่มีเกณฑ์ใดพลิกสถานะในช่วงนี้</span>`}</div>
+      <div class="note">💡 อ่านค่านี้เป็น <b>วินัยการใช้เงิน</b>: ${fmtM(down)} คือส่วนที่ยังรองรับได้ ถ้าเบิกจ่าย/ลงทุนเกินกว่านี้ (หรือรายรับเข้าช้ากว่าคาด) ระดับวิกฤตจะแย่ลงทันที</div>`;
+    }
+  } else if(noFit){
+    modeBox=`<div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>
+      <div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">เงินก้อนอย่างเดียวไม่พอ</b></div>`;
+  } else {
+    modeBox=`<div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)'}</b>${injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL&&rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>`;
+  }
   return `<div class="ovsub-box">${head}
     <div class="acctbl-wrap" style="max-height:none">
       <table class="acctbl brktbl">
-        <tr><th>เกณฑ์ (7 คะแนนเต็ม)</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน<br>(${nowLab})</th><th>ณ ${sepLab}<br>ก่อนช่วย</th><th>ณ ${sepLab}<br>หลังช่วย+มาตรการ</th><th>คะแนน<br>ปัจจุบัน→ก่อน→หลัง</th></tr>
+        <tr><th>เกณฑ์ (7 คะแนนเต็ม)</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน<br>(${nowLab})</th><th>ณ ${sepLab}<br>ก่อนช่วย</th><th>${col5}</th><th>${scoreHd}</th></tr>
         ${rows}${suRow}
-        <tr class="brk-tot"><td class="l"><b>รวมคะแนนความเสี่ยง</b></td><td>เป้า ≤ ${L}</td>
+        <tr class="brk-tot"><td class="l"><b>รวมคะแนนความเสี่ยง</b></td><td>${mode==='ceiling'?'ดูระดับ '+L:'เป้า ≤ '+L}</td>
           <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> <span class="tgt-note">ทางการ</span></td>
-          <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
-          <td>${b1?`<span class="badge" style="background:${riskColor(rL.sepRisk)}">${rL.sepRisk!=null?rL.sepRisk:'–'}</span>`:'<span class="tgt-note">–</span>'}</td>
-          <td><b>${rawN} → ${raw0} → ${raw1!=null?raw1:'–'}</b></td></tr>
+          <td><span class="badge" style="background:${riskColor(sep0)}">${sep0!=null?sep0:'–'}</span></td>
+          <td>${bX?`<span class="badge" style="background:${riskColor(risk5)}">${risk5!=null?risk5:'–'}</span>`:'<span class="tgt-note">–</span>'}</td>
+          <td><b>${rawN} → ${raw0} → ${rawX!=null?rawX:'–'}</b></td></tr>
       </table>
     </div>
-    ${noFit?`<div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>`:''}
-    <div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${noFit?'เงินก้อนอย่างเดียวไม่พอ':(injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)')}</b>${!noFit&&injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>
+    ${modeBox}
     ${anchorNote}
     ${ratioNote}
     <div class="note">${r0.cashOut!=null?`⚠️ ถ้าไม่ช่วย เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(h.bs.t,r0.cashOut))}) · `:''}NI จำลอง ${fmtM(r0.niM)}/เดือน — เกณฑ์ NWC/NI/SU ขยับตามกำไรรายเดือนด้วย ไม่ใช่แค่เงินก้อน</div>
