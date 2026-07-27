@@ -285,6 +285,16 @@ tr.ovsub td{background:var(--hover);padding:10px 14px}
 .ovsub-box .fld label{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
 .ovsub-box input[type=range]{width:100%;max-width:520px;accent-color:var(--blue);cursor:pointer}
 .ovsub-box select{font-family:inherit;font-size:11.5px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:2px 4px}
+/* ── แผงเจาะเกณฑ์ 7 คะแนน (คลิก badge คอลัมน์ "ระดับ ก.ย.69 หลังช่วย") ── */
+.badge.brkbadge{cursor:pointer;transition:transform .1s,box-shadow .1s}
+.badge.brkbadge:hover{transform:scale(1.12);box-shadow:0 2px 8px var(--shadow)}
+.badge.brkbadge.on{outline:2.5px solid var(--ink);outline-offset:2px}
+.brk-head{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.brk-lvl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+table.brktbl th:nth-child(2),table.brktbl td:nth-child(2){text-align:center;color:var(--mut);font-size:11.5px}
+table.brktbl .brk-ok{color:var(--green);font-weight:600}
+table.brktbl .brk-no{color:var(--red);font-weight:600}
+table.brktbl tr.brk-tot td{border-top:1.5px solid var(--line);border-bottom:none;font-size:13px}
 /* ── Executive tab (แนวทางสำหรับผู้บริหาร) ── */
 .extbl input[type=range]{width:150px;max-width:38vw;accent-color:var(--blue);cursor:pointer;vertical-align:middle}
 .exchip{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
@@ -851,6 +861,7 @@ function ovCopyTSV(){
 // + Solver เงินสนับสนุนขั้นต่ำรายแห่งให้ถึงเป้าระดับวิกฤต ≤ เป้า และเงินสดไม่หมด
 // ══════════════════════════════════════════════════════════════════════
 let EX=null, EXST=null, EXOPEN={}, EXTJ=null, EXROWS=null, EX_TSV='';
+let EXBRK={};   // hcode -> ระดับเป้าที่กางแผงเจาะเกณฑ์ 7 คะแนนอยู่ (undefined = ปิด) — ไม่เซฟลง localStorage เพราะเป็นมุมมองชั่วคราว
 let _refundCache={sig:null, refund:null};   // cache ผล solver "ยกหนี้เจาะจง" (คำนวณใหม่เฉพาะตอน state กระทบ sim เปลี่ยน)
 let EXSORT={col:null,dir:-1};
 const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
@@ -1010,7 +1021,7 @@ function exSimPath(h, inj){
   let sc0=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
   let r=anc(sc0.risk);
   let sepRisk=(bs.mo===12?r:null), endRisk=r, cashOut=st.ccn<=0?0:null;
-  let sepBreak=(bs.mo===12?{...sc0,ni:st.ni}:null);   // เกณฑ์ย่อย (cr/qr/cash/nwc/ni/li/st/su) ณ เดือน ก.ย. — ใช้อธิบายเหตุผลรายตัวใน exNeedTip
+  let sepBreak=(bs.mo===12?{...sc0,ni:st.ni,mo:st.mo}:null);   // เกณฑ์ย่อย (cr/qr/cash/nwc/ni/li/st/su) ณ เดือน ก.ย. — ใช้กางแผงเจาะเกณฑ์ 7 คะแนน (exBrkHtml)
   for(let k=1;k<=months;k++){
     if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;
     st.ni+=niM;
@@ -1018,15 +1029,16 @@ function exSimPath(h, inj){
     st.cca+=c; st.cqn+=c; st.ccn+=c;
     const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
     r=anc(sc.risk);
-    if(st.mo===12 && sepRisk==null){ sepRisk=r; sepBreak={...sc,ni:st.ni}; }   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
+    if(st.mo===12 && sepRisk==null){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     endRisk=r;
   }
   return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:exMoeMo(h),xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak};
 }
 // ── Solver: เงินก้อนขั้นต่ำ (เดือน 0) ให้ ระดับ ณ ก.ย.≤เป้า และปลาย horizon≤เป้า และเงินสดไม่หมด ──
-function exSolve(h){
-  const L=EXST.tgt;
+function exSolve(h){ return exSolveFor(h, EXST.tgt); }
+// เป้าระดับ L ใดก็ได้ (แผงเจาะเกณฑ์รายแห่งใช้เลือกดูระดับอื่น) — ตรรกะเดิมของ exSolve ทั้งหมด
+function exSolveFor(h, L){
   const pass=v=>{ const r=exSimPath(h,v); return (r.sepRisk==null||r.sepRisk<=L)&&r.endRisk<=L&&r.cashOut==null; };
   if(pass(0)) return 0;
   const HI=Math.max(2*h.bs.cl, 400e6);
@@ -1040,30 +1052,73 @@ function exSolve(h){
   return hi;
 }
 function exInjOf(h, need){ const m=EXST.inj[h.hcode]; return m!=null?m:(need!=null?need:0); }
-// อธิบายต่อ รพ.: ทำไมต้องสนับสนุนเงินก้อนนี้ + เงินก้อนนี้ทำให้ระดับวิกฤตลดลงถึง ก.ย.69 ได้อย่างไร (ไอคอน ⓘ คอลัมน์ "เงินสนับสนุนที่ต้องใช้")
-function exNeedTip(x, sepLab){
-  const {h,inj,r0,r1}=x, bs=h.bs;
-  const b0=r0.sepBreak, b1=r1.sepBreak;
-  const cashTxt=r0.cashOut!=null?`เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))}) เป็นอีกสาเหตุที่ต้องช่วย\n`:'';
-  if(!b0||!b1){   // กันกรณีไม่มี breakdown (ไม่ควรเกิด — เผื่อ edge case)
-    return `${cashTxt}เติมเงิน ${fmtM(inj)} → ระดับ ${sepLab} ${r0.sepRisk!=null?r0.sepRisk:'–'} → ${r1.sepRisk!=null?r1.sepRisk:'–'}`;
-  }
-  const R=v=>v==null?'–':v.toFixed(2);
-  const crit=[
-    {lbl:'CR (สินทรัพย์หมุนเวียน÷หนี้สินหมุนเวียน) ≥1.5',v0:b0.cr,v1:b1.cr,ok0:b0.cr>=1.5,ok1:b1.cr>=1.5,f:R},
-    {lbl:'QR (สินทรัพย์เร็ว÷หนี้สินหมุนเวียน) ≥1.0',v0:b0.qr,v1:b1.qr,ok0:b0.qr>=1.0,ok1:b1.qr>=1.0,f:R},
-    {lbl:'Cash ratio (เงินสด+เทียบเท่า÷หนี้สินหมุนเวียน) ≥0.8',v0:b0.cash,v1:b1.cash,ok0:b0.cash>=0.8,ok1:b1.cash>=0.8,f:R},
-    {lbl:'NWC (สินทรัพย์หมุนเวียน−หนี้สินหมุนเวียน) ≥0',v0:b0.nwc,v1:b1.nwc,ok0:b0.nwc>=0,ok1:b1.nwc>=0,f:fmtM},
-    {lbl:'NI สะสมทั้งปีงบ ≥0',v0:b0.ni,v1:b1.ni,ok0:b0.ni>=0,ok1:b1.ni>=0,f:fmtM},
-  ];
-  const critLines=crit.map(c=>{
-    const flip=c.ok0!==c.ok1?(c.ok1?' ✅พ้นเกณฑ์(−1)':' ⚠️หลุดเกณฑ์(+1)'):'';
-    return `• ${c.lbl}: ${c.f(c.v0)}${c.ok0?'✓':'✗'} → ${c.f(c.v1)}${c.ok1?'✓':'✗'}${flip}`;
-  }).join('\n');
-  const suLine=`• SU (ระดับความอยู่รอด NWC เทียบ NI — 0 ดีสุด/2 แย่สุด): ${b0.su} → ${b1.su}${b0.su!==b1.su?' (ดีขึ้น)':' (คงที่)'}`;
-  const delta=Math.max(0,(b0.li+b0.st+b0.su)-(b1.li+b1.st+b1.su));
-  return `${cashTxt}**เกณฑ์ทีละตัว ณ ${sepLab} — ก่อน→หลังเติมเงิน**:\n${critLines}\n${suLine}\n\n`+
-    `**สรุป**: เติมเงิน ${fmtM(inj)} เข้า ca/qn/cn (สินทรัพย์หมุนเวียน+สินทรัพย์เร็ว+เงินสด) พร้อมกันตั้งแต่เดือน 0 → เกณฑ์ที่ไม่ผ่านลดลง ${delta} จุด (จากสูตรเดียวกับ Risk Score ทางการ) → ระดับ ${sepLab} ${r0.sepRisk!=null?r0.sepRisk:'–'} → ${r1.sepRisk!=null?r1.sepRisk:'–'}`;
+// ── แผงเจาะเกณฑ์ 7 คะแนน ณ ก.ย. (คลิก badge คอลัมน์ "ระดับ ก.ย.69 หลังช่วย") ──
+// EXBRK[hcode] = ระดับเป้าที่กำลังดูอยู่ในแผง (undefined = แผงปิด) — เป็นการดูรายแห่ง ไม่กระทบเป้าทั้งเขต (EXST.tgt)
+function exBrkToggle(hc){ if(EXBRK[hc]!=null) delete EXBRK[hc]; else EXBRK[hc]=EXST.tgt; exRender(); }
+function exBrkLvl(hc,L){ EXBRK[hc]=L; exRender(); }
+// เกณฑ์ทั้ง 7 คะแนน: LI 3 (CR/QR/Cash) + ST 2 (NWC/NI) + SU 0-2 = เต็ม 7 ตรงสูตรทางการ
+const EX_CRIT=[
+  {g:'LI',n:'CR',d:'สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน',th:'≥ 1.50',v:b=>b.cr,f:fmtR,ok:b=>b.cr>=1.5},
+  {g:'LI',n:'QR',d:'สินทรัพย์เร็ว (ไม่รวมสินค้าคงเหลือ) ÷ หนี้สินหมุนเวียน',th:'≥ 1.00',v:b=>b.qr,f:fmtR,ok:b=>b.qr>=1.0},
+  {g:'LI',n:'Cash ratio',d:'เงินสด+เทียบเท่า ÷ หนี้สินหมุนเวียน',th:'≥ 0.80',v:b=>b.cash,f:fmtR,ok:b=>b.cash>=0.8},
+  {g:'ST',n:'NWC',d:'สินทรัพย์หมุนเวียน − หนี้สินหมุนเวียน',th:'≥ 0',v:b=>b.nwc,f:fmtM,ok:b=>b.nwc>=0},
+  {g:'ST',n:'NI',d:'กำไร/ขาดทุนสุทธิสะสมทั้งปีงบ (มีค่าเสื่อม)',th:'≥ 0',v:b=>b.ni,f:fmtM,ok:b=>b.ni>=0},
+];
+// เดือนอยู่รอด/ฟื้นตัวของ SU (ตามสูตร 4-quadrant ใน scoreOf) — คืน null เมื่อ NWC/NI เป็นบวกทั้งคู่
+function exSuMonths(b){
+  const m=b.mo>0?b.mo:12, np=b.nwc>=0, ip=b.ni>=0;
+  if(np&&ip) return null;
+  if(!np&&!ip) return null;
+  if(np&&!ip){ const a=Math.abs(b.ni)/m; return {lbl:'เดือนที่ NWC จะหมด',v:a?b.nwc/a:null}; }
+  const a=b.ni/m; return {lbl:'เดือนที่กำไรดัน NWC กลับเป็นบวก',v:a?(-b.nwc)/a:null};
+}
+function exBrkHtml(x, sepLab){
+  const {h,r0}=x, hc=h.hcode, L=EXBRK[hc];
+  const injL=exSolveFor(h,L), rL=(injL!=null?exSimPath(h,injL):null);
+  const b0=r0.sepBreak, b1=rL?rL.sepBreak:null;
+  const lvlBtns=[0,1,2,3,4,5,6,7].map(l=>`<button type="button" class="lvlbtn${l===L?' on':''}" data-l="${l}" style="background:${riskColor(l)};width:30px;height:30px;font-size:13px;border-radius:8px" onclick="exBrkLvl('${hc}',${l})">${l}</button>`).join('');
+  const head=`<div class="brk-head">🔍 <b>${h.name}</b> — เกณฑ์ Risk Score ทั้ง 7 คะแนน ณ ${sepLab}
+    <span class="tgt-note">(ค่าที่จำลองได้ ณ ${sepLab} ไม่ใช่ค่าปัจจุบัน)</span></div>
+    <div class="brk-lvl"><span class="tgt-note">🎯 เลือกระดับเป้าที่ต้องการดู (เฉพาะ รพ.นี้ ไม่กระทบเป้าทั้งเขต):</span> <span class="lvlbtns" style="margin:0;gap:5px">${lvlBtns}</span></div>`;
+  if(!b0) return `<div class="ovsub-box">${head}<div class="note">งวดนี้ข้อมูลไม่พอสำหรับจำลอง (ไม่มีค่าดิบงบดุล)</div></div>`;
+  if(injL==null||!b1) return `<div class="ovsub-box">${head}
+    <div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>
+    <div class="note">ค่า ณ ${sepLab} ถ้าไม่ช่วยเลย: ${EX_CRIT.map(c=>`${c.n} ${c.f(c.v(b0))}${c.ok(b0)?'✓':'✗'}`).join(' · ')} · SU ${b0.su} → ระดับ ${r0.sepRisk!=null?r0.sepRisk:'–'}</div></div>`;
+  const pt=(ok)=>ok?'0':'1';
+  const rows=EX_CRIT.map(c=>{
+    const ok0=c.ok(b0), ok1=c.ok(b1), flip=ok0!==ok1;
+    return `<tr>
+      <td class="l"><b>${c.n}</b> <span class="tgt-note">${c.d}</span></td>
+      <td>${c.th}</td>
+      <td class="${ok0?'brk-ok':'brk-no'}">${c.f(c.v(b0))} ${ok0?'✓':'✗'}</td>
+      <td class="${ok1?'brk-ok':'brk-no'}">${c.f(c.v(b1))} ${ok1?'✓':'✗'}</td>
+      <td>${pt(ok0)} → ${pt(ok1)}${flip?(ok1?' <span class="brk-ok">✅ −1</span>':' <span class="brk-no">⚠️ +1</span>'):''}</td></tr>`;
+  }).join('');
+  const su0=exSuMonths(b0), su1=exSuMonths(b1);
+  const suTxt=b=>{ const s=exSuMonths(b); return s&&s.v!=null&&isFinite(s.v)?`${s.lbl} ≈ ${s.v.toFixed(1)} ด.`:(b.nwc>=0&&b.ni>=0?'NWC และ NI เป็นบวกทั้งคู่ = ปลอดภัย':'NWC และ NI ติดลบทั้งคู่ = แย่สุด'); };
+  const suRow=`<tr>
+    <td class="l"><b>SU</b> <span class="tgt-note">ระดับความอยู่รอด — 4 quadrant จาก NWC เทียบ NI (คิดได้ 0–2 คะแนน)</span></td>
+    <td>0 คะแนน</td>
+    <td class="${b0.su===0?'brk-ok':'brk-no'}">${suTxt(b0)}</td>
+    <td class="${b1.su===0?'brk-ok':'brk-no'}">${suTxt(b1)}</td>
+    <td>${b0.su} → ${b1.su}${b1.su<b0.su?` <span class="brk-ok">✅ −${b0.su-b1.su}</span>`:(b1.su>b0.su?` <span class="brk-no">⚠️ +${b1.su-b0.su}</span>`:'')}</td></tr>`;
+  const raw0=b0.li+b0.st+b0.su, raw1=b1.li+b1.st+b1.su;
+  const anchorNote=(r0.sepRisk!==raw0)?`<div class="note" style="margin-top:4px">📎 badge แสดง ${r0.sepRisk} ขณะที่ผลรวมเกณฑ์จำลองได้ ${raw0} — เพราะจุดตั้งต้นถูก anchor ให้ตรงกับ Risk Score ทางการงวด ${EX.periodLabel} (ระบบยึด badge ทางการเป็นหลัก แล้วบวก/ลบส่วนต่างที่จำลองได้)</div>`:'';
+  return `<div class="ovsub-box">${head}
+    <div class="acctbl-wrap" style="max-height:none">
+      <table class="acctbl brktbl">
+        <tr><th>เกณฑ์ (7 คะแนนเต็ม)</th><th>ผ่านเมื่อ</th><th>ก่อนช่วย ณ ${sepLab}</th><th>หลังช่วย ณ ${sepLab}</th><th>คะแนน</th></tr>
+        ${rows}${suRow}
+        <tr class="brk-tot"><td class="l"><b>รวมคะแนนความเสี่ยง</b></td><td>เป้า ≤ ${L}</td>
+          <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
+          <td><span class="badge" style="background:${riskColor(rL.sepRisk)}">${rL.sepRisk!=null?rL.sepRisk:'–'}</span></td>
+          <td><b>${raw0} → ${raw1}</b></td></tr>
+      </table>
+    </div>
+    <div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)'}</b>${injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>
+    ${anchorNote}
+    <div class="note">${r0.cashOut!=null?`⚠️ ถ้าไม่ช่วย เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(h.bs.t,r0.cashOut))}) · `:''}NI จำลอง ${fmtM(r0.niM)}/เดือน — เกณฑ์ NWC/NI/SU ขยับตามกำไรรายเดือนด้วย ไม่ใช่แค่เงินก้อน</div>
+  </div>`;
 }
 function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }
 function exHorLab(){ return (+EXST.ext||0)>0 ? tLab(addMo(exSepT(), +EXST.ext)) : tLab(exSepT()); }
@@ -1354,7 +1409,7 @@ function exRender(){
   const hist=lv=>{ const c={}; items.forEach(x=>{ const v=lv(x); if(v!=null) c[v]=(c[v]||0)+1; });
     return [7,6,5,4,3,2,1,0].filter(L=>c[L]).map(L=>`<span class="b" style="background:${riskColor(L)}">${L}×${c[L]}</span>`).join(''); };
   const rowsHtml=items.map(x=>{
-    const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc];
+    const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc], brkOpen=EXBRK[hc]!=null;
     const main=`<tr>
       <td>${h.prov||''}</td>
       <td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.cls?' '+h.cls:''}</span> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a></td>
@@ -1365,11 +1420,12 @@ function exRender(){
       <td>${r0.cashOut!=null?`<span class="tgt-warn">${r0.cashOut===0?'ติดลบแล้ว':'เดือน '+r0.cashOut+' ('+tLab(addMo(h.bs.t,r0.cashOut))+')'}</span>`:'<span style="color:var(--green)">ไม่หมด</span>'}</td>
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
       <td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>
-      <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b> ${tip(exNeedTip(x,sepLab))}${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<span class="tgt-note">–</span>')}</td>
-      <td><span class="badge" style="background:${riskColor(r1.sepRisk)}">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
+      <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<span class="tgt-note">–</span>')}</td>
+      <td><span class="badge brkbadge${brkOpen?' on':''}" style="background:${riskColor(r1.sepRisk)}" title="คลิกดูเกณฑ์ทั้ง 7 คะแนน ก่อน/หลังช่วย ณ ${sepLab} — เลือกดูระดับเป้าอื่นได้" onclick="exBrkToggle('${hc}')">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
     </tr>`;
-    if(!open) return main;
+    const brkRow=brkOpen?`<tr class="ovsub"><td colspan="12">${exBrkHtml(x,sepLab)}</td></tr>`:'';
+    if(!open) return main+brkRow;
     const segs=[];
     for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
       for(const g of ['op','ip','pp','oth']){ if(r[g]) segs.push({p,g,v:r[g]}); } }
@@ -1399,7 +1455,7 @@ function exRender(){
         </div></div>`;}).join('')}
       <div class="tgt-note"><a href="#" onclick="exResetOvr('${hc}');return false">↺ ล้างค่าปรับเองของ รพ.นี้ (กลับไปตามกลุ่ม/Solver)</a></div>
     </div></td></tr>`;
-    return main+sub;
+    return main+brkRow+sub;
   }).join('');
   EX_TSV=exBuildTSV(items, horLab);
   // tooltip ที่มาบัญชีของคอลัมน์ "เงินสด+เทียบเท่า" (จาก EX.cashDef ที่ export_exec.py ดึงตามผัง 1003X)
