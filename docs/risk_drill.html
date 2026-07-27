@@ -1037,6 +1037,21 @@ function exSolve(h){
   return hi;
 }
 function exInjOf(h, need){ const m=EXST.inj[h.hcode]; return m!=null?m:(need!=null?need:0); }
+// อธิบายต่อ รพ.: ทำไมต้องสนับสนุนเงินก้อนนี้ + เงินก้อนนี้ทำให้ระดับวิกฤตลดลงถึง ก.ย.69 ได้อย่างไร (ไอคอน ⓘ คอลัมน์ "เงินสนับสนุนที่ต้องใช้")
+function exNeedTip(x, sepLab){
+  const {h,inj,r0,r1}=x, bs=h.bs;
+  const cr=bs.cl?bs.ca/bs.cl:null, qr=bs.cl?bs.qn/bs.cl:null, cash=bs.cl?bs.cn/bs.cl:null, nwc=bs.ca-bs.cl;
+  const why=[];
+  if(cr!=null&&cr<1.5) why.push(`CR ${fmtR(cr)}<1.5`);
+  if(qr!=null&&qr<1.0) why.push(`QR ${fmtR(qr)}<1.0`);
+  if(cash!=null&&cash<0.8) why.push(`Cash ${fmtR(cash)}<0.8`);
+  if(nwc<0) why.push(`NWC ติดลบ ${fmtM(nwc)}`);
+  if(r0.niM<0) why.push(`NI จำลอง ${fmtM(r0.niM)}/ด. ยังขาดทุน`);
+  const cashTxt=r0.cashOut!=null?` · เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(bs.t,r0.cashOut))})`:'';
+  return `**ทำไมต้องช่วย**: ${why.length?why.join(' · '):'ยังไม่เข้าเกณฑ์สภาพคล่อง/กำไร'}${cashTxt} → ระดับก่อนช่วย ${r0.sepRisk!=null?r0.sepRisk:'–'}\n`+
+    `**วิธีที่ช่วย**: เติมเงิน ${fmtM(inj)} เข้าสินทรัพย์หมุนเวียน+สินทรัพย์เร็ว+เงินสด (ca/qn/cn) พร้อมกันตั้งแต่เดือน 0 → ดัน CR/QR/Cash ratio และ NWC ให้พ้นเกณฑ์ทันที กันเงินสดไม่ให้หมดตลอดช่วงจำลองถึง ${sepLab}\n`+
+    `**ผล**: ระดับ ${sepLab} ${r0.sepRisk!=null?r0.sepRisk:'–'} → ${r1.sepRisk!=null?r1.sepRisk:'–'} — เป็นก้อนต่ำสุดที่ Solver หาได้ (เติมน้อยกว่านี้ระดับจะยังเกินเป้า)`;
+}
 function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }
 function exHorLab(){ return (+EXST.ext||0)>0 ? tLab(addMo(exSepT(), +EXST.ext)) : tLab(exSepT()); }
 // ── Render หลักของแท็บ ──
@@ -1337,7 +1352,7 @@ function exRender(){
       <td>${r0.cashOut!=null?`<span class="tgt-warn">${r0.cashOut===0?'ติดลบแล้ว':'เดือน '+r0.cashOut+' ('+tLab(addMo(h.bs.t,r0.cashOut))+')'}</span>`:'<span style="color:var(--green)">ไม่หมด</span>'}</td>
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
       <td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>
-      <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<b>฿0</b>')}</td>
+      <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b> ${tip(exNeedTip(x,sepLab))}${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<span class="tgt-note">–</span>')}</td>
       <td><span class="badge" style="background:${riskColor(r1.sepRisk)}">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
     </tr>`;
