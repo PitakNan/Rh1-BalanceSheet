@@ -297,6 +297,7 @@ table.brktbl th:nth-child(5),table.brktbl td:nth-child(5){background:var(--mid-b
 table.brktbl th:nth-child(6),table.brktbl td:nth-child(6){border-left:1px solid var(--line);font-size:11.5px;white-space:nowrap}
 table.brktbl .brk-ok{color:var(--green);font-weight:600}
 table.brktbl .brk-no{color:var(--red);font-weight:600}
+table.brktbl .brk-d{display:block;font-size:10.5px;font-weight:400;color:var(--mut)}
 table.brktbl tr.brk-tot td{border-top:1.5px solid var(--line);border-bottom:none;font-size:13px}
 /* ── Executive tab (แนวทางสำหรับผู้บริหาร) ── */
 .extbl input[type=range]{width:150px;max-width:38vw;accent-color:var(--blue);cursor:pointer;vertical-align:middle}
@@ -1087,6 +1088,12 @@ function exBrkHtml(x, sepLab){
   if(!b0||!bN) return `<div class="ovsub-box">${head}<div class="note">งวดนี้ข้อมูลไม่พอสำหรับจำลอง (ไม่มีค่าดิบงบดุล)</div></div>`;
   const suTxt=b=>{ const s=exSuMonths(b); return s&&s.v!=null&&isFinite(s.v)?`${s.lbl} ≈ ${s.v.toFixed(1)} ด.`:(b.nwc>=0&&b.ni>=0?'NWC และ NI เป็นบวกทั้งคู่ = ปลอดภัย':'NWC และ NI ติดลบทั้งคู่ = แย่สุด'); };
   const cell=(c,b)=>b?`<td class="${c.ok(b)?'brk-ok':'brk-no'}">${c.f(c.v(b))} ${c.ok(b)?'✓':'✗'}</td>`:'<td class="tgt-note">–</td>';
+  // คอลัมน์ "หลังช่วย" แสดงส่วนต่างจากก่อนช่วยด้วย — คำนวณจากค่าจริง ไม่ใช่จากค่าที่ปัดแล้ว
+  // (ปัด 2 ตำแหน่งทำให้ CR/QR/Cash ที่เพิ่มเท่ากันเป๊ะดูเหมือนต่างกัน 0.01)
+  const cellD=(c,bA,bB)=>{ if(!bB) return '<td class="tgt-note">–</td>';
+    const d=c.v(bB)-c.v(bA), dz=Math.abs(d)<1e-9;
+    return `<td class="${c.ok(bB)?'brk-ok':'brk-no'}">${c.f(c.v(bB))} ${c.ok(bB)?'✓':'✗'}
+      <span class="brk-d">${dz?'เท่าเดิม':(d>0?'+':'−')+c.f(Math.abs(d))}</span></td>`; };
   const suCell=b=>b?`<td class="${b.su===0?'brk-ok':'brk-no'}">${suTxt(b)}</td>`:'<td class="tgt-note">–</td>';
   const pt=ok=>ok?'0':'1';
   const noFit=(injL==null||!b1);   // เป้านี้เงินก้อนอย่างเดียวไม่พอ — ยังแสดง 2 คอลัมน์แรก คอลัมน์ "หลังช่วย" เป็น –
@@ -1097,7 +1104,7 @@ function exBrkHtml(x, sepLab){
     return `<tr>
       <td class="l"><b>${c.n}</b> <span class="tgt-note">${c.d}</span></td>
       <td>${c.th}</td>
-      ${cell(c,bN)}${cell(c,b0)}${cell(c,b1)}
+      ${cell(c,bN)}${cell(c,b0)}${cellD(c,b0,b1)}
       <td>${scoreTxt}</td></tr>`;
   }).join('');
   const suRow=`<tr>
@@ -1106,6 +1113,9 @@ function exBrkHtml(x, sepLab){
     ${suCell(bN)}${suCell(b0)}${suCell(b1)}
     <td>${bN.su} → ${b0.su} → ${b1?b1.su:'–'}${b1&&b1.su<b0.su?` <span class="brk-ok">✅ −${b0.su-b1.su}</span>`:(b1&&b1.su>b0.su?` <span class="brk-no">⚠️ +${b1.su-b0.su}</span>`:'')}</td></tr>`;
   const rawN=bN.li+bN.st+bN.su, raw0=b0.li+b0.st+b0.su, raw1=b1?b1.li+b1.st+b1.su:null;
+  // ทำไม CR/QR/Cash ขยับเท่ากันเป๊ะ: เงินก้อนบวกเข้าทั้ง 3 ตัวเศษ (CA/สินทรัพย์เร็ว/เงินสด) ตัวส่วน (CL) ไม่เปลี่ยน
+  // → Δ = เงินก้อน ÷ CL เท่ากันทั้งสาม · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 (ตัวเลข Δ ที่โชว์คิดจากค่าจริง)
+  const ratioNote=(b1&&injL>0)?`<div class="note" style="margin-top:4px">🧮 <b>ทำไม CR/QR/Cash ขยับเท่ากันทั้งสามตัว:</b> เงินก้อน ${fmtM(injL)} บวกเข้าทั้งสามตัวเศษ (สินทรัพย์หมุนเวียน · สินทรัพย์เร็ว · เงินสด) พร้อมกัน โดยตัวส่วนคือหนี้สินหมุนเวียน ${fmtM(bs.cl)} เท่าเดิม → ทั้งสามเพิ่มขึ้น <b>+${(injL/bs.cl).toFixed(4)}</b> เท่ากันเป๊ะ (= ${fmtM(injL)} ÷ ${fmtM(bs.cl)}) · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 — เลข Δ ที่แสดงคิดจากค่าจริงก่อนปัด · NWC เพิ่มเท่าเงินก้อนพอดี ส่วน NI ไม่เปลี่ยน เพราะเงินก้อนเป็นรายการทางงบดุล ไม่ใช่รายได้</div>`:'';
   const anchorNote=(h.risk!==rawN)?`<div class="note" style="margin-top:4px">📎 badge ปัจจุบันแสดง ${h.risk} ขณะที่ผลรวมเกณฑ์จากงบทดลองคำนวณได้ ${rawN} — ระบบยึด Risk Score ทางการงวด ${nowLab} เป็นจุดตั้งต้น (anchor) แล้วบวก/ลบส่วนต่างที่จำลองได้ ตัวเลขในคอลัมน์จำลองจึงอ่านเป็น "ทิศทางการเปลี่ยนแปลง" เทียบกับ badge ทางการ</div>`:'';
   return `<div class="ovsub-box">${head}
     <div class="acctbl-wrap" style="max-height:none">
@@ -1122,6 +1132,7 @@ function exBrkHtml(x, sepLab){
     ${noFit?`<div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>`:''}
     <div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${noFit?'เงินก้อนอย่างเดียวไม่พอ':(injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)')}</b>${!noFit&&injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>
     ${anchorNote}
+    ${ratioNote}
     <div class="note">${r0.cashOut!=null?`⚠️ ถ้าไม่ช่วย เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(h.bs.t,r0.cashOut))}) · `:''}NI จำลอง ${fmtM(r0.niM)}/เดือน — เกณฑ์ NWC/NI/SU ขยับตามกำไรรายเดือนด้วย ไม่ใช่แค่เงินก้อน</div>
   </div>`;
 }
