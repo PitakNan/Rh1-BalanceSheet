@@ -832,7 +832,7 @@ function ovRender(){
       </table>
     </div>
     ${summary}
-    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">ความแม่นยำ: เกณฑ์คะแนน (CR/QR/Cash/NWC/NI/SU) ตรงสูตรทางการกองเศรษฐกิจสุขภาพฯ ทุกข้อ — จุดตั้งต้นเดือน 0 ตรง badge ทางการทั้ง ${items.length} แห่ง · สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม run-rate − เร่งชำระหนี้สุทธิ · เร่งเก็บลูกหนี้เพิ่มเฉพาะเงินสด (Cash Ratio) ไม่เพิ่ม CA/NWC · NI สะสมรีเซ็ต ต.ค. · ไม่มี seasonality — เป็นการจำลองเชิงสถานการณ์เพื่อวางแผน ไม่ใช่พยากรณ์</div>`;
+    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">ความแม่นยำ: เกณฑ์คะแนน (CR/QR/Cash/NWC/NI/SU) ตรงสูตรทางการกองเศรษฐกิจสุขภาพฯ ทุกข้อ — จุดตั้งต้นเดือน 0 ตรง badge ที่แสดงทั้ง ${items.length} แห่ง${(()=>{const g=items.filter(o=>o.h&&o.h.source==='gl').length; return g===items.length?' (คะแนนคำนวณจากงบทดลอง — งวดนี้ยังไม่มีคะแนนที่ รพ. รายงาน)':(g?` (ในนั้น ${g} แห่งเป็นคะแนนคำนวณจากงบทดลอง)`:' (คะแนนทางการที่ รพ. รายงาน)');})()} · สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม run-rate − เร่งชำระหนี้สุทธิ · เร่งเก็บลูกหนี้เพิ่มเฉพาะเงินสด (Cash Ratio) ไม่เพิ่ม CA/NWC · NI สะสมรีเซ็ต ต.ค. · ไม่มี seasonality — เป็นการจำลองเชิงสถานการณ์เพื่อวางแผน ไม่ใช่พยากรณ์</div>`;
 }
 function ovBuildTSV(items, L, sepLab){
   const M=v=>(v/1e6).toFixed(2);
@@ -1152,6 +1152,9 @@ function exSuMonths(b){
 }
 function exBrkHtml(x, sepLab){
   const {h,r0}=x, hc=h.hcode, L=EXBRK[hc], bs=h.bs, nowLab=EX.periodLabel;
+  // ที่มาของคะแนนตั้งต้น: "rep" = รพ.รายงานเข้า risk_scores (ทางการ) · "gl" = คำนวณจากงบทดลอง
+  // งวดที่ risk_scores ยังไม่ส่ง ทุกแห่งจะเป็น gl — ต้องไม่เรียกว่า "ทางการ" ให้ผู้ใช้เข้าใจผิด
+  const srcLab=(h.src==='gl')?'คำนวณจากงบทดลอง':(h.src?'ทางการ (รพ.รายงาน)':'');
   const sep0=r0.sepRisk;
   // 3 โหมดตามความสัมพันธ์ระหว่างเป้า L กับระดับที่จะเป็น ณ ก.ย. ถ้าไม่ช่วย (sep0) — ตรงกับ semantic ของ Simulator เดิม
   //   L < sep0 : แผนลดวิกฤต (หาเงินก้อนขั้นต่ำ)
@@ -1216,7 +1219,7 @@ function exBrkHtml(x, sepLab){
   // ทำไม CR/QR/Cash ขยับเท่ากันเป๊ะ: เงินก้อนบวกเข้าทั้ง 3 ตัวเศษ (CA/สินทรัพย์เร็ว/เงินสด) ตัวส่วน (CL) ไม่เปลี่ยน
   // → Δ = เงินก้อน ÷ CL เท่ากันทั้งสาม · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 (ตัวเลข Δ ที่โชว์คิดจากค่าจริง)
   const ratioNote=(b1&&injL>0)?`<div class="note" style="margin-top:4px">🧮 <b>ทำไม CR/QR/Cash ขยับเท่ากันทั้งสามตัว:</b> เงินก้อน ${fmtM(injL)} บวกเข้าทั้งสามตัวเศษ (สินทรัพย์หมุนเวียน · สินทรัพย์เร็ว · เงินสด) พร้อมกัน โดยตัวส่วนคือหนี้สินหมุนเวียน ${fmtM(bs.cl)} เท่าเดิม → ทั้งสามเพิ่มขึ้น <b>+${(injL/bs.cl).toFixed(4)}</b> เท่ากันเป๊ะ (= ${fmtM(injL)} ÷ ${fmtM(bs.cl)}) · ค่าในตารางปัด 2 ตำแหน่งจึงอาจอ่านได้ต่างกัน 0.01 — เลข Δ ที่แสดงคิดจากค่าจริงก่อนปัด · <b>NWC และ NI เพิ่มขึ้นเท่าเงินก้อนพอดี</b> เพราะรับรู้เงินสนับสนุนเป็น<b>รายได้เงินอุดหนุนจากหน่วยงานภาครัฐ</b> ตามผัง MOPH (หลักเดียวกับ Option ยกหนี้)</div>`:'';
-  const anchorNote=(h.risk!==rawN)?`<div class="note" style="margin-top:4px">📎 badge ปัจจุบันแสดง ${h.risk} ขณะที่ผลรวมเกณฑ์จากงบทดลองคำนวณได้ ${rawN} — ระบบยึด Risk Score ทางการงวด ${nowLab} เป็นจุดตั้งต้น (anchor) แล้วบวก/ลบส่วนต่างที่จำลองได้ ตัวเลขในคอลัมน์จำลองจึงอ่านเป็น "ทิศทางการเปลี่ยนแปลง" เทียบกับ badge ทางการ</div>`:'';
+  const anchorNote=(h.risk!==rawN)?`<div class="note" style="margin-top:4px">📎 badge ปัจจุบันแสดง ${h.risk} ขณะที่ผลรวมเกณฑ์จากงบทดลองคำนวณได้ ${rawN} — ระบบยึดคะแนนงวด ${nowLab} (${srcLab}) เป็นจุดตั้งต้น (anchor) แล้วบวก/ลบส่วนต่างที่จำลองได้ ตัวเลขในคอลัมน์จำลองจึงอ่านเป็น "ทิศทางการเปลี่ยนแปลง" เทียบกับ badge</div>`:'';
   // ── ตาราง "ปัจจัยที่จะทำให้ตกระดับ" — ทุกระดับที่แย่กว่าระดับที่จะเป็น (sep0+1 … 7) × 3 ช่องทางบัญชี ──
   // ตอบคำถาม: ใช้เงินเพิ่มกี่บาท / รายได้ลดกี่บาท / ทั้งสองปัจจัยรวมกันเท่าไหร่ ถึงจะตกไปแต่ละระดับ
   // 3 ช่องทางให้ตัวเลขต่างกันจริงเพราะกระทบ ratio ต่างจุด (เงินสดลด vs ตัวส่วนโต vs สินทรัพย์เร็วลด)
@@ -1302,7 +1305,7 @@ function exBrkHtml(x, sepLab){
         <tr><th>เกณฑ์ (7 คะแนนเต็ม)</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน<br>(${nowLab})</th><th>ณ ${sepLab}<br>ก่อนช่วย</th><th>${col5}</th><th>${scoreHd}</th></tr>
         ${rows}${suRow}${resRow}
         <tr class="brk-tot"><td class="l"><b>รวมคะแนนความเสี่ยง</b></td><td>${mode==='ceiling'?'ดูระดับ '+L:'เป้า ≤ '+L}</td>
-          <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> <span class="tgt-note">ทางการ</span></td>
+          <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> <span class="tgt-note">${srcLab}</span></td>
           <td><span class="badge" style="background:${riskColor(sep0)}">${sep0!=null?sep0:'–'}</span></td>
           <td>${bX?`<span class="badge" style="background:${riskColor(risk5)}">${risk5!=null?risk5:'–'}</span>`:'<span class="tgt-note">–</span>'}</td>
           <td><b>${rawN} → ${raw0} → ${rawX!=null?rawX:'–'}</b></td></tr>
@@ -1314,6 +1317,16 @@ function exBrkHtml(x, sepLab){
     ${ratioNote}
     <div class="note">${r0.cashOut!=null?`⚠️ ถ้าไม่ช่วย เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(h.bs.t,r0.cashOut))}) · `:''}NI จำลอง ${fmtM(r0.niM)}/เดือน — เกณฑ์ NWC/NI/SU ขยับตามกำไรรายเดือนด้วย ไม่ใช่แค่เงินก้อน</div>
   </div>`;
+}
+// สรุปที่มาของคะแนนตั้งต้นทั้งชุด — ใช้ในข้อความ "ที่มา" ทุกจุดของแท็บ กันการเรียก "ทางการ" ผิด
+// (งวดที่ risk_scores ยังไม่ส่งข้อมูล ทุกแห่งจะเป็น gl = คำนวณจากงบทดลอง ไม่ใช่ค่าที่ รพ. รายงาน)
+function exRiskSrcLab(){
+  const hs=EX.hosp||[], n=hs.length, c={};
+  hs.forEach(h=>{ c[h.src||'?']=(c[h.src||'?']||0)+1; });
+  if(!n) return 'Risk Score';
+  if(c.gl===n) return `คะแนนที่คำนวณจากงบทดลอง (งวดนี้ยังไม่มีคะแนนที่ รพ. รายงานเข้าระบบ risk_scores)`;
+  if(c.rep===n) return 'Risk Score ทางการที่ รพ. รายงาน';
+  return `คะแนนตั้งต้นแบบผสม — ทางการที่ รพ. รายงาน ${c.rep||0} แห่ง · คำนวณจากงบทดลอง ${c.gl||0} แห่ง`;
 }
 function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }
 function exHorLab(){ return (+EXST.ext||0)>0 ? tLab(addMo(exSepT(), +EXST.ext)) : tLab(exSepT()); }
@@ -1335,7 +1348,7 @@ async function renderExec(){
     </div>
     <div class="panel">
       <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง <span id="exHorLab2">${sepLab}</span> ด้วยโมเดล MOE</h3>
-      <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + Risk Score ทางการ</div>
+      <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + ${exRiskSrcLab()}</div>
       <div class="exctl" style="margin-top:10px">
         <span class="seg" style="display:inline-flex">
           <button id="exC67" class="${EXST.crisis==='67'?'on':''}" onclick="exSet('crisis','67')">🚨 วิกฤต 6-7</button>
@@ -1357,7 +1370,7 @@ async function renderExec(){
     <div class="panel" style="margin-top:14px" id="exRevBox"></div>
     <div class="panel" style="margin-top:14px" id="exTjBox"></div>
     <div class="panel" style="margin-top:14px" id="exResBox"></div>
-    <div class="gap-note" style="margin-top:14px">⚙️ สมมติฐาน: <b>NI จำลอง/เดือน = Σรายรับกองทุน×(1+%ปรับ) − MOE (นิยามกองเศรษฐกิจสุขภาพ) − คชจ.นอกนิยาม (run-rate) − รายการไม่ใช่เงินสด</b> · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด · ค่าเฉลี่ยรายรับ/รายจ่ายมาจากยอดจริงสะสม ${EX.monthsElapsed} เดือน (ต.ค.–${EX.periodLabel}) จากงบทดลอง — <b>รวมส่วนต่ำ/ส่วนสูงแล้ว</b> · เงินสนับสนุน = เงินก้อนครั้งเดียวเดือน 0 เพิ่ม CA/QN/เงินสด <b>และรับรู้เป็นรายได้เงินอุดหนุนจากหน่วยงานภาครัฐเข้า NI ด้วย</b> (ตามผัง MOPH หลักเดียวกับ Option ยกหนี้ — CFO กำหนด 27 ก.ค. 69) · เกณฑ์คะแนน CR/QR/Cash/NWC/NI/SU ตรงสูตรทางการกองเศรษฐกิจสุขภาพชุดเดียวกับหน้าจำลองเดิม · จุดตั้งต้นเดือน 0 ตรง badge ทางการ · เป็นการจำลองเชิงสถานการณ์เพื่อวางแผนจัดสรร ไม่ใช่พยากรณ์ — ที่มารายบัญชีของแต่ละส่วนดูในหัวข้อนั้น ๆ</div>
+    <div class="gap-note" style="margin-top:14px">⚙️ สมมติฐาน: <b>NI จำลอง/เดือน = Σรายรับกองทุน×(1+%ปรับ) − MOE (นิยามกองเศรษฐกิจสุขภาพ) − คชจ.นอกนิยาม (run-rate) − รายการไม่ใช่เงินสด</b> · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด · ค่าเฉลี่ยรายรับ/รายจ่ายมาจากยอดจริงสะสม ${EX.monthsElapsed} เดือน (ต.ค.–${EX.periodLabel}) จากงบทดลอง — <b>รวมส่วนต่ำ/ส่วนสูงแล้ว</b> · เงินสนับสนุน = เงินก้อนครั้งเดียวเดือน 0 เพิ่ม CA/QN/เงินสด <b>และรับรู้เป็นรายได้เงินอุดหนุนจากหน่วยงานภาครัฐเข้า NI ด้วย</b> (ตามผัง MOPH หลักเดียวกับ Option ยกหนี้ — CFO กำหนด 27 ก.ค. 69) · เกณฑ์คะแนน CR/QR/Cash/NWC/NI/SU ตรงสูตรทางการกองเศรษฐกิจสุขภาพชุดเดียวกับหน้าจำลองเดิม · จุดตั้งต้นเดือน 0 ตรง badge ที่แสดง (${exRiskSrcLab()}) · เป็นการจำลองเชิงสถานการณ์เพื่อวางแผนจัดสรร ไม่ใช่พยากรณ์ — ที่มารายบัญชีของแต่ละส่วนดูในหัวข้อนั้น ๆ</div>
   </div>`;
   exRender();
 }
@@ -1698,7 +1711,7 @@ function exRender(){
       ${EXST.tj.mode==='smart'?`<div class="tgt-row" style="font-weight:600">💵 เขตต้องใช้เงินรวม ≈ คืนเจาะจง ${fmtM(refundTot)} + สนับสนุน ${fmtM(sumNeed)} = <b style="color:var(--blue)">${fmtM(refundTot+sumNeed)}</b></div>`
       :EXST.tj.mode==='forgive'?`<div class="tgt-row" style="font-weight:600">💵 รวมความช่วยเหลือ ≈ ยกหนี้ ${fmtM(EXTJ.total)} + สนับสนุน ${fmtM(sumNeed)} = <b style="color:var(--blue)">${fmtM(EXTJ.total+sumNeed)}</b> <span class="tgt-note" style="font-weight:400">(ยกหนี้ = เคลียร์หนี้ระหว่าง รพ. ในเขต · เงินสดใหม่จากเขต = สนับสนุน ${fmtM(sumNeed)})</span></div>`:''}
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
-      <div class="tgt-row tgt-note"><b>ที่มา:</b> ระดับตอนนี้ = Risk Score ทางการงวด ${EX.periodLabel} (badge เดียวกับหน้าหลัก) · MOE = นิยามกองเศรษฐกิจสุขภาพ (ดูรายบัญชีใน panel MOE) · เงินสนับสนุน = ผล Solver หาค่าต่ำสุดที่ทำให้ระดับ ณ ${horLab} ≤ ${EXST.tgt} และเงินสดไม่หมดระหว่างทาง (ปรับเองรายแห่งได้ในปุ่ม "ปรับรายแห่ง")</div>
+      <div class="tgt-row tgt-note"><b>ที่มา:</b> ระดับตอนนี้ = คะแนนงวด ${EX.periodLabel} — ${exRiskSrcLab()} (badge เดียวกับหน้าหลัก) · MOE = นิยามกองเศรษฐกิจสุขภาพ (ดูรายบัญชีใน panel MOE) · เงินสนับสนุน = ผล Solver หาค่าต่ำสุดที่ทำให้ระดับ ณ ${horLab} ≤ ${EXST.tgt} และเงินสดไม่หมดระหว่างทาง (ปรับเองรายแห่งได้ในปุ่ม "ปรับรายแห่ง")</div>
     </div>`;
   if(exScrollEl) exScrollEl.scrollTop=exScrollTop;
 }

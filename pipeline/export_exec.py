@@ -189,6 +189,10 @@ def main():
             "hcode": org5, "name": h.get("name"), "prov": h.get("prov"),
             "grp": grp, "type": typ, "cls": h.get("typeSer"), "bed": h.get("bed"),
             "risk": s.get("risk"),
+            # ที่มาของคะแนน: "rep" = ค่าที่ รพ. รายงานเข้า risk_scores (ทางการ) · "gl" = คำนวณจากงบทดลอง
+            # ⚠️ สำคัญต่อการสื่อสาร: งวดที่ risk_scores ยังไม่มีข้อมูล (เช่น 256909) ทุกแห่งจะเป็น "gl"
+            # หน้าเว็บต้องไม่เรียกว่า "ทางการ" ในกรณีนั้น (ดู RISK_EXEC_MODEL.md หัวข้อ 1)
+            "src": s.get("source"),
             "bs": {"t": int(t["t"]), "mo": mo, "ca": t["ca"], "cl": t["cl"], "qn": t["qn"],
                    "cn": t["cn"], "ni": t["ni"],
                    # non-cash/เดือน = ค่าเสื่อม+ตัดจำหน่าย+หนี้สูญ (ดูเหตุผลที่ NONCASH_P ด้านบน)
