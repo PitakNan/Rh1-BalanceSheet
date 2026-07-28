@@ -1270,6 +1270,27 @@ function exBrkHtml(x, sepLab){
     return `<div class="note" style="margin-top:4px">💧 <b>กลไกเมื่อเงินไม่พอ (เกณฑ์คงค้าง):</b> เงินสด ${fmtM(bs.cn)} ต้องกันไว้จ่าย MOE อีก ${Math.max(0,12-bs.mo)} เดือน (${fmtM(r0.moeMo)}/ด. = <b>${fmtM(r0.resNeed0)}</b>) จึงใช้จ่ายอย่างอื่นได้ ${tight?'<b class="brk-no">0 บาท</b> (เงินสดยังน้อยกว่าเงินสำรองที่ต้องกัน '+fmtM(r0.resNeed0-bs.cn)+')':'<b>'+fmtM(r0.cashAvail0)+'</b>'}
       → ส่วนที่จ่ายไม่ได้ <b class="brk-no">${fmtM(rr.owedAdd)}</b> ค้างเป็น<b>เจ้าหนี้</b> (หนี้สินหมุนเวียน ${fmtM(bs.cl)} → ${fmtM(rr.clEnd)}) ไม่ใช่ปล่อยให้เงินสดติดลบ — ยอดคงเหลือติดลบเป็นไปไม่ได้ทางบัญชี</div>`;
   })();
+  // ── ปัจจัยเสี่ยง "เงินรับโอนจากหน่วยงานในสังกัดหยุด" (ดู RISK_EXEC_MODEL.md หัวข้อ 3.7) ──
+  // ต่างจากปัจจัยเสี่ยงอื่นในตารางข้างบน: อันนั้นถามว่า "ต้องเกิดเท่าไหร่จึงตกระดับ" (สมมติขึ้น)
+  // อันนี้เป็น "ปัจจัยที่มีขนาดจริงวัดได้จากงบทดลอง" — เงินที่ สสจ./รพ. อื่นโอนมาให้ ซึ่ง baseline
+  // สมมติว่าจะโอนต่อในอัตราเดิมถึงสิ้นปีงบ · ถ้าหยุด NI/สภาพคล่องหายไปทันที
+  // trf.op = 4313010199.114/115/117/119-123 (เงินดำเนินงาน/สินค้า/วัสดุ) — ไม่รวม .116/.118
+  // (ครุภัณฑ์-ที่ดิน/งบลงทุน) เพราะไม่ใช่เงินหมุนเวียน · บัญชีชุดนี้อยู่ใน rev แล้ว ไม่ได้บวกซ้ำ
+  const trfNote=(()=>{
+    const T=h.trf; if(!T||!(T.op>0)) return '';
+    const moLeft=Math.max(0,12-bs.mo); if(!moLeft) return '';
+    const perMo=T.op/bs.mo, stop=perMo*moLeft;
+    const rs=exSimPath(h,-stop), lv=rs.sepRisk;
+    const worse=(lv!=null&&sep0!=null&&lv>sep0);
+    const invTxt=T.inv>0?` <span class="tgt-note">(ไม่นับครุภัณฑ์/งบลงทุนที่รับโอนอีก ${fmtM(T.inv)} เพราะไม่ใช่เงินหมุนเวียน)</span>`:'';
+    return `<div class="note" style="margin-top:4px">💸 <b>ถ้าเงินรับโอนจากหน่วยงานในสังกัดหยุด:</b> งวดนี้รับมาแล้ว <b>${fmtM(T.op)}</b> (≈ ${fmtM(perMo)}/เดือน)${invTxt}
+      — ถ้าหยุดโอนตั้งแต่เดือนนี้ถึง ${sepLab} จะหายไป <b class="brk-no">${fmtM(stop)}</b> →
+      ระดับ ณ ${sepLab} ${sep0!=null?`<span class="badge" style="background:${riskColor(sep0)}">${sep0}</span> →`:''}
+      <span class="badge" style="background:${riskColor(lv)}">${lv!=null?lv:'–'}</span>
+      ${worse?`<b class="brk-no">⚠️ แย่ลง ${lv-sep0} ระดับ</b>`:'<span class="brk-ok">✅ ระดับไม่เปลี่ยน</span>'}
+      ${rs.owedAdd>0?` · เจ้าหนี้เพิ่ม <span class="brk-no">${fmtM(rs.owedAdd)}</span>`:''}
+      <br><span class="tgt-note">เทียบได้กับคอลัมน์ ① ในตารางด้านบน (ทั้งคู่เป็นรายได้เงินสดไม่เข้า) · เป็นปัจจัยที่<b>เขต/จังหวัดควบคุมได้เอง</b> ต่างจากปัจจัยเสี่ยงอื่น — ยอด baseline รวมเงินก้อนนี้อยู่แล้ว จึงเป็นการถามว่า "ถ้าของที่มีอยู่หายไป" ไม่ใช่การเพิ่มความเสี่ยงใหม่</span></div>`;
+  })();
   // ── กล่องสรุปตามโหมด ──
   const tjHint=(bs&&h.tj&&h.tj.payIn>0)?` · ลดได้ด้วย<b>การยกหนี้ค่ารักษาตามจ่าย</b> (มีเจ้าหนี้ตามจ่ายอยู่ ${fmtM(h.tj.payIn)}) — เลือก Option "ยกหนี้" ในแผงด้านบน`:'';
   let modeBox;
@@ -1316,6 +1337,7 @@ function exBrkHtml(x, sepLab){
     </div>
     ${modeBox}
     ${cashNote}
+    ${trfNote}
     ${anchorNote}
     ${ratioNote}
     <div class="note">${r0.cashOut!=null?`⚠️ ถ้าไม่ช่วย เงินสดจะหมดเดือน ${r0.cashOut} (${tLab(addMo(h.bs.t,r0.cashOut))}) · `:''}NI จำลอง ${fmtM(r0.niM)}/เดือน — เกณฑ์ NWC/NI/SU ขยับตามกำไรรายเดือนด้วย ไม่ใช่แค่เงินก้อน</div>
