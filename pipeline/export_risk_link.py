@@ -142,8 +142,12 @@ gl["opMargin_gl"] = (gl["ebitda_gl"] / gl["3200Y"].where(gl["3200Y"] != 0)) * 10
 gl["roa_gl"]      = (gl["ni_gl"] / gl["3210Y"].where(gl["3210Y"] != 0)) * 100
 
 # LI/ST คำนวณจากเกณฑ์ที่ยืนยันแล้ว (ตรง 100% กับรายงานจริง) — ใช้เป็น fallback + ใช้โชว์ trigger เสมอ
+# ⚠️ ปัด CR/QR/Cash เป็น 2 ตำแหน่งก่อนเทียบเกณฑ์ — HFO ทำแบบนี้ (ยืนยัน 29 ก.ค. 69 หัวข้อ 3.11):
+#    รพ.เชียงกลาง งวด 256908 QR จริง 0.996 แต่ไฟล์ทางการแสดง 1.00 และให้ 0 คะแนน (ไม่ใช่ 1)
+#    ปัดแล้วตรงกับไฟล์ทางการ 103/103 · ไม่ปัดตรง 102/103 — ห้ามถอดออก
 month_of = gl["t"] % 100
-gl["li_gl"] = (gl["cr_gl"] < 1.5).astype(int) + (gl["qr_gl"] < 1.0).astype(int) + (gl["cash_gl"] < 0.8).astype(int)
+_cr2, _qr2, _cash2 = gl["cr_gl"].round(2), gl["qr_gl"].round(2), gl["cash_gl"].round(2)
+gl["li_gl"] = (_cr2 < 1.5).astype(int) + (_qr2 < 1.0).astype(int) + (_cash2 < 0.8).astype(int)
 gl["st_gl"] = (gl["nwc_gl"] < 0).astype(int) + (gl["ni_gl"] < 0).astype(int)
 
 # SU (Survival Index) — สูตรทางการฉบับเต็ม 4 quadrant (ยืนยันจากชีท "7 Risk Scoring plus"

@@ -883,7 +883,7 @@ function ovRender(){
       </table>
     </div>
     ${summary}
-    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">ความแม่นยำ: เกณฑ์คะแนน (CR/QR/Cash/NWC/NI/SU) ตรงสูตรทางการกองเศรษฐกิจสุขภาพฯ ทุกข้อ — จุดตั้งต้นเดือน 0 ตรง badge ที่แสดงทั้ง ${items.length} แห่ง${(()=>{const g=items.filter(o=>o.h&&o.h.source==='gl').length; return g===items.length?' (คะแนนคำนวณจากงบทดลอง — งวดนี้ยังไม่มีคะแนนที่ รพ. รายงาน)':(g?` (ในนั้น ${g} แห่งเป็นคะแนนคำนวณจากงบทดลอง)`:' (คะแนนทางการที่ รพ. รายงาน)');})()} · สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม run-rate − เร่งชำระหนี้สุทธิ · เร่งเก็บลูกหนี้เพิ่มเฉพาะเงินสด (Cash Ratio) ไม่เพิ่ม CA/NWC · NI สะสมรีเซ็ต ต.ค. · ไม่มี seasonality — เป็นการจำลองเชิงสถานการณ์เพื่อวางแผน ไม่ใช่พยากรณ์</div>`;
+    <div class="tgt-row tgt-note" style="border-top:1px dashed var(--line)">ความแม่นยำ: เกณฑ์คะแนน (CR/QR/Cash/NWC/NI/SU) ตรงสูตรทางการกองเศรษฐกิจสุขภาพฯ ทุกข้อ — จุดตั้งต้นเดือน 0 ตรง badge ที่แสดงทั้ง ${items.length} แห่ง${(()=>{const g=items.filter(o=>o.h&&o.h.source==='gl').length; return g===items.length?' (คะแนนคำนวณด้วยสูตรทางการจากงบทดลอง — สูตรตรงกับไฟล์ทางการงวดก่อน 103/103)':(g?` (ในนั้น ${g} แห่งเป็นคะแนนคำนวณจากงบทดลอง)`:' (คะแนนทางการที่ รพ. รายงาน)');})()} · สมมติฐาน: กระแสเงินสด/เดือน = NI + ค่าเสื่อม run-rate − เร่งชำระหนี้สุทธิ · เร่งเก็บลูกหนี้เพิ่มเฉพาะเงินสด (Cash Ratio) ไม่เพิ่ม CA/NWC · NI สะสมรีเซ็ต ต.ค. · ไม่มี seasonality — เป็นการจำลองเชิงสถานการณ์เพื่อวางแผน ไม่ใช่พยากรณ์</div>`;
 }
 function ovBuildTSV(items, L, sepLab){
   const M=v=>(v/1e6).toFixed(2);
@@ -1205,7 +1205,7 @@ function exBrkHtml(x, sepLab){
   const {h,r0}=x, hc=h.hcode, L=EXBRK[hc], bs=h.bs, nowLab=EX.periodLabel;
   // ที่มาของคะแนนตั้งต้น: "rep" = รพ.รายงานเข้า risk_scores (ทางการ) · "gl" = คำนวณจากงบทดลอง
   // งวดที่ risk_scores ยังไม่ส่ง ทุกแห่งจะเป็น gl — ต้องไม่เรียกว่า "ทางการ" ให้ผู้ใช้เข้าใจผิด
-  const srcLab=(h.src==='gl')?'คำนวณจากงบทดลอง':(h.src?'ทางการ (รพ.รายงาน)':'');
+  const srcLab=(h.src==='gl')?'คำนวณด้วยสูตรทางการจากงบทดลอง':(h.src?'ทางการ (รพ.รายงาน)':'');
   const sep0=r0.sepRisk;
   // 3 โหมดตามความสัมพันธ์ระหว่างเป้า L กับระดับที่จะเป็น ณ ก.ย. ถ้าไม่ช่วย (sep0) — ตรงกับ semantic ของ Simulator เดิม
   //   L < sep0 : แผนลดวิกฤต (หาเงินก้อนขั้นต่ำ)
@@ -1397,7 +1397,10 @@ function exRiskSrcLab(){
   const hs=EX.hosp||[], n=hs.length, c={};
   hs.forEach(h=>{ c[h.src||'?']=(c[h.src||'?']||0)+1; });
   if(!n) return 'Risk Score';
-  if(c.gl===n) return `คะแนนที่คำนวณจากงบทดลอง (งวดนี้ยังไม่มีคะแนนที่ รพ. รายงานเข้าระบบ risk_scores)`;
+  // งวดที่ไม่มีไฟล์ risk score ทางการ (HFO ไม่แจกในชุด .mdb — ต้องเข้าเว็บโหลดเอง) เราคำนวณด้วย
+  // สูตรทางการจากงบทดลองงวดเดียวกับที่ HFO ใช้ · พิสูจน์กับไฟล์ทางการงวด พ.ค.69 ตรง 103/103
+  // และ มี.ค.69 ตรง 103/103 (ดู RISK_EXEC_MODEL.md 3.11) — จึงบอกได้ว่าเทียบเท่า ไม่ใช่ค่าประมาณ
+  if(c.gl===n) return `คะแนนที่คำนวณด้วยสูตรทางการจากงบทดลองงวดนี้ (ยังไม่มีไฟล์คะแนนทางการของงวดนี้ — สูตรตรงกับไฟล์ทางการงวดก่อน 103/103 แห่ง)`;
   if(c.rep===n) return 'Risk Score ทางการที่ รพ. รายงาน';
   return `คะแนนตั้งต้นแบบผสม — ทางการที่ รพ. รายงาน ${c.rep||0} แห่ง · คำนวณจากงบทดลอง ${c.gl||0} แห่ง`;
 }
@@ -2057,7 +2060,10 @@ function renderClBreakdown(h){
 function scoreOf(ca, cl, qn, cn, ni, mo){
   if(!cl) return null;
   const cr=ca/cl, qr=qn/cl, cash=cn/cl, nwc=ca-cl;
-  const li=(cr<1.5?1:0)+(qr<1.0?1:0)+(cash<0.8?1:0);
+  // ปัด 2 ตำแหน่งก่อนเทียบเกณฑ์ให้ตรงกับที่ HFO ทำ (ดู RISK_EXEC_MODEL.md 3.11)
+  // เคสจริง: เชียงกลาง งวด 256908 QR 0.996 → ไฟล์ทางการแสดง 1.00 และให้ 0 คะแนน
+  const r2=v=>Math.round(v*100)/100;
+  const li=(r2(cr)<1.5?1:0)+(r2(qr)<1.0?1:0)+(r2(cash)<0.8?1:0);
   const st=(nwc<0?1:0)+(ni<0?1:0);
   const m=mo>0?mo:12;
   const np=nwc>=0, ip=ni>=0;
