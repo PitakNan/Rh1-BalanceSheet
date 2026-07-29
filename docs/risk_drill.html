@@ -437,6 +437,38 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
 }
 /* ── Print / บันทึก PDF (แท็บผู้บริหาร) — ซ่อน chrome+ตัวปรับแต่ง เก็บตาราง/ค่า แล้ว window.print() ── */
 .print-head{display:none}
+/* ── ผังที่มาข้อมูล (#data) — SVG node-link + การ์ดอธิบายรายขั้น ── */
+.lin-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 2px 2px}
+/* SVG ย่อ/ขยายตามความกว้างกรอบ (viewBox คงที่) — จอกว้างเห็นครบ 7 ขั้นไม่ต้องเลื่อน
+   min-width กันไม่ให้ตัวอักษรเล็กจนอ่านไม่ออกบนมือถือ (เลื่อนแนวนอนแทน) */
+.lin-wrap svg{display:block;width:100%;height:auto;min-width:1080px}
+.lin-node{cursor:pointer}
+.lin-node rect{fill:var(--card);stroke:var(--line);stroke-width:1.5;rx:7}
+.lin-node:hover rect,.lin-node.on rect{stroke-width:2.5}
+.lin-node text{fill:var(--ink);font-size:11px;font-weight:600;pointer-events:none}
+.lin-node text.sub{fill:var(--mut);font-size:9.5px;font-weight:400}
+.lin-link{fill:none;stroke:var(--mut);stroke-width:1.2;opacity:.28}
+.lin-link.hot{stroke:var(--blue);stroke-width:2.4;opacity:1}
+.lin-col{fill:var(--mut);font-size:10px;font-weight:700;letter-spacing:.2px}
+.lin-colbg{fill:var(--th-bg);opacity:.5;rx:6}
+.lin-dim{opacity:.22}
+.lin-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);margin:6px 2px 0;align-items:center}
+.lin-legend b{color:var(--ink)}
+.lin-sw{display:inline-block;width:11px;height:11px;border-radius:3px;border:1.5px solid;vertical-align:-1px;margin-right:3px}
+.lin-card{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:8px;padding:10px 12px;margin:8px 0;scroll-margin-top:12px}
+.lin-card.on{box-shadow:0 0 0 2px var(--blue)}
+.lin-card h4{margin:0 0 2px;font-size:14px}
+.lin-card .who{font-size:11px;color:var(--mut);margin-bottom:6px;font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+.lin-card p{margin:5px 0;font-size:12.5px;line-height:1.75}
+.lin-card ul{margin:4px 0 4px 18px;font-size:12.5px;line-height:1.75}
+.lin-plain{background:var(--mid-bg);border:1px solid var(--mid-bd);color:var(--mid-ink);border-radius:6px;padding:7px 10px;margin:6px 0;font-size:12.5px;line-height:1.7}
+.lin-trap{background:var(--bad-bg);border:1px solid var(--bad-bd);color:var(--bad-ink);border-radius:6px;padding:7px 10px;margin:6px 0;font-size:12px;line-height:1.7}
+.lin-out{background:var(--good-bg);border:1px solid var(--good-bd);color:var(--good-ink);border-radius:6px;padding:7px 10px;margin:6px 0;font-size:12px;line-height:1.7}
+.lin-gloss{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+.lin-gloss th,.lin-gloss td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+.lin-gloss th{background:var(--th-bg);white-space:nowrap}
+.lin-gloss td:first-child{white-space:nowrap;font-weight:600}
+@media(max-width:640px){.lin-card p,.lin-card ul{font-size:12px}}
 @media print{
   header,.left,#menuBtn{display:none!important}
   .main{display:block!important;overflow:visible!important;height:auto!important}
@@ -464,6 +496,7 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
     <a href="#exec" style="color:#6ee7b7;text-decoration:none;font-weight:600">🧭 ผู้บริหาร</a>
     <a href="explorer.html" style="color:#fbbf24;text-decoration:none;font-weight:600">🔍 Explorer</a>
     <a href="https://pitaknan.github.io/Risk-Score-Rh1/" target="_blank" style="color:#cbd5e1;text-decoration:none">🎯 Risk Score</a>
+    <a href="#data" style="color:#a5b4fc;text-decoration:none;font-weight:600" title="ผังที่มาของข้อมูล — เลขบนหน้านี้มาจากไหน ผ่านอะไรมาบ้าง">🗺️ ที่มาข้อมูล</a>
     <button id="themeBtn" onclick="toggleTheme()" title="สลับโหมดมืด/สว่าง">🌙</button>
   </nav>
 </header>
@@ -558,6 +591,7 @@ function applyHash(){
   const m=location.hash.match(/^#h\/(\w+)/);
   if(m && SUMMARY.hospitals.find(h=>h.hcode===m[1])) selectHosp(m[1]);
   else if(location.hash.startsWith('#exec')) { CUR=null; renderList(); closeDrawer(); renderExec(); }
+  else if(location.hash.startsWith('#data')) { CUR=null; renderList(); closeDrawer(); renderLineage(); }
   else { CUR=null; renderList(); renderWatchlist(); }
 }
 
@@ -922,6 +956,193 @@ function ovCopyTSV(){
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// ══ ผังที่มาข้อมูล (hash #data) ═══════════════════════════════════════
+// ⚠️ ตัวเลขในผังนี้เป็นของจริงที่นับจากฐาน/ไฟล์เมื่อ 29 ก.ค. 69 — ถ้าข้อมูลเดินงวด
+//    ให้อัปเดต LIN_NODES ด้วย (นับใหม่: SELECT COUNT(*) รายตาราง · ls -la docs/data/risk/)
+const LIN_COLS=['① ต้นทาง','② ไฟล์ดิบที่โหลดมา','③ ฐานข้อมูล MySQL','④ รวมเป็นชุดเดียว','⑤ สคริปต์แปลงข้อมูล','⑥ ไฟล์ที่หน้าเว็บโหลด','⑦ ที่เห็นบนหน้านี้'];
+// st = ขั้นที่การ์ดอธิบายอยู่ (คลิกโหนดแล้วเลื่อนไปการ์ดนั้น) · c=คอลัมน์ r=แถว
+const LIN_NODES=[
+  {id:'hfo',c:0,r:1,e:'🌐',t:'เว็บ HFO',s:'hfo.moph.go.th · ดึงวันที่ 16'},
+  {id:'mdb',c:1,r:0,e:'📁',t:'M5317 / D5317 .mdb',s:'MS Access · งบทดลองรายเดือน'},
+  {id:'acc',c:1,r:1,e:'🗂️',t:'ตาราง AccCode',s:'ผังบัญชี → รหัส P ทางการ'},
+  {id:'xls',c:1,r:2,e:'📊',t:'RiskScoring .xlsx',s:'คะแนนที่ รพ. รายงาน'},
+  {id:'bs' ,c:2,r:0,e:'🗄️',t:'balance_sheet',s:'4,960,909 แถว'},
+  {id:'ri' ,c:2,r:1,e:'📐',t:'ratio_items',s:'5,545 แถว · สูตรราชการ'},
+  {id:'ah' ,c:2,r:2,e:'🏷️',t:'acc_hierarchy',s:'991 แถว · ชื่อ+ชั้นบัญชี'},
+  {id:'rs' ,c:2,r:3,e:'🎯',t:'risk_scores',s:'3,501 แถว · ถึง พ.ค.69'},
+  {id:'pq' ,c:3,r:0,e:'📦',t:'master.parquet',s:'4.06 ล้านแถว · 64 MB'},
+  {id:'pm' ,c:3,r:1,e:'📄',t:'planfin_map (ทางการ)',s:'444 รหัส · ผังทางการ'},
+  {id:'erl',c:4,r:0,e:'🐍',t:'export_risk_link.py',s:'คะแนน + สาเหตุราย รพ.'},
+  {id:'epf',c:4,r:1,e:'🐍',t:'export_planfin.py',s:'จับบัญชีเข้ารหัส P'},
+  {id:'eex',c:4,r:2,e:'🐍',t:'export_exec.py',s:'โมเดล MOE + งบดุลย่อ'},
+  {id:'sum',c:5,r:0,e:'📄',t:'summary.json',s:'100 KB · 103 รพ.'},
+  {id:'hj' ,c:5,r:1,e:'📄',t:'h/10717.json …',s:'103 ไฟล์ · 7 MB'},
+  {id:'exj',c:5,r:2,e:'📄',t:'exec.json',s:'154 KB'},
+  {id:'wl' ,c:6,r:0,e:'🚨',t:'Watchlist วิกฤต',s:'6–7 คะแนน + เงินสดพอจ่าย MOE'},
+  {id:'dr' ,c:6,r:1,e:'🔬',t:'ไล่สาเหตุ L0→L4',s:'เทรนด์ → กลุ่มบัญชี → GL'},
+  {id:'ex' ,c:6,r:2,e:'🧭',t:'แท็บผู้บริหาร #exec',s:'NI จำลอง · Solver เงินก้อน'},
+];
+const LIN_LINKS=[['hfo','mdb'],['hfo','xls'],['mdb','acc'],['mdb','bs'],['xls','rs'],
+  ['bs','pq'],['acc','pm'],
+  ['pq','erl'],['pq','epf'],['pq','eex'],['ri','erl'],['ri','epf'],['ri','eex'],
+  ['ah','erl'],['ah','eex'],['rs','erl'],['pm','epf'],
+  ['erl','sum'],['erl','hj'],['epf','hj'],['hj','eex'],['sum','eex'],['eex','exj'],
+  ['sum','wl'],['sum','dr'],['hj','dr'],['exj','ex'],['sum','ex']];
+let LIN_SEL=null;
+// โหนดที่เชื่อมกับ sel ทั้งขึ้นและลง (ไล่ทั้งสาย ไม่ใช่แค่เพื่อนบ้านชั้นเดียว)
+function linChain(id){
+  const up=new Set([id]), dn=new Set([id]);
+  for(let i=0;i<9;i++){
+    LIN_LINKS.forEach(([a,b])=>{ if(dn.has(a)) dn.add(b); if(up.has(b)) up.add(a); });
+  }
+  return new Set([...up,...dn]);
+}
+// โหนด → การ์ดอธิบายของขั้นนั้น (การ์ดมี 7 ใบ = 7 คอลัมน์ · โหนดในคอลัมน์เดียวกันใช้การ์ดเดียวกัน)
+const LIN_CARD_OF_COL=['hfo','mdb','bs','pq','erl','sum','wl'];
+function linCard(id){ const n=LIN_NODES.find(x=>x.id===id); return n?LIN_CARD_OF_COL[n.c]:null; }
+function linSelect(id){ LIN_SEL=(LIN_SEL===id?null:id); renderLineage();
+  if(LIN_SEL){ const el=document.getElementById('lc-'+linCard(LIN_SEL)); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } }
+function linSvg(){
+  // ขนาดคุมให้ความกว้างรวม ≈ 1120 = พอดีกรอบ .dwrap (max-width 1200) บนจอเดสก์ท็อป
+  // ถ้าเพิ่มคอลัมน์ในอนาคตต้องลด CS ลงด้วย ไม่งั้นผังจะล้นต้องเลื่อนแนวนอน
+  const NW=148,NH=54,CS=160,RS=68,PX=6,PY=34;
+  const W=PX*2+CS*(LIN_COLS.length-1)+NW, H=PY+RS*4+6;
+  const pos={}; LIN_NODES.forEach(n=>{ pos[n.id]={x:PX+n.c*CS,y:PY+n.r*RS}; });
+  const chain=LIN_SEL?linChain(LIN_SEL):null;
+  const inCh=id=>!chain||chain.has(id);
+  const heads=LIN_COLS.map((t,i)=>
+    `<rect class="lin-colbg" x="${PX+i*CS-4}" y="6" width="${NW+8}" height="${H-10}"></rect>
+     <text class="lin-col" x="${PX+i*CS}" y="22">${t}</text>`).join('');
+  const links=LIN_LINKS.map(([a,b])=>{
+    const s=pos[a],d=pos[b]; if(!s||!d) return '';
+    const x1=s.x+NW,y1=s.y+NH/2,x2=d.x,y2=d.y+NH/2,mx=(x1+x2)/2;
+    const hot=chain&&chain.has(a)&&chain.has(b);
+    return `<path class="lin-link${hot?' hot':''}${chain&&!hot?' lin-dim':''}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"></path>`;
+  }).join('');
+  const nodes=LIN_NODES.map(n=>{
+    const p=pos[n.id], on=LIN_SEL===n.id;
+    // ตัดชื่อยาวให้พอกับกล่อง (กันข้อความล้นออกนอกกรอบบนจอแคบ)
+    const t=n.t.length>24?n.t.slice(0,23)+'…':n.t, s=n.s.length>30?n.s.slice(0,29)+'…':n.s;
+    return `<g class="lin-node${on?' on':''}${inCh(n.id)?'':' lin-dim'}" onclick="linSelect('${n.id}')">
+      <title>${n.t} — ${n.s}\nคลิกเพื่อดูคำอธิบายและไฮไลต์เส้นทางข้อมูล</title>
+      <rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}"${on?' stroke="var(--blue)"':''}></rect>
+      <text x="${p.x+9}" y="${p.y+21}">${n.e} ${t}</text>
+      <text class="sub" x="${p.x+9}" y="${p.y+38}">${s}</text></g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMinYMin meet" role="img"
+    aria-label="ผังที่มาของข้อมูลบนหน้าสาเหตุวิกฤต 7 ขั้น">${heads}${links}${nodes}</svg>`;
+}
+function renderLineage(){
+  const per=(SUMMARY&&SUMMARY.periodLabel)?SUMMARY.periodLabel:'-';
+  const nH=(SUMMARY&&SUMMARY.nHosp)?SUMMARY.nHosp:'-';
+  document.getElementById('right').innerHTML=`
+  <div class="dwrap" style="max-width:1200px">
+    <div class="panel">
+      <h3 style="margin:0 0 4px">🗺️ ที่มาของข้อมูล — เลขบนหน้านี้เดินทางมาจากไหน</h3>
+      <div class="note" style="margin-bottom:8px">ทุกตัวเลขบนหน้า "สาเหตุวิกฤต" มาจาก <b>งบทดลองที่โรงพยาบาลส่งเข้าระบบราชการ</b>
+        ไม่ใช่ตัวเลขที่เราตั้งขึ้นเอง · ผังนี้ไล่ให้เห็นทั้ง 7 ขั้น ตั้งแต่ไฟล์ที่ดาวน์โหลดมา จนถึงกล่องที่คุณเห็นบนจอ
+        <br><b>คลิกกล่องไหนก็ได้</b> — ระบบจะไฮไลต์เส้นทางข้อมูลทั้งสาย (ทั้งต้นน้ำและปลายน้ำของกล่องนั้น) แล้วเลื่อนไปคำอธิบายด้านล่าง
+        · งวดข้อมูลปัจจุบัน <b>${per}</b> · ${nH} โรงพยาบาลในเขตสุขภาพที่ 1</div>
+      <div class="lin-wrap">${linSvg()}</div>
+      <div class="lin-legend">
+        <span><span class="lin-sw" style="border-color:var(--blue)"></span><b>เส้นน้ำเงิน</b> = เส้นทางของกล่องที่เลือก</span>
+        <span>เลื่อนผังไปทางขวาได้ถ้าจอแคบ</span>
+        ${LIN_SEL?`<a class="ovlink" href="#" onclick="linSelect('${LIN_SEL}');return false">↺ ล้างการเลือก (ดูทั้งผัง)</a>`:''}
+      </div>
+    </div>
+
+    ${linCards()}
+
+    <div class="panel">
+      <h3 style="margin:0 0 6px">📖 ศัพท์บัญชีที่โผล่บนหน้านี้ — แปลเป็นภาษาคนทั่วไป</h3>
+      <div class="note" style="margin-bottom:6px">ไม่ต้องมีพื้นฐานบัญชีก็อ่านหน้านี้ได้ ใช้ตารางนี้เทียบคำ</div>
+      <div class="acctbl-wrap" style="max-height:none"><table class="lin-gloss">
+        <tr><th>คำที่เห็นบนหน้าเว็บ</th><th>แปลเป็นภาษาคนทั่วไป</th><th>ทำไมต้องดู</th></tr>
+        <tr><td>งบทดลอง</td><td>สรุปยอดคงเหลือของทุกบัญชี ณ สิ้นเดือน — คล้ายใบสรุปบัญชีธนาคาร แต่มีหลายพันช่อง</td><td>เป็นข้อมูลตั้งต้นของทุกอย่างบนหน้านี้</td></tr>
+        <tr><td>สินทรัพย์หมุนเวียน</td><td>ของที่เปลี่ยนเป็นเงินได้ภายใน 1 ปี — เงินสด เงินฝาก ลูกหนี้ ยา/เวชภัณฑ์คงคลัง</td><td>ตัวตั้งของ CR</td></tr>
+        <tr><td>หนี้สินหมุนเวียน</td><td>หนี้ที่ต้องจ่ายภายใน 1 ปี — ค่ายาที่ยังไม่จ่าย เงินเดือนค้างจ่าย</td><td>ตัวหารของ CR/QR/Cash ratio</td></tr>
+        <tr><td>สินทรัพย์เร็ว</td><td>สินทรัพย์หมุนเวียน <b>หักของคงคลังออก</b> (ยาขายเป็นเงินทันทีไม่ได้)</td><td>ตัวตั้งของ QR</td></tr>
+        <tr><td>CR / QR / Cash ratio</td><td>"มีของเปลี่ยนเป็นเงินได้กี่เท่าของหนี้ที่ต้องจ่าย" — ยิ่งสูงยิ่งสบาย · Cash ratio นับแค่เงินสดจริง</td><td>3 ใน 7 คะแนน Risk Score</td></tr>
+        <tr><td>NWC (เงินบำรุงสุทธิ)</td><td>สินทรัพย์หมุนเวียน − หนี้สินหมุนเวียน = "เหลือเท่าไรถ้าจ่ายหนี้ระยะสั้นหมด" ติดลบ = ไม่พอ</td><td>1 คะแนน + ใช้คิด SU</td></tr>
+        <tr><td>NI (กำไร/ขาดทุนสุทธิ)</td><td>รายได้รวม − ค่าใช้จ่ายรวม สะสมตั้งแต่ ต.ค. ของปีงบ</td><td>1 คะแนน · ⚠️ ไม่เท่ากับ "เงินสดที่หายไป"</td></tr>
+        <tr><td>SU (อัตราความอยู่รอด)</td><td>"ถ้าขาดทุนเท่านี้ต่อเดือน เงินที่มีจะอยู่ได้อีกกี่เดือน" ต่ำกว่า 3 เดือน = เสี่ยง</td><td>ให้ได้ถึง 2 คะแนน (เต็ม 7 จึงมาจากตรงนี้)</td></tr>
+        <tr><td>MOE</td><td>ค่าใช้จ่ายที่ <b>ไม่จ่ายไม่ได้</b> ต่อเดือน — เงินค่าจ้างลูกจ้าง ค่ายา ค่าน้ำค่าไฟ (59 บัญชีตามนิยามกองเศรษฐกิจสุขภาพฯ)</td><td>ใช้วัดว่าเงินสดที่มีจ่ายของจำเป็นได้กี่เดือน</td></tr>
+        <tr><td>ค่าเสื่อมราคา</td><td>การทยอยตัดมูลค่าของที่ซื้อมาแล้ว (ตึก/เครื่องมือ) เป็นค่าใช้จ่าย — <b>เป็นตัวเลขทางบัญชี ไม่มีเงินไหลออกจริง</b></td><td>ต้องบวกกลับเวลาคิดเงินสด</td></tr>
+        <tr><td>รับบริจาค-สินทรัพย์</td><td>มีคนบริจาค <b>ของ</b> (เครื่องมือ/รถ) ไม่ใช่เงิน — ลงเป็นรายได้เต็มจำนวนแต่ไม่มีเงินเข้าบัญชี</td><td>ต้องหักออกเวลาคิดเงินสด</td></tr>
+        <tr><td>รหัส P (Planfin)</td><td>รหัสจัดกลุ่มรายรับ/รายจ่ายของกระทรวง เช่น P17 = เงินเดือน · P24 = ค่าเสื่อม</td><td>ใช้จัดกลุ่มให้อ่านง่ายในแท็บผู้บริหาร</td></tr>
+        <tr><td>Risk Score 0–7</td><td>คะแนนความเสี่ยงทางการเงิน <b>0 = ปกติ · 7 = วิกฤตสุด</b> (นับจาก 7 เกณฑ์ข้างบนรวมกัน)</td><td>ตัวเลขหลักที่ใช้จัดลำดับความช่วยเหลือ</td></tr>
+      </table></div>
+    </div>
+
+    <div class="panel">
+      <div class="note">🔁 <b>ข้อมูลอัปเดตเมื่อไหร่:</b> ทีมดึงรายงานจาก HFO <b>ทุกวันที่ 16 ของเดือน</b>
+        แล้วรัน <code>monthly_routine.py</code> ไล่ทั้งสาย (ขั้น ②→⑥) จบด้วย <code>git push</code> ซึ่งทำให้หน้าเว็บนี้อัปเดตเอง
+        · ถ้าเห็นตัวเลขค้างงวดเก่า แปลว่ารอบเดือนนั้นยังไม่ได้รัน หรือไฟล์ต้นทางยังไม่มาครบ
+        <br>📄 <b>เอกสารเชิงลึกสำหรับคนทำงาน:</b> <code>RISK_EXEC_MODEL.md</code> ใน repo (ไม่เผยแพร่บนเว็บ) — มีสูตรครบ ที่มาของทุกการตัดสินใจ และกับดักที่เคยเจอ</div>
+    </div>
+  </div>`;
+}
+// การ์ดอธิบายรายขั้น — เขียนให้คนไม่มีพื้นฐานบัญชีอ่านรู้เรื่อง
+function linCards(){
+  const C=[
+   {id:'hfo',h:'① ต้นทาง — เว็บ HFO ของกระทรวง',who:'hfo.moph.go.th (กองเศรษฐกิจสุขภาพและหลักประกันสุขภาพ · สป.สธ.)',
+    plain:'โรงพยาบาลทุกแห่งต้องส่งบัญชีของตัวเองเข้าระบบกลางของกระทรวงทุกเดือน เว็บ HFO คือที่เก็บนั้น — เราไม่ได้ไปขอตัวเลขจากโรงพยาบาลเอง แต่ดึงจากระบบทางการที่โรงพยาบาลรับรองแล้ว',
+    li:['ทีมการเงินเขตเข้าไป <b>ดาวน์โหลดด้วยบัญชีผู้ใช้ทุกวันที่ 16 ของเดือน</b> (มีสคริปต์ทำอัตโนมัติผ่าน Task Scheduler)',
+        'รายงานที่โหลด: งบทดลอง · อัตราส่วนการเงินรายงวด · <b>Risk score</b> · งบบริหาร · ตาราง Planfin · ต้นทุน',
+        'ไฟล์ที่ได้เก็บไว้ที่ <code>D:\\OneDrive\\Share Rh1-New\\hfo\\2569\\</code> แยกโฟลเดอร์ตามรอบที่เรียก'],
+    out:'ได้อะไรออกมา: ไฟล์ .mdb และ .xlsx ของงวดนั้น'},
+   {id:'mdb',h:'② ไฟล์ดิบ — .mdb (Access) และ .xlsx (Excel)',who:'M5317.mdb · D5317.mdb · RiskScoring เดือน ….xlsx',
+    plain:'ไฟล์ .mdb คือฐานข้อมูล Microsoft Access — ข้างในเป็นตารางเหมือน Excel แต่ใหญ่กว่ามาก บรรจุงบทดลองของโรงพยาบาลทุกแห่งในงวดนั้น ทีละบัญชี ทีละยอด',
+    li:['<b>ตาราง DataIn ใน M5317.mdb</b> = ตัวงบทดลอง (ยอดคงเหลือทุกบัญชีของทุก รพ.) — ตรวจแล้วตรงกับข้อมูลที่เราใช้อยู่ทุกบาท',
+        '<b>ตาราง AccCode</b> = ผังทางการที่บอกว่าบัญชีรหัสไหนจัดอยู่กลุ่มไหน (รหัส P) — สำคัญมาก เพราะก่อนหน้านี้เราเดาเอง',
+        '<b>RiskScoring .xlsx</b> = ตารางคะแนนความเสี่ยงที่ทางการคำนวณให้ ใช้เทียบว่าสูตรเราตรงไหม (ตรง 103/103 แห่ง)'],
+    trap:'กับดัก: อ่าน .mdb ต้องใช้ COM DAO เท่านั้น — ถ้าใช้ pyodbc ภาษาไทยจะเพี้ยน',
+    out:'ได้อะไรออกมา: ข้อมูลพร้อมนำเข้าฐานข้อมูล + ผังบัญชีทางการ'},
+   {id:'bs',h:'③ ฐานข้อมูล MySQL — เก็บสะสมทุกงวด ไม่ใช่แค่เดือนล่าสุด',who:'MySQL ชื่อฐาน rh1_health (อยู่ในเครื่อง ไม่ได้ขึ้นเว็บ)',
+    plain:'ไฟล์รายเดือนถูกเทเข้าฐานข้อมูลกลาง เพื่อให้เทียบย้อนหลังได้ว่าโรงพยาบาลแย่ลงหรือดีขึ้น — ถ้าเก็บแยกไฟล์รายเดือนจะเทียบข้ามปีไม่ได้',
+    li:['<b>balance_sheet — 4,960,909 แถว</b> คือหัวใจ: 1 แถว = 1 บัญชี ของ 1 โรงพยาบาล ใน 1 เดือน พร้อมยอดยกมา/เพิ่ม/ลด/คงเหลือ',
+        '<b>ratio_items — 5,545 แถว</b> คือ <u>สูตรของราชการ</u> บอกว่าจะเอาบัญชีไหนบวกเป็นตัวเลขไหน · หน้านี้ใช้ 8 สูตร: สินทรัพย์หมุนเวียน (122 บัญชี) · หนี้สินหมุนเวียน (118) · สินทรัพย์เร็ว (97) · เงินสด+เทียบเท่า (19) · รายได้รวม (168) · ค่าใช้จ่ายรวม (276) · และอีก 2 ตัวสำหรับ EBITDA',
+        '<b>acc_hierarchy — 991 แถว</b> เก็บชื่อบัญชีและลำดับชั้น เพื่อให้แสดงเป็นภาษาคนได้ ไม่ใช่โชว์แต่รหัสตัวเลข',
+        '<b>risk_scores — 3,501 แถว</b> คะแนนที่โรงพยาบาลรายงานเข้าระบบ · ⚠️ มีถึงงวด <b>พ.ค. 69</b> เท่านั้น'],
+    trap:'เพราะ risk_scores ไม่มีงวด มิ.ย. 69 คะแนนที่หน้านี้แสดงจึงเป็น <b>ค่าที่เราคำนวณเองจากงบทดลอง</b> ด้วยสูตรทางการ (ตรวจกับไฟล์ทางการงวดก่อนแล้วตรง 103/103 แห่ง) หน้าเว็บเขียนบอกที่มาไว้ตรงๆ ไม่ได้อ้างว่าเป็นคะแนนทางการ',
+    out:'ได้อะไรออกมา: ข้อมูลย้อนหลังหลายปี + สูตรราชการ + ชื่อบัญชี'},
+   {id:'pq',h:'④ รวมร่างเป็นชุดเดียว — master.parquet',who:'build_from_mysql.py → master.parquet (64 MB) · export_planfin_map.py → planfin_map_official.csv',
+    plain:'การอ่านจากฐานข้อมูลทุกครั้งช้าเกินไปสำหรับงานที่ต้องคิดซ้ำๆ จึงสรุปทุกอย่างเป็นไฟล์เดียวที่อ่านเร็วมาก (Parquet คือรูปแบบไฟล์ตารางที่บีบอัดและอ่านเฉพาะคอลัมน์ที่ต้องใช้ได้)',
+    li:['<b>4,056,289 แถว</b> · งวด <b>ธ.ค. 2562 ถึง มิ.ย. 2569</b> · 103 โรงพยาบาล · 3,730 บัญชี',
+        'คอลัมน์ที่หน้านี้ใช้จริงมี 4 ตัว: รหัส รพ. · งวด · รหัสบัญชี · ยอด',
+        '<b>planfin_map_official.csv (444 รหัส)</b> = ผังจาก AccCode ในไฟล์ .mdb ใช้จับบัญชีเข้ารหัส P — ตรง 397/397 รหัสที่มียอด'],
+    out:'ได้อะไรออกมา: ข้อมูลชุดเดียวที่ทุกสคริปต์อ่านร่วมกัน (เลขจึงตรงกันทุกหน้า)'},
+   {id:'erl',h:'⑤ สคริปต์แปลงข้อมูล — จากบัญชีดิบเป็นคำตอบ',who:'export_risk_link.py → export_planfin.py → export_exec.py (ต้องรันตามลำดับนี้)',
+    plain:'ขั้นนี้คือ "สมอง" ของหน้าเว็บ — เปลี่ยนยอดบัญชีดิบสี่ล้านแถวให้เป็นคะแนน เป็นสาเหตุ และเป็นข้อเสนอว่าต้องใช้เงินเท่าไร',
+    li:['<b>export_risk_link.py</b> — คิดคะแนน 7 ข้อรายโรงพยาบาล + หาว่าบัญชีไหนเปลี่ยนแปลงมากจนทำให้คะแนนแย่ลง (ใส่การปัดทศนิยม 2 ตำแหน่งก่อนเทียบเกณฑ์ เหมือนที่ระบบทางการทำ)',
+        '<b>export_planfin.py</b> — จับบัญชีเข้ารหัส P ตามผังทางการ เพื่อจัดกลุ่มรายรับ/รายจ่ายให้อ่านรู้เรื่อง',
+        '<b>export_exec.py</b> — สร้างโมเดลของแท็บผู้บริหาร: ค่าใช้จ่ายจำเป็น (MOE) 59 บัญชี · รายการที่ไม่ใช่เงินสด · เจ้าหนี้แยกชนิด · งบดุลย่อสำหรับจำลอง',
+        'มีชุดตรวจอัตโนมัติกันคำนวณเพี้ยน: <code>test_exec_model.js</code> ตรวจ 2,595 สถานการณ์ ~3 วินาที รันทุกครั้งก่อนขึ้นเว็บ'],
+    trap:'ลำดับสำคัญ: export_risk_link.py เขียนทับไฟล์ราย รพ. ทั้ง 103 ไฟล์ ถ้าไม่รันอีกสองตัวต่อ ข้อมูลจะขาด',
+    out:'ได้อะไรออกมา: ไฟล์ JSON ที่เบาพอให้เบราว์เซอร์โหลดได้ทันที'},
+   {id:'sum',h:'⑥ ไฟล์ที่หน้าเว็บโหลด — JSON 3 ชุด',who:'docs/data/risk/summary.json · h/{รหัส รพ.}.json · exec.json',
+    plain:'หน้าเว็บนี้ไม่มีเซิร์ฟเวอร์และไม่ได้ต่อฐานข้อมูล — มันคือไฟล์ HTML ไฟล์เดียวที่โหลดไฟล์ JSON เหล่านี้ไปคิดในเบราว์เซอร์ของคุณ จึงเปิดได้เร็วและไม่มีข้อมูลรั่ว',
+    li:['<b>summary.json (100 KB)</b> — ภาพรวมทั้ง 103 แห่ง: คะแนน · CR/QR/Cash · เงินบำรุงสุทธิ · เงินสด · MOE ต่อเดือน → ใช้ทำ Watchlist',
+        '<b>h/&lt;รหัส&gt;.json (103 ไฟล์ รวม 7 MB)</b> — เจาะลึกรายแห่ง: ย้อนหลังรายงวด · บัญชีที่เปลี่ยนแปลงมากสุด → โหลดเฉพาะแห่งที่คุณคลิก',
+        '<b>exec.json (154 KB)</b> — ข้อมูลแท็บผู้บริหารทั้งเขตในไฟล์เดียว: รายรับรายกองทุน · MOE 7 กลุ่ม · เจ้าหนี้แยกชนิด · งบดุลย่อ'],
+    trap:'กติกาที่บังคับไว้: ตัวเลข "เงินสดพอจ่าย MOE" ใน summary.json กับ exec.json ต้องเท่ากันเป๊ะ ไม่งั้นผู้บริหารจะเห็นสองค่าสำหรับโรงพยาบาลเดียวกัน — มีชุดตรวจเทียบสองไฟล์รายแห่งทุกครั้ง',
+    out:'ได้อะไรออกมา: ข้อมูลพร้อมแสดงผลบนจอ'},
+   {id:'wl',h:'⑦ ที่เห็นบนหน้านี้ — 3 ส่วน',who:'risk_drill.html (ไฟล์เดียว · เผยแพร่ผ่าน GitHub Pages)',
+    plain:'ทั้งสามส่วนใช้ข้อมูลชุดเดียวกัน ต่างกันแค่ระดับการซูม: ดูทั้งเขต → ดูรายแห่ง → วางแผนใช้เงิน',
+    li:['<b>🚨 Watchlist</b> — รายชื่อโรงพยาบาลที่ได้ 6–7 คะแนน พร้อมคอลัมน์ "เงินสดพอจ่าย MOE ได้กี่เดือน" และคำแนะนำเฉพาะแห่ง',
+        '<b>🔬 ไล่สาเหตุ L0→L4</b> — คลิกชื่อโรงพยาบาลแล้วไล่ลงไปเรื่อยๆ: ภาพรวม → เกณฑ์ที่ไม่ผ่าน → กลุ่มบัญชี → บัญชี GL ตัวจริงที่เป็นต้นเหตุ',
+        '<b>🧭 แท็บผู้บริหาร</b> — จำลองว่าถ้าไม่ทำอะไร สิ้นปีงบจะเป็นระดับไหน และต้องใช้เงินสนับสนุนเท่าไรจึงจะคุมไม่ให้เกินเป้า (มีตัวเลื่อนปรับสมมติฐานได้เอง)'],
+    trap:'อ่านให้ถูก: ตัวเลขจำลองเป็น <b>การจำลองเชิงสถานการณ์เพื่อวางแผน ไม่ใช่การพยากรณ์</b> และ "ผลขาดทุนทางบัญชี ≠ เงินที่ต้องจ่ายจริง" — เงินที่ต้องจ่ายจริงคือรายการตาม MOE',
+    out:'ปลายทาง: ใช้จัดลำดับว่าช่วยแห่งไหนก่อน ด้วยเงินเท่าไร'},
+  ];
+  return C.map(c=>`<div class="lin-card${LIN_SEL&&linCard(LIN_SEL)===c.id?' on':''}" id="lc-${c.id}">
+    <h4>${c.h}</h4><div class="who">${c.who}</div>
+    <div class="lin-plain">💡 ${c.plain}</div>
+    <ul>${c.li.map(x=>`<li>${x}</li>`).join('')}</ul>
+    ${c.trap?`<div class="lin-trap">⚠️ ${c.trap}</div>`:''}
+    <div class="lin-out">➡️ ${c.out}</div></div>`).join('');
+}
+
 // ── Executive Tab: แนวทางสำหรับผู้บริหาร (hash #exec) ──────────────────
 // โมเดล MOE: NI จำลอง/เดือน = Σรายรับกองทุน×(1+%) − MOE (คชจ.จำเป็น) − ค่าเสื่อม
 // แทนการลาก NI เฉลี่ย YTD ตรงๆ — เพราะรายรับต้นปีมีเงินเหมาจ่าย/จ่ายล่วงหน้าเป็นก้อน
