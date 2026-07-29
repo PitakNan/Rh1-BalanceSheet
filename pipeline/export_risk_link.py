@@ -223,6 +223,16 @@ def triggers(row):
 latest = j[j["t"] == T].set_index("org5")
 prev3 = j[j["t"] == TPREV3].set_index("org5")["risk"]
 
+# ---------- 6b) MOE ทางการ/เดือน — ตัวชี้วัด "เงินสดพอจ่าย MOE" ใน Watchlist ----------
+# ⚠️ import นิยาม MOE 59 บัญชีจาก export_exec.py แทนการก๊อปรายการมาไว้ที่นี่ — ต้องเป็น "ชุดเดียวกัน"
+# กับแท็บผู้บริหาร (#exec) เสมอ ไม่งั้นตัวเลขสองหน้าจะไม่ตรงกัน (ดู RISK_EXEC_MODEL.md หัวข้อ 3.6)
+# export_exec.py ปลอดภัยต่อการ import (โค้ดทำงานอยู่ใน main() ทั้งหมด · planfin map โหลดแบบ lazy)
+from export_exec import MOE_ACC
+# กรองด้วย 3010X เหมือน export_exec.py (นับเฉพาะบัญชีที่อยู่ในค่าใช้จ่ายรวมตามผัง)
+MOE_ROOTS = set(MOE_ACC) & code_sets["3010X"]
+moe_ytd = m[(m["t"] == T) & (m["root"].isin(MOE_ROOTS))].groupby("org5")["bs"].sum()
+MO_N = max(1, T % 100)   # เดือนที่ผ่านมาแล้วในปีงบ — bs เป็นยอดสะสม YTD จึงต้องหารเป็นค่าเฉลี่ย/เดือน
+
 rnd = lambda v, n=2: None if pd.isna(v) else round(float(v), n)
 summary_rows = []
 for o, r in latest.iterrows():
@@ -234,6 +244,10 @@ for o, r in latest.iterrows():
         "riskPrev3": rnd(prev3.get(o), 0),
         "cr": rnd(r["cr"]), "qr": rnd(r["qr"]), "cash": rnd(r["cash"]),
         "nwc": rnd(r["nwc"], 0), "ni": rnd(r["ni"], 0), "ebitda": rnd(r["ebitda"], 0), "reserve": rnd(r["reserve"], 0),
+        # cn = เงินสดและรายการเทียบเท่าเงินสด (ตัวเศษ Cash ratio · 1003X) · moeMo = MOE ทางการ/เดือน (run-rate)
+        # คู่นี้ให้หน้า Watchlist คำนวณ "เงินสดพอจ่าย MOE ได้กี่เดือน" = cn/moeMo ได้เองโดยไม่ต้องโหลด exec.json
+        # ตัวเลขชุดเดียวกับแท็บ #exec เป๊ะ (cn จาก 1003X เหมือน bs.cn · moeMo จาก MOE_ACC ชุดเดียวกัน)
+        "cn": rnd(r["1003X"], 0), "moeMo": rnd(max(0.0, float(moe_ytd.get(o, 0.0))) / MO_N, 0),
         "triggers": triggers(r),
         "source": r["src_risk"],
         "app": rnd(r["app"], 1), "acpUc": rnd(r["acpUc"], 1), "acpCs": rnd(r["acpCs"], 1),
@@ -309,7 +323,11 @@ def top_accounts(org_df, t_cur, t_base, bucket, cls_label):
     sub = org_df[(org_df["bucket"] == bucket) & (org_df["t"].isin((t_cur, t_base)))]
     cur_g = sub[sub["t"] == t_cur].groupby("root")["bs"].sum()
     base_g = sub[sub["t"] == t_base].groupby("root")["bs"].sum()
-    allk = set(cur_g.index) | set(base_g.index)
+    # ⚠️ ต้อง sorted() — เดิมวน set ของสตริงตรงๆ ซึ่งลำดับเปลี่ยนทุก process (str hash randomization)
+    # ผลคือบัญชีที่ |delta| เท่ากันเป๊ะสลับตำแหน่งกันมั่วในผลลัพธ์ที่เรียงด้วย sorted() แบบ stable ทำให้
+    # h/*.json เปลี่ยนทุกครั้งที่รัน pipeline โดยตัวเลขไม่ได้เปลี่ยนเลย (พบ 21 แห่ง 2026-07-29)
+    # และถ้าคู่ที่เท่ากันคาบเส้น TOPN_ACC จะสลับกันว่าบัญชีไหนได้แสดง = ผลลัพธ์ไม่รีโปรดิวซ์
+    allk = sorted(set(cur_g.index) | set(base_g.index))
     out = []
     for k in allk:
         v1, v0 = cur_g.get(k, 0.0), base_g.get(k, 0.0)

@@ -25,6 +25,7 @@ export_risk_link.py เอง ไม่งั้น risk_drill.html จะโช
     python monthly_routine.py --month 2026-07    # ระบุเดือน (สำหรับรันย้อนหลัง/ทดสอบ)
     python monthly_routine.py --skip-download    # ใช้ไฟล์ที่ดาวน์โหลดไว้แล้วใน Output/<เดือน>/ (ทดสอบ pipeline โดยไม่ยิงเว็บ HFO ซ้ำ)
 """
+import json
 import shutil
 import socket
 import subprocess
@@ -86,6 +87,37 @@ def print_summary(year_month, total_sec, done=True):
     return log_path
 
 
+def notify_line(message, level="info"):
+    """ส่งแจ้งเตือน LINE ผ่าน Rh1 Notify Hub (Cloudflare Worker) — best-effort เหมือน notify_email
+    อ่าน URL/Key จาก D:\\Github\\_git-hooks\\notify.config ถ้ายังไม่ตั้งค่า (NOTIFY_URL ว่าง) จะข้ามเงียบๆ"""
+    # ครอบ try ทั้งก้อน — การแจ้งเตือนต้องไม่มีทางทำให้ routine ที่สร้างข้อมูล Dashboard ล้ม
+    # (เคยพลาด: อ่าน config อยู่นอก try ถ้าไฟล์ถูกเซฟเป็น UTF-16 จะ UnicodeDecodeError แล้วพา routine ตายทั้งตัว)
+    try:
+        config_path = Path(r"D:\Github\_git-hooks\notify.config")
+        if not config_path.exists():
+            return
+        cfg = {}
+        # utf-8-sig: เผื่อไฟล์ config ถูกแก้ด้วย editor ที่ใส่ BOM (เช่น Notepad แบบ UTF-8 with BOM)
+        # ถ้าอ่านแบบ utf-8 เฉยๆ คีย์แรกจะกลายเป็น "﻿NOTIFY_URL" แล้วหา NOTIFY_URL ไม่เจอ
+        for line in config_path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+            if "=" in line:
+                k, _, v = line.partition("=")
+                cfg[k.strip()] = v.strip()
+        url = cfg.get("NOTIFY_URL")
+        key = cfg.get("NOTIFY_KEY")
+        if not url:
+            return
+        import urllib.request
+        payload = json.dumps({"system": "Rh1-BalanceSheet", "message": message, "level": level}).encode("utf-8")
+        req = urllib.request.Request(
+            f"{url}/notify", data=payload, method="POST",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"  (ส่ง LINE แจ้งเตือนไม่สำเร็จ — ข้ามไป ไม่กระทบข้อมูล: {e})")
+
+
 def notify_email(subject, log_path):
     """ส่งอีเมลแจ้งผล (best-effort — ส่งไม่ได้ก็ไม่ทำให้ routine พัง). ปิดด้วย --no-email
     (n8n จะส่งเมลเอง ตอนย้ายไป orchestrate ด้วย n8n ให้ผ่าน --no-email กันเมลซ้ำ)"""
@@ -115,6 +147,7 @@ def run(cmd, cwd, label=None):
         ym = parse_month()
         log_path = print_summary(ym, sum(s[1] for s in STEPS), done=False)
         notify_email(f"[HFO Routine] {ym} ล้มเหลวที่ {label}", log_path)
+        notify_line(f"Monthly Routine {ym} ล้มเหลวที่ขั้นตอน: {label}", level="error")
         sys.exit(1)
 
 
@@ -212,6 +245,7 @@ def main():
 
     log_path = print_summary(year_month, time.perf_counter() - routine_start, done=True)
     notify_email(f"[HFO Routine] {year_month} สำเร็จ — พร้อมรีวิว+push", log_path)
+    notify_line(f"Monthly Routine {year_month} สำเร็จ — พร้อมรีวิว+push", level="info")
 
 
 if __name__ == "__main__":
