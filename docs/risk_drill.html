@@ -650,8 +650,11 @@ function recommendFor(h){
 //   และตรงคำถามที่ต้องตอบ: "จากงวดนี้ไปอีก 3 เดือน จะมีเงินจ่ายค่าใช้จ่ายขั้นต่ำหรือไม่"
 // ⚠️ เดิม (28 ก.ค.) ใช้ (12 − เดือนงวด) = เดือนที่เหลือถึงสิ้นปีงบ — เลิกใช้แล้วเพราะงวด ก.ย.
 //    จะได้ 0 ทำให้ชิป/บรรทัดสรุปหายทั้งแผง และเกณฑ์ 3 เดือนไม่ควรผูกกับปฏิทินปีงบ
-// ⚠️ resNeed() ใน exSimPath ใช้ MOE_MIN_MO ตัวเดียวกันแล้ว (29 ก.ค. 69) — นิยาม "อยู่รอด" ชุดเดียว
-//    ทั้งตัวชี้วัดและเงินสำรองในเส้นจำลอง (ดู RISK_EXEC_MODEL.md หัวข้อ 3.5/3.6/3.12)
+// ⚠️ เงินสำรองใน exSimPath ใช้ MOE_MIN_MO ตัวเดียวกัน (29 ก.ค. 69) — นิยาม "อยู่รอด" ชุดเดียว
+//    แต่ **ฐานที่คูณต่างกันโดยเจตนา**: ตัวชี้วัดนี้ใช้ MOE ทั้งก้อน (ตอบคำถาม "ถ้ารายรับสะดุด
+//    จะอยู่ได้กี่เดือน" — ต้องรวมค่ายาด้วย) · เงินสำรองในเส้นจำลองใช้เฉพาะส่วนที่ยืดไม่ได้
+//    + คชจ.ค้างจ่าย (ตอบคำถาม "ควักเงินสดไปทำอย่างอื่นได้เท่าไหร่" — ค่ายาซื้อด้วยเครดิตได้)
+//    ดู RISK_EXEC_MODEL.md หัวข้อ 3.5/3.6/3.12/3.13
 // ⚠️ อ่านให้ถูก: ต่ำกว่าเส้น = "ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่เข้ามาระหว่างทาง"
 //    ไม่ใช่ "จ่าย MOE ไม่ได้" (ส่วนใหญ่กระแสเงินสด/เดือนเป็นบวก) — ดู RISK_EXEC_MODEL.md หัวข้อ 3.6
 const MOE_MIN_MO=3;                                 // เกณฑ์ขั้นต่ำตาม SU — ค่าคงที่ ไม่ผูกกับงวด
@@ -1056,6 +1059,15 @@ function exMoeMo(h){
   for(const g of EX.moeGroups){ if(exMoeOff(g.id)) continue; const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
   return Math.max(0,s);
 }
+// MOE ส่วนที่ "ยืดไม่ได้" ต่อเดือน = กลุ่มที่ธง cash=true (ค่าจ้าง/ค่าตอบแทน + สาธารณูปโภค)
+// เป็นฐานของเงินสำรอง MOE — ไม่มีใครให้เครดิตค่าแรง/ค่าน้ำค่าไฟ ต้องมีเงินสดจ่ายตามรอบเดือน
+// ⚠️ ธง cash มาจาก export_exec.py (MOE_CASH_G) — ห้าม hardcode รายชื่อกลุ่มซ้ำที่นี่ (จะหลุดกันเวลาผังเปลี่ยน)
+// คิด %ปรับ/ปิดกลุ่ม แบบเดียวกับ exMoeMo เพื่อให้เงินสำรองขยับตามสมมติฐานที่ผู้ใช้ตั้งไว้
+function exMoeCashMo(h){
+  const mo=h.bs.mo; let s=0;
+  for(const g of EX.moeGroups){ if(!g.cash || exMoeOff(g.id)) continue; const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
+  return Math.max(0,s);
+}
 // ค่าใช้จ่ายเงินสดนอกนิยาม MOE = คชจ.รวม − MOE ทางการ − non-cash (เงินเดือน ขรก./ค่าตอบแทนอื่น/ตามจ่าย/ค่าใช้สอยอื่น ฯลฯ)
 function exXmoeMo(h){
   const mo=h.bs.mo;
@@ -1082,23 +1094,30 @@ function exSimPath(h, inj, sc){
   // รายจ่ายที่จ่ายไม่ได้ → ค้างเป็นเจ้าหนี้ (หนี้สินหมุนเวียนโต) ไม่ใช่ปล่อยเงินสดติดลบ
   const moeMoV=exMoeMo(h);
   let owedAdd=0;                                    // เจ้าหนี้ที่เพิ่มจากการจ่ายไม่ได้ (แสดงในแผงเจาะเกณฑ์)
-  // เงินสำรอง MOE ที่ต้องกันไว้เสมอ = MOE 3 เดือนข้างหน้า (คงที่ ไม่ลดตามเดือน) — CFO อนุมัติ 29 ก.ค. 69
-  // เดิมใช้ moeMo×(12−m) "กันจนถึงสิ้นปีงบ" ซึ่งมีปัญหา 2 ข้อ:
-  //   ① ต้นปีงบต้องกันสูงถึง 11-12 เท่าของ MOE/เดือน ไม่มี รพ. ไหนทำได้จริง → กลไกไม่ทำงาน
-  //   ② พอถึง ส.ค./ก.ย. เหลือ 1 แล้ว 0 = ยิ่งใกล้สิ้นปียิ่งหลวม ทั้งที่เป็นช่วงกดดันที่สุด
-  // 3 เดือนคงที่ = เกณฑ์เดียวกับตัวชี้วัด "เงินสดพอจ่าย MOE" (MOE_MIN_MO) และเกณฑ์ SU ของ Risk Score
-  // → ทั้งหน้าเว็บใช้นิยาม "อยู่รอด" ชุดเดียวกันหมด (ดู RISK_EXEC_MODEL.md 3.5/3.6/3.12)
-  const resNeed=m=>moeMoV*MOE_MIN_MO;
+  // ── เงินสำรอง MOE: กันตาม "รอบจ่ายจริง" แยกตามชนิดเจ้าหนี้ (CFO อนุมัติ 29 ก.ค. 69 · 3.13) ──
+  //   = MOE ส่วนที่ยืดไม่ได้ (ค่าจ้าง/ค่าตอบแทน + สาธารณูปโภค) × MOE_MIN_MO เดือน
+  //   + คชจ.บุคลากร/สาธารณูปโภค "ค้างจ่าย" ที่ครบกำหนดแล้ว (bs.apAccr) — ต้องจ่ายด้วยเงินสด
+  // ⛔ ไม่กันเจ้าหนี้การค้า (bs.apTrade) ด้วยเหตุผล 2 ชั้น:
+  //   ① ผู้ขายให้เครดิตอยู่จริง — วัดจากงบ 256909: รอบค้างมัธยฐาน 4.72 เดือน (ยา/เวชภัณฑ์/วัสดุ)
+  //      ต่างกับ คชจ.ค้างจ่าย 1.84 เดือน · การบังคับให้กันเงินสดจ่ายค่ายา 3 เดือนล่วงหน้า
+  //      ไม่ตรงวิธีจัดซื้อจริงของ รพ. เลย (ซื้อด้วยเครดิต ไม่ใช่เงินสด)
+  //   ② จะนับซ้ำ — เจ้าหนี้การค้าเป็น "ตัวส่วน" ของ CR/QR/Cash ratio อยู่แล้ว ความเสี่ยงจากการ
+  //      ค้างเจ้าหนี้ยาวจึงถูกลงโทษในคะแนนไปแล้ว ไม่ต้องลงโทษซ้ำผ่านเงินสำรอง
+  // เดิม (29 ก.ค. เช้า) ใช้ moeMo ทั้งก้อน × 3 → ทั้งเขต 4,174 ลบ. · 29/103 แห่งใช้จ่ายอื่นได้ 0 บาท
+  // ใหม่ → 1,560 ลบ. · เหลือ 4 แห่ง (เทิง · ทุ่งหัวช้าง · ขุนตาล · เวียงเชียงรุ้ง) = ชี้เป้าคมกว่า
+  // ⚠️ ยังคงคงที่ ไม่ผูกปฏิทินปีงบ (เหตุผลเดียวกับ MOE_MIN_MO — ดู 3.6)
+  const resCashV=exMoeCashMo(h), resAccrV=Math.max(0,bs.apAccr||0);
+  const resNeedV=resCashV*MOE_MIN_MO+resAccrV;
   // ดึงเงินสดออก amt บาท · useRes=false → ห้ามแตะเงินสำรอง (รายจ่ายนอกแผน/ปัจจัยเสี่ยง)
   //                        useRes=true  → ใช้เงินสำรองได้ (การดำเนินงานปกติ ซึ่ง MOE อยู่ในนั้นเอง)
   const drain=(amt,useRes)=>{
     if(amt<=0) return;
-    const avail=Math.max(0, st.ccn-(useRes?0:resNeed(st.mo)));
+    const avail=Math.max(0, st.ccn-(useRes?0:resNeedV));
     const paid=Math.max(0,Math.min(amt,avail));
     st.ccn-=paid; st.cca-=paid; st.cqn-=paid;
     const owe=amt-paid; st.ccl+=owe; owedAdd+=owe;   // ส่วนที่จ่ายไม่ได้ = เจ้าหนี้ค้างจ่าย
   };
-  const resNeed0=resNeed(bs.mo), cashAvail0=Math.max(0,bs.cn-resNeed0);
+  const resNeed0=resNeedV, cashAvail0=Math.max(0,bs.cn-resNeed0);
   if(inj>=0){ st.cca+=inj; st.cqn+=inj; st.ccn+=inj; } else drain(-inj,false);
   st.ni+=inj;                                       // เงินอุดหนุน = รายได้ · ใช้เกินแผน = ค่าใช้จ่าย
   if(sc){
@@ -1154,7 +1173,7 @@ function exSimPath(h, inj, sc){
     endRisk=r;
   }
   return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:moeMoV,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
-          owedAdd,resNeed0,cashAvail0,cnEnd:st.ccn,clEnd:st.ccl};
+          owedAdd,resNeed0,resCash:resCashV,resAccr:resAccrV,cashAvail0,cnEnd:st.ccn,clEnd:st.ccl};
 }
 // ── Solver: เงินก้อนขั้นต่ำ (เดือน 0) ให้ ระดับ ณ ก.ย.≤เป้า และปลาย horizon≤เป้า และเงินสดไม่หมด ──
 function exSolve(h){ return exSolveFor(h, EXST.tgt); }
@@ -1266,7 +1285,7 @@ function exBrkHtml(x, sepLab){
   // และเจ้าหนี้ที่เพิ่มขึ้นเมื่อจ่ายเงินสดไม่ได้ — ตามหลักเกณฑ์คงค้างที่ CFO กำหนด
   const rX=(mode==='ceiling')?rDown:rL;
   const resRow=`<tr class="brk-res">
-    <td class="l">💧 <b>เงินสดสำรอง MOE</b> <span class="tgt-note">ต้องกันไว้จ่ายค่าใช้จ่ายจำเป็นถึงสิ้นปีงบ = MOE ${fmtM(r0.moeMo)}/ด. × ${Math.max(0,12-bs.mo)} ด. — ไม่ใช่เกณฑ์คะแนน</span></td>
+    <td class="l">💧 <b>เงินสดสำรอง MOE</b> <span class="tgt-note">กันตามรอบจ่ายจริง = ส่วนที่ยืดไม่ได้ (ค่าจ้าง/ค่าตอบแทน+สาธารณูปโภค) ${fmtM(r0.resCash)}/ด. × ${MOE_MIN_MO} ด. + คชจ.ค้างจ่ายที่ครบกำหนด ${fmtM(r0.resAccr)} · เจ้าหนี้การค้า ${fmtM(bs.apTrade||0)} ไม่ต้องกัน (ผู้ขายให้เครดิต และถูกนับเป็นตัวส่วนของ CR/QR แล้ว) — ไม่ใช่เกณฑ์คะแนน</span></td>
     <td>ต้องมี ≥</td>
     <td>${fmtM(r0.resNeed0)}<span class="brk-d">มีเงินสด ${fmtM(bs.cn)}${bs.cn<r0.resNeed0?' · <span class="brk-no">ขาด '+fmtM(r0.resNeed0-bs.cn)+'</span>':' · <span class="brk-ok">พอ</span>'}</span></td>
     <td>${fmtM(r0.cnEnd)}<span class="brk-d">เงินสดปลายงวด${r0.owedAdd>0?' · ค้างจ่าย '+fmtM(r0.owedAdd):''}</span></td>
@@ -1325,7 +1344,7 @@ function exBrkHtml(x, sepLab){
     const rr=(mode==='ceiling')?rDown:rL;
     if(!rr||!(rr.owedAdd>0)) return '';
     const tight=bs.cn<r0.resNeed0;
-    return `<div class="note" style="margin-top:4px">💧 <b>กลไกเมื่อเงินไม่พอ (เกณฑ์คงค้าง):</b> เงินสด ${fmtM(bs.cn)} ต้องกันไว้จ่าย MOE อีก ${MOE_MIN_MO} เดือนข้างหน้า (${fmtM(r0.moeMo)}/ด. = <b>${fmtM(r0.resNeed0)}</b>) จึงใช้จ่ายอย่างอื่นได้ ${tight?'<b class="brk-no">0 บาท</b> (เงินสดยังน้อยกว่าเงินสำรองที่ต้องกัน '+fmtM(r0.resNeed0-bs.cn)+')':'<b>'+fmtM(r0.cashAvail0)+'</b>'}
+    return `<div class="note" style="margin-top:4px">💧 <b>กลไกเมื่อเงินไม่พอ (เกณฑ์คงค้าง):</b> เงินสด ${fmtM(bs.cn)} ต้องกันไว้จ่ายส่วนที่<b>ยืดไม่ได้</b> — ค่าจ้าง/ค่าตอบแทน+สาธารณูปโภค ${fmtM(r0.resCash)}/ด. × ${MOE_MIN_MO} ด. + คชจ.ค้างจ่ายที่ครบกำหนดแล้ว ${fmtM(r0.resAccr)} = <b>${fmtM(r0.resNeed0)}</b> (ค่ายา/เวชภัณฑ์ไม่ต้องกัน เพราะซื้อด้วยเครดิตการค้า) จึงใช้จ่ายอย่างอื่นได้${tight?'<b class="brk-no">0 บาท</b> (เงินสดยังน้อยกว่าเงินสำรองที่ต้องกัน '+fmtM(r0.resNeed0-bs.cn)+')':'<b>'+fmtM(r0.cashAvail0)+'</b>'}
       → ส่วนที่จ่ายไม่ได้ <b class="brk-no">${fmtM(rr.owedAdd)}</b> ค้างเป็น<b>เจ้าหนี้</b> (หนี้สินหมุนเวียน ${fmtM(bs.cl)} → ${fmtM(rr.clEnd)}) ไม่ใช่ปล่อยให้เงินสดติดลบ — ยอดคงเหลือติดลบเป็นไปไม่ได้ทางบัญชี</div>`;
   })();
   // ── ปัจจัยเสี่ยง "เงินรับโอนจากหน่วยงานในสังกัดหยุด" (ดู RISK_EXEC_MODEL.md หัวข้อ 3.7) ──

@@ -69,6 +69,40 @@ NONCASH_REV = {"4302030101.102"}
 TRF_OP  = {f"4313010199.{i}" for i in (114, 115, 117, 119, 120, 121, 122, 123)}
 TRF_INV = {"4313010199.116", "4313010199.118"}
 
+# ══ แยกหนี้สินหมุนเวียน (1001Y) เป็นถัง — ฐานของเงินสำรอง MOE (RISK_EXEC_MODEL.md 3.13) ══
+# วัดจากงบจริงงวด 256909: เจ้าหนี้การค้า 4,312.8 ลบ. = 66.8% ของหนี้สินหมุนเวียนทั้งเขต
+# และ "รอบค้างจริง" (ยอดเจ้าหนี้ ÷ ค่าใช้จ่ายกลุ่มนั้น/เดือน) ต่างกันคนละเรื่อง:
+#   เจ้าหนี้การค้า มัธยฐาน 4.72 เดือน  ← ผู้ขายให้เครดิต ยืดได้ (หางดง 20.6 ด. · ดอยหล่อ 18.9 ด.)
+#   คชจ.บุคลากร/สาธารณูปโภคค้างจ่าย 1.84 เดือน  ← ยืดไม่ได้ ต้องมีเงินสดจ่าย
+# → เงินสำรอง MOE กันเฉพาะส่วนที่ "ยืดไม่ได้" ไม่กันเจ้าหนี้การค้า (ดูเหตุผลเต็มใน 3.13)
+# รีโปรดิวซ์: python pipeline/analyze_ap_terms.py (ใช้ cl_bucket ตัวนี้ ห้ามก๊อปไปไว้ที่อื่น)
+CL_TRADE_PRE = ("2101010101", "2101010102", "2101010103", "2101010107", "2101020198")
+CL_ACCR_PRE  = ("2102",)
+
+
+def cl_bucket(root):
+    """จำแนก root บัญชีหนี้สินหมุนเวียนเป็น 4 ถัง
+    trade = เจ้าหนี้การค้า/ผู้ขาย (ยา เวชภัณฑ์ วัสดุ ครุภัณฑ์ จ้างเหมา LAB/X-Ray + GR/IR) — มีเครดิต
+    accr  = คชจ.บุคลากร/สาธารณูปโภคค้างจ่าย (2102*) — ครบกำหนดแล้ว ต้องจ่ายด้วยเงินสด
+    tj    = เจ้าหนี้ค่ารักษาตามจ่าย — มีกลไก Option แยกในแท็บ #exec อยู่แล้ว ไม่ใช่ MOE
+    oth   = เงินรับฝาก/เงินประกัน/รายได้รับล่วงหน้า — ไม่ใช่ภาระจ่ายจากเงินบำรุงตามรอบ
+    """
+    if root.startswith(CL_TRADE_PRE):
+        return "trade"
+    if root.startswith("2101020199."):
+        # .134-.150 = เจ้าหนี้สินค้า/บริการ · .2xx/.3xx/.5xx/.7xx = ค่ารักษาตามจ่าย
+        return "trade" if root.split(".")[1][0] == "1" else "tj"
+    if root.startswith("2101020106"):
+        return "tj"
+    if root.startswith(CL_ACCR_PRE):
+        return "accr"
+    return "oth"
+
+
+# กลุ่ม MOE ที่ "ยืดไม่ได้" — ไม่มีใครให้เครดิตค่าแรง/ค่าน้ำค่าไฟ ต้องมีเงินสดจ่ายตามรอบเดือน
+# ที่เหลือ (med/mat/rep/svc/oth) เป็นสินค้า/บริการที่มีเจ้าหนี้การค้ารองรับ
+MOE_CASH_G = ("labor", "util")
+
 # ── เจ้าหนี้/ลูกหนี้ค่ารักษาตามจ่าย (root 13 หลัก) ──
 TJ_PAY_IN  = {"2101020199.202"}                      # เจ้าหนี้ OP-UC นอก CUP ในจังหวัดสังกัด สธ.
 TJ_PAY_OUT = {"2101020199.203"}                      # เจ้าหนี้ OP-UC นอก CUP ต่างจังหวัดสังกัด สธ.
@@ -134,7 +168,7 @@ def opip_of(name):
 def main():
     conn = pymysql.connect(host="localhost", user="root", db="rh1_health", charset="utf8mb4")
     items = pd.read_sql("SELECT RatioItemID,CodeL1 FROM ratio_items WHERE UseYN='Yes' "
-                        "AND RatioItemID IN ('3006Y','3010X')", conn)
+                        "AND RatioItemID IN ('3006Y','3010X','1001Y')", conn)
     # 1003X = เงินสดและรายการเทียบเท่าเงินสด (ตัวเศษ Cash ratio) — ดึงชื่อบัญชีจากผัง acc_hierarchy
     # สำหรับ tooltip "ที่มา" ในตารางผลจำลอง (แสดงว่าเงินสดมาจากบัญชีอะไรบ้าง) — ผันแปรตามผังจริงเสมอ
     cash_df = pd.read_sql(
@@ -144,6 +178,7 @@ def main():
     conn.close()
     rev_codes = set(items.loc[items.RatioItemID == "3006Y", "CodeL1"])
     exp_codes = set(items.loc[items.RatioItemID == "3010X", "CodeL1"])
+    cl_codes  = set(items.loc[items.RatioItemID == "1001Y", "CodeL1"])
 
     names = {}
     for p in (NAME_J, NAME_P):
@@ -200,6 +235,10 @@ def main():
               "arIn": bal(TJ_AR_IN),  "arOut": bal(TJ_AR_OUT)}
         # ── เงินรับโอนจากหน่วยงานในสังกัด (แท็กจาก rev ที่มีอยู่แล้ว ไม่บวกซ้ำ) ──
         trf = {"op": bal(TRF_OP), "inv": bal(TRF_INV)}
+        # ── หนี้สินหมุนเวียนแยก 4 ถัง (ฐานคำนวณเงินสำรอง MOE — ดู cl_bucket ด้านบน) ──
+        clb = {"trade": 0.0, "accr": 0.0, "tj": 0.0, "oth": 0.0}
+        for root, gg in g[g["root"].isin(cl_codes)].groupby("root"):
+            clb[cl_bucket(root)] += float(gg["bs"].sum())
         # ── ตรวจ NI สอดคล้อง ──
         if abs(ni_chk - float(t["ni"])) > 5:
             ni_bad.append(f"{org5} {h.get('name')}: Σrev−Σexp={ni_chk:,.0f} ≠ t.ni={t['ni']:,.0f}")
@@ -219,12 +258,21 @@ def main():
                    # non-cash/เดือน = ค่าเสื่อม+ตัดจำหน่าย+หนี้สูญ (ดูเหตุผลที่ NONCASH_P ด้านบน)
                    "depMo": round(max(0.0, sum(v for p, v in exp.items() if p in NONCASH_P) / mo), 0),
                    # รายได้ไม่ใช่เงินสด/เดือน = รับบริจาคสินทรัพย์ (หักออกจากกระแสเงินสด ดู NONCASH_REV)
-                   "donMo": round(max(0.0, bal(NONCASH_REV) / mo), 0)},
+                   "donMo": round(max(0.0, bal(NONCASH_REV) / mo), 0),
+                   # เจ้าหนี้แยกถัง (ฐานเงินสำรอง MOE · ดู cl_bucket + RISK_EXEC_MODEL.md 3.13)
+                   #   apAccr  = คชจ.บุคลากร/สาธารณูปโภค "ค้างจ่าย" — ครบกำหนดแล้ว ต้องมีเงินสดจ่าย
+                   #             → เข้าเงินสำรองเต็มจำนวน
+                   #   apTrade = เจ้าหนี้การค้า — ผู้ขายให้เครดิตอยู่ ไม่เข้าเงินสำรอง
+                   #             (และถูกนับเป็นตัวส่วนของ CR/QR/Cash ratio อยู่แล้ว จะนับซ้ำ)
+                   "apAccr": round(max(0.0, clb["accr"]), 0),
+                   "apTrade": round(max(0.0, clb["trade"]), 0)},
             "rev": rev, "exp": exp, "moe": moe, "tj": tj, "trf": trf,
         })
 
     # meta กลุ่ม MOE พร้อมรหัส+ชื่อบัญชี (ให้หน้าเว็บแสดง "ที่มา" ตรวจสอบได้รายบัญชี)
-    moe_meta = [{"id": gid, "name": gname,
+    # cash=True → กลุ่มที่ "ยืดไม่ได้" (ค่าจ้าง/ค่าตอบแทน/สาธารณูปโภค) ต้องมีเงินสดจ่ายตามรอบเดือน
+    # หน้าเว็บใช้ธงนี้คิดเงินสำรอง MOE — ห้าม hardcode รายชื่อกลุ่มซ้ำใน risk_drill.html
+    moe_meta = [{"id": gid, "name": gname, "cash": gid in MOE_CASH_G,
                  "accs": [{"a": a, "n": names.get(a, "?")} for a in accs]}
                 for gid, gname, accs in MOE_GROUPS]
     # cashDef: ที่มาบัญชีของ "เงินสดและรายการเทียบเท่าเงินสด" (bs.cn) จัดกลุ่มตาม Name2 ของผัง
@@ -258,6 +306,14 @@ def main():
     for gid, gname, _ in MOE_GROUPS:
         v = sum(x["moe"].get(gid, 0) for x in hosp)
         print(f"   {gid:6s} {gname}: {v/mo_n/1e6:,.1f} ลบ./เดือน")
+    # ฐานเงินสำรอง MOE: MOE กลุ่มยืดไม่ได้ × 3 เดือน + คชจ.ค้างจ่ายที่ครบกำหนดแล้ว
+    moe_cash = sum(sum(x["moe"].get(g, 0) for g in MOE_CASH_G) for x in hosp) / mo_n
+    ap_accr  = sum(x["bs"]["apAccr"] for x in hosp)
+    ap_trade = sum(x["bs"]["apTrade"] for x in hosp)
+    print(f"เจ้าหนี้: การค้า {ap_trade/1e6:,.1f} ลบ. (ไม่กันสำรอง — มีเครดิต) · "
+          f"คชจ.ค้างจ่าย {ap_accr/1e6:,.1f} ลบ. (กันเต็ม)")
+    print(f"เงินสำรอง MOE ทั้งเขต = ยืดไม่ได้ {moe_cash/1e6:,.1f} ลบ./ด. × 3 + ค้างจ่าย {ap_accr/1e6:,.1f} "
+          f"= {(moe_cash*3+ap_accr)/1e6:,.1f} ลบ. (เดิม MOE ทั้งก้อน×3 = {moe_tot/mo_n*3/1e6:,.1f} ลบ.)")
 
 # ══════════════════════════════════════════════════════════════════
 # ⚠️ CHECKLIST รอ CFO review — mapping ที่ร่างเองในไฟล์นี้ (ยังไม่ validate ผัง MOPH)

@@ -74,6 +74,27 @@ console.log('   (ต้องเท่าเดิม: 0×53 1×12 2×10 3×11 4
 //    เชียงกลาง 0→3 · วังชิ้น 2→4 · เทิง 3→5 · เวียงสา 2→3 · แม่ออน 2→3 · เด่นชัย 0→1
 //    (ดู RISK_EXEC_MODEL.md 3.10/3.12) ถ้าเลขนี้ขยับอีกโดยไม่ตั้งใจ = มีของพัง
 
+console.log('\n════ 3.5) เงินสำรอง MOE — กันตามรอบจ่ายจริง แยกชนิดเจ้าหนี้ (3.13) ════');
+// สูตร: (MOE กลุ่มยืดไม่ได้ = ธง cash ใน moeGroups) × 3 + คชจ.ค้างจ่าย (bs.apAccr)
+// ⛔ ไม่รวมเจ้าหนี้การค้า (bs.apTrade) — ผู้ขายให้เครดิต + ถูกนับเป็นตัวส่วน CR/QR แล้ว
+let resTot=0, stuck=[], dRes=0;
+const cashG=j.moeGroups.filter(g=>g.cash).map(g=>g.id);
+for(const h of j.hosp){
+  const r=A.exSimPath(h,0);
+  const want=cashG.reduce((s,g)=>s+(h.moe[g]||0)/h.bs.mo,0)*3+(h.bs.apAccr||0);
+  dRes=Math.max(dRes,Math.abs(r.resNeed0-want));
+  resTot+=r.resNeed0;
+  if(h.bs.cn<r.resNeed0) stuck.push(h.name);
+}
+console.log('  ธง cash ใน moeGroups:',cashG.join(',')||'⚠️ ไม่มี — pipeline ไม่ได้ส่งธงมา');
+console.log('  |resNeed0 − (ยืดไม่ได้×3 + ค้างจ่าย)| =',M(dRes), dRes<1?'✅':'⚠️ สูตรไม่ตรง');
+console.log('  เงินสำรองรวมทั้งเขต:',M(resTot),'(ต้องเท่า 1560.46M · เดิม MOE ทั้งก้อน×3 = 4174.25M)',
+  Math.abs(resTot-1560.46e6)<1e5?'✅':'⚠️ เปลี่ยน');
+console.log('  แห่งที่ใช้จ่ายอย่างอื่นได้ 0 บาท:',stuck.length,'(ต้องเป็น 4: ทุ่งหัวช้าง เทิง ขุนตาล เวียงเชียงรุ้ง)',
+  stuck.length===4?'✅':'⚠️ เปลี่ยน — '+stuck.join(' '));
+if(!cashG.length) fail.push('moeGroups ไม่มีธง cash → เงินสำรองจะเป็น 0 ทุกแห่ง (รัน export_exec.py ใหม่)');
+if(dRes>=1) fail.push('สูตรเงินสำรองไม่ตรงนิยาม 3.13 คลาด '+M(dRes));
+
 console.log('\n════ 4) แผง 824 เคส + คอลัมน์ครบ ════');
 let runs=0,threw=0,badcol=0; const t0=Date.now();
 for(const h of j.hosp){
