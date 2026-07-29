@@ -63,12 +63,16 @@ console.log('  ข้อ 7 monotonic:',mono?'✅':'⚠️');
 console.log('\n════ 3) ตัวเลขที่ใช้ตัดสินใจ ════');
 let sum=0,n=0,rows=[];
 for(const h of j.hosp){const v=A.exSolveFor(h,6); if(v!=null){sum+=v; if(v>0){n++;rows.push([h.name,v]);}}}
-console.log('  เงินสนับสนุนรวม (เป้า 6):',M(sum),'·',n,'แห่ง  (ต้องเท่า 20.95M/6 แห่ง)',
-  Math.abs(sum-20.95e6)<1e5&&n===6?'✅':'⚠️ เปลี่ยน');
+console.log('  เงินสนับสนุนรวม (เป้า 6):',M(sum),'·',n,'แห่ง  (ต้องเท่า 21.05M/6 แห่ง)',
+  Math.abs(sum-21.05e6)<1e5&&n===6?'✅':'⚠️ เปลี่ยน');
 rows.sort((a,b)=>b[1]-a[1]).forEach(r=>console.log('   ',r[0].padEnd(18),M(r[1])));
 const hist={}; j.hosp.forEach(h=>{const s=A.exSimPath(h,0).sepRisk; if(s!=null)hist[s]=(hist[s]||0)+1;});
 console.log('  ระดับ ณ ก.ย. baseline:',[0,1,2,3,4,5,6,7].filter(l=>hist[l]).map(l=>l+'×'+hist[l]).join(' '));
-console.log('   (ต้องเท่าเดิม: 0×55 1×11 2×13 3×9 4×2 5×1 6×6 7×6)');
+console.log('   (ต้องเท่าเดิม: 0×53 1×12 2×10 3×11 4×3 5×2 6×6 7×6)');
+// ⚠️ ค่าคาดหวังเปลี่ยน 29 ก.ค. 69 จากงานค้างข้อ 10 (หักรายได้รับบริจาคสินทรัพย์ออกจากกระแสเงินสด)
+//    เดิม 20.95M · 0×55 1×11 2×13 3×9 4×2 5×1 6×6 7×6 — 6 แห่งที่ระดับ ณ ก.ย. แย่ลง:
+//    เชียงกลาง 0→3 · วังชิ้น 2→4 · เทิง 3→5 · เวียงสา 2→3 · แม่ออน 2→3 · เด่นชัย 0→1
+//    (ดู RISK_EXEC_MODEL.md 3.10/3.12) ถ้าเลขนี้ขยับอีกโดยไม่ตั้งใจ = มีของพัง
 
 console.log('\n════ 4) แผง 824 เคส + คอลัมน์ครบ ════');
 let runs=0,threw=0,badcol=0; const t0=Date.now();
