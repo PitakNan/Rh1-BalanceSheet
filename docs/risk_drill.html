@@ -644,12 +644,18 @@ function recommendFor(h){
 // ใช้ตัวเลขชุดเดียวกับแท็บผู้บริหาร (#exec) เป๊ะ — summary.json ให้มาสองฟิลด์จาก export_risk_link.py:
 //   cn    = เงินสดและรายการเทียบเท่าเงินสด (1003X ตัวเดียวกับ EX.hosp[].bs.cn)
 //   moeMo = MOE ทางการ 59 บัญชี/เดือน (นิยาม MOE_ACC ชุดเดียวกับ export_exec.py)
-// เส้นเทียบ = เดือนที่เหลือถึงสิ้นปีงบ (ไม่ใช่เพดาน · ค่าจริงเกินได้ เช่น ฮอด 7.8 เดือน) ลดเองตามงวด
-// ⚠️ งวด ก.ย. เส้นเทียบ = 0 → ไม่มีแห่งไหนต่ำกว่าเส้น ชิป/บรรทัดสรุปจะหายไปเอง (ถูกต้องตามนิยาม
-//    เพราะสิ้นปีงบไม่มีเดือนข้างหน้าที่ต้องกันเงินไว้จ่ายแล้ว — แท็บ #exec เป็นแบบเดียวกัน)
+// เส้นเทียบ = 3 เดือน คงที่ (ไม่ใช่เพดาน · ค่าจริงเกินได้ เช่น ฮอด 7.8 เดือน)
+// ที่มาของเลข 3 — เจ้าของงานกำหนด 29 ก.ค. 69: ตรงกับเกณฑ์ SU (อัตราความอยู่รอด) ของ Risk Score
+//   ที่ให้ผ่านเมื่ออยู่รอดได้ ≥ 3 เดือน (ดูหัวข้อ 1: s=NWC÷(|NI|/mo) · s<3 = 2 คะแนน)
+//   และตรงคำถามที่ต้องตอบ: "จากงวดนี้ไปอีก 3 เดือน จะมีเงินจ่ายค่าใช้จ่ายขั้นต่ำหรือไม่"
+// ⚠️ เดิม (28 ก.ค.) ใช้ (12 − เดือนงวด) = เดือนที่เหลือถึงสิ้นปีงบ — เลิกใช้แล้วเพราะงวด ก.ย.
+//    จะได้ 0 ทำให้ชิป/บรรทัดสรุปหายทั้งแผง และเกณฑ์ 3 เดือนไม่ควรผูกกับปฏิทินปีงบ
+// ⚠️ คนละตัวกับ resNeed() ใน exSimPath ที่ยังใช้ (12 − m) — อันนั้นคือเงินสำรองในเส้นจำลอง
+//    ที่วิ่งถึง ก.ย. จึงต้องลดลงตามเดือนที่เดินไป (ดู RISK_EXEC_MODEL.md หัวข้อ 3.5/3.6)
 // ⚠️ อ่านให้ถูก: ต่ำกว่าเส้น = "ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่เข้ามาระหว่างทาง"
 //    ไม่ใช่ "จ่าย MOE ไม่ได้" (ส่วนใหญ่กระแสเงินสด/เดือนเป็นบวก) — ดู RISK_EXEC_MODEL.md หัวข้อ 3.6
-function wlMoeLeft(){ return Math.max(0,12-(SUMMARY.period%100)); }
+const MOE_MIN_MO=3;                                 // เกณฑ์ขั้นต่ำตาม SU — ค่าคงที่ ไม่ผูกกับงวด
+function wlMoeLeft(){ return MOE_MIN_MO; }
 function wlMoeBuf(h){ return (h && h.moeMo>0 && h.cn!=null) ? h.cn/h.moeMo : null; }
 function wlMoeShort(list){ const left=wlMoeLeft(); return list.filter(h=>{ const rw=wlMoeBuf(h); return rw!=null && rw<left; }); }
 function wlMoeCell(h){
@@ -657,13 +663,13 @@ function wlMoeCell(h){
   if(rw==null) return '<span class="note">–</span>';
   const left=wlMoeLeft(), short=rw<left;
   return `<b style="color:${short?'var(--red)':'var(--green)'}">${rw.toFixed(1)} เดือน${short?' ⚠️':''}</b>`+
-    `<span class="cellsub${short?' warn':''}">${short?'ขาด '+fmtM(h.moeMo*left-h.cn):'พอถึงสิ้นปีงบ'}</span>`;
+    `<span class="cellsub${short?' warn':''}">${short?'ขาด '+fmtM(h.moeMo*left-h.cn):'ผ่านเกณฑ์ '+left+' เดือน'}</span>`;
 }
 // ชิปในหัวแผง (เห็นได้ทั้งที่ยังไม่กดขยาย) + บรรทัดอธิบายเต็มในตัวแผง
 function wlMoeChip(rows){
   const n=wlMoeShort(rows).length;
   if(!n) return '';
-  return `<span class="exchip warn">💧 เงินสดพอจ่าย MOE ไม่ถึง ${wlMoeLeft()} เดือนที่เหลือ: ${n}/${rows.length} แห่ง</span>`;
+  return `<span class="exchip warn">💧 เงินสดพอจ่าย MOE ไม่ถึง ${wlMoeLeft()} เดือน (เกณฑ์ขั้นต่ำ): ${n}/${rows.length} แห่ง</span>`;
 }
 function wlMoeNote(rows){
   const left=wlMoeLeft(), inList=wlMoeShort(rows), all=wlMoeShort(SUMMARY.hospitals);
@@ -671,7 +677,7 @@ function wlMoeNote(rows){
   const gap=all.reduce((s,h)=>s+(h.moeMo*left-h.cn),0);
   const worst=all.map(h=>({n:h.name,rw:wlMoeBuf(h)})).sort((a,b)=>a.rw-b.rw).slice(0,4);
   return `<div class="note" style="margin-top:6px">💧 <b>เงินสดพอจ่าย MOE</b> (เงินสด ÷ MOE ต่อเดือน) — กลุ่มวิกฤตนี้ <b>${inList.length}</b> จาก ${rows.length} แห่ง ·
-    ทั้งเขต <b>${all.length}</b> จาก ${SUMMARY.nHosp} แห่ง จ่ายได้<b>ไม่ถึง ${left} เดือนที่เหลือถึงสิ้นปีงบ</b> (ขาดรวม ${fmtM(gap)})
+    ทั้งเขต <b>${all.length}</b> จาก ${SUMMARY.nHosp} แห่ง จ่ายได้<b>ไม่ถึง ${left} เดือน</b> ซึ่งเป็นเกณฑ์ขั้นต่ำตามหลักอัตราความอยู่รอด (SU) ของ Risk Score (ขาดรวม ${fmtM(gap)})
     <br>น้อยสุด: ${worst.map(w=>w.n+' '+w.rw.toFixed(1)+' เดือน').join(' · ')} — อ่านว่า <b>"ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่เข้ามาระหว่างทาง"</b>
     ไม่ใช่จ่าย MOE ไม่ได้ ถ้ารายรับสะดุดกลุ่มนี้กระทบก่อน · <a class="ovlink" href="#exec">เจาะรายแห่งในมุมมองผู้บริหาร →</a></div>`;
 }
@@ -688,7 +694,7 @@ function renderWatchlist(){
         <div class="panel">
           <div class="acctbl-wrap" style="max-height:none">
             <table class="wltbl wl-card">
-              <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>Risk</th><th>Cash<br>ratio</th><th>เงินบำรุง<br>สุทธิ</th><th title="เงินสด ÷ MOE ต่อเดือน = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็นได้กี่เดือน (เทียบข้ามขนาด รพ. ได้) · แดง = ไม่ถึงจำนวนเดือนที่เหลือถึงสิ้นปีงบ ไม่ใช่เพดาน">เงินสดพอจ่าย<br>MOE</th><th>สาเหตุ/ประเด็นชี้ปัญหา</th><th>คำแนะนำเฉพาะ รพ.</th></tr>
+              <tr><th>จังหวัด</th><th>โรงพยาบาล</th><th>Risk</th><th>Cash<br>ratio</th><th>เงินบำรุง<br>สุทธิ</th><th title="เงินสด ÷ MOE ต่อเดือน = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็นได้กี่เดือน (เทียบข้ามขนาด รพ. ได้) · แดง = ไม่ถึง 3 เดือน ซึ่งเป็นเกณฑ์ขั้นต่ำตามหลักอัตราความอยู่รอด (SU) ของ Risk Score — ไม่ใช่เพดาน">เงินสดพอจ่าย<br>MOE</th><th>สาเหตุ/ประเด็นชี้ปัญหา</th><th>คำแนะนำเฉพาะ รพ.</th></tr>
               ${rows.map(h=>`<tr class="click" onclick="location.hash='h/${h.hcode}'">
                 <td>${h.prov||''}</td>
                 <td><b>${h.name}</b><div class="note">${h.typeSer||''}${h.bed?' · '+h.bed+' เตียง':''}${h.grp?' · '+h.grp:''}</div></td>
@@ -1693,9 +1699,9 @@ function exRender(){
       <td style="color:${r0.niM<0?'var(--red)':'var(--green)'}">${sgnM(r0.niM)}</td>
       <td${h.bs.cn<=0?' style="color:var(--red);font-weight:700"':''}>${fmtM(h.bs.cn)}${(()=>{
         // เงินสดพอจ่าย MOE: เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็นได้กี่เดือน (เทียบข้ามขนาด รพ. ได้)
-        // เตือนเมื่อน้อยกว่าเดือนที่เหลือถึงสิ้นปีงบ = ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับระหว่างทาง
-        // (เส้นเทียบไม่ใช่เพดาน — ค่าจริงเกินได้ · งวด ก.ย. เส้นเทียบ = 0 จึงไม่มีใครถูกเตือน)
-        const mm=r0.moeMo, left=Math.max(0,12-h.bs.mo);
+        // เตือนเมื่อน้อยกว่าเกณฑ์ขั้นต่ำ 3 เดือน (ตาม SU) = ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับระหว่างทาง
+        // (เส้นเทียบไม่ใช่เพดาน — ค่าจริงเกินได้ · ค่าคงที่ ไม่ผูกกับงวด ดูเหตุผลที่ MOE_MIN_MO)
+        const mm=r0.moeMo, left=MOE_MIN_MO;
         if(!(mm>0)||h.bs.cn==null) return '';
         const rw=h.bs.cn/mm, short=rw<left;
         return `<span class="cellsub${short?' warn':''}">พอจ่าย MOE ${rw.toFixed(1)} เดือน${short?' ⚠️':''}</span>`;
@@ -1750,7 +1756,7 @@ function exRender(){
     risk0:'ระดับวิกฤตการเงิน (Risk Score ทางการ) งวดล่าสุด — 0 ดีสุด ถึง 7 วิกฤตสุด',
     moe:'ค่าใช้จ่ายจำเป็นต่อเดือน (นิยามกองเศรษฐกิจสุขภาพ) = Σ(ยอดจ่ายจริงสะสม ÷ เดือน) × (1 + %ปรับรายหมวด)',
     ni:'กำไร/ขาดทุนสุทธิจำลอง/เดือน = รายรับกองทุน×(1+%) − MOE − ค่าใช้จ่ายนอกนิยาม(run-rate) − รายการไม่ใช่เงินสด',
-    cashbal:cashTitle+'\n\nบรรทัดล่าง "พอจ่าย MOE X เดือน" = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็น (MOE) ได้กี่เดือน\n= เงินสด ÷ MOE/เดือน · ไม่ใช่เพดาน ค่าจริงเกินได้\n⚠️ เตือนเมื่อน้อยกว่าเดือนที่เหลือถึงสิ้นปีงบ = ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่จะเข้ามาระหว่างทาง',
+    cashbal:cashTitle+'\n\nบรรทัดล่าง "พอจ่าย MOE X เดือน" = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็น (MOE) ได้กี่เดือน\n= เงินสด ÷ MOE/เดือน · ไม่ใช่เพดาน ค่าจริงเกินได้\n⚠️ เตือนเมื่อน้อยกว่า 3 เดือน (เกณฑ์ขั้นต่ำตามหลักอัตราความอยู่รอด SU ของ Risk Score)\n= ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่จะเข้ามาระหว่างทาง',
     cash:'เดือนที่เงินสดจะติดลบระหว่างจำลอง (ไม่หมด = ไม่ติดลบตลอดช่วง) · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด',
     sep0:'ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก)',
     give:'เงินยกหนี้/คืน จาก Option ตามจ่าย · ยกหนี้: รพช.รับเต็ม, รพศ./รพท.ยกให้ · ยกหนี้เจาะจง: เงินคืนขั้นต่ำให้ระดับ ≤3 · ไม่ใช้/จ่ายจริง: ไม่มี',
@@ -1782,14 +1788,14 @@ function exRender(){
       <div class="tgt-row">ช่วย ${nHelp} แห่ง จาก ${rows.length} แห่งที่เลือก${nFail?` · <span class="tgt-warn">⚠️ ${nFail} แห่งเงินก้อนอย่างเดียวไม่ถึงเป้า (ต้องแก้ NI/รายรับร่วมด้วย)</span>`:''}${Object.keys(byProv).length?` · <span class="tgt-note">${Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')}</span>`:''}</div>
       <div class="tgt-row">ระดับวิกฤต ณ ${sepLab}: ก่อนช่วย <span class="exhist">${hist(x=>x.r0.sepRisk)}</span> → หลังช่วย <span class="exhist">${hist(x=>x.r1.sepRisk)}</span></div>
       ${(()=>{
-        // สรุปเงินสดพอจ่าย MOE: แห่งที่เงินสดพอจ่าย MOE ไม่ถึงสิ้นปีงบ (ไม่ใช่วิกฤตเฉพาะหน้า
+        // สรุปเงินสดพอจ่าย MOE: แห่งที่เงินสดพอจ่าย MOE ไม่ถึงเกณฑ์ขั้นต่ำ 3 เดือน (ไม่ใช่วิกฤตเฉพาะหน้า
         // เพราะรายรับยังเข้าทุกเดือน — แต่เป็นกลุ่มที่จะกระทบก่อนถ้ารายรับสะดุด)
-        const left=Math.max(0,12-EX.monthsElapsed);
+        const left=MOE_MIN_MO;                       // เกณฑ์ขั้นต่ำ 3 เดือน (ตัวเดียวกับ Watchlist หน้าหลัก)
         const t=items.filter(x=>x.r0.moeMo>0 && x.h.bs.cn/x.r0.moeMo < left);
         if(!t.length) return '';
         const gap=t.reduce((s,x)=>s+(x.r0.moeMo*left-x.h.bs.cn),0);
         const worst=t.map(x=>({n:x.h.name,rw:x.h.bs.cn/x.r0.moeMo})).sort((a,b)=>a.rw-b.rw).slice(0,4);
-        return `<div class="tgt-row">💧 เงินสดพอจ่าย MOE: <b>${t.length}</b> จาก ${rows.length} แห่ง จ่ายได้<b>ไม่ถึง ${left} เดือนที่เหลือถึงสิ้นปีงบ</b> (ขาดรวม ${fmtM(gap)})
+        return `<div class="tgt-row">💧 เงินสดพอจ่าย MOE: <b>${t.length}</b> จาก ${rows.length} แห่ง จ่ายได้<b>ไม่ถึง ${left} เดือน</b> (เกณฑ์ขั้นต่ำตามหลัก SU · ขาดรวม ${fmtM(gap)})
           <span class="tgt-note">— น้อยสุด: ${worst.map(w=>w.n+' '+w.rw.toFixed(1)+' เดือน').join(' · ')} · อ่านเป็น "ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่เข้ามาระหว่างทาง" ไม่ใช่จ่าย MOE ไม่ได้ — ถ้ารายรับสะดุด กลุ่มนี้กระทบก่อน</span></div>`;
       })()}
       ${EXST.tj.mode==='forgive'&&EXTJ.total>0?`<div class="tgt-row">💛 เงินที่ยกให้รวม (Option ยกหนี้): <b>${fmtM(EXTJ.total)}</b> <span class="tgt-note">— รพช. ${EXTJ.debtors.size} แห่งได้รับการยกหนี้ (รพศ./รพท. ฝั่งเจ้าหนี้ยกให้ตามสัดส่วน)${EXTJ.uncovered>1?` · เกลี่ยไม่ได้ ${fmtM(EXTJ.uncovered)}`:''}</span></div>`

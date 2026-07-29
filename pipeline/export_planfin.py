@@ -82,6 +82,8 @@ def planfin_code_fallback(root):
         if d == "4307010103": return "P11"                       # งบบุคลากร
         if d in ("4307010104", "4302020107", "4302020199"): return "P13"  # งบลงทุน/ช่วยเหลือลงทุน
         if d == "4307010112": return "P121"                      # เบิกเกินส่งคืน — ยืนยันจาก Mapping_Clean
+        # 4308010121 = "ภายในกรมเดียวกัน (Manual)" → P12 รายได้อื่นปกติ ไม่ใช่ auto (ผังทางการ 3.8)
+        if d == "4308010121": return "P12"                        # แก้ 2026-07-29 (เดิม P121 ผิด)
         if d.startswith("4308"): return "P121"                    # ระหว่างหน่วยงานกรณีอื่น (auto) — ยืนยัน suf .101 จาก Mapping_Clean ใช้ทั้ง prefix
         if d.startswith("4307"): return "P12"                     # งบดำเนินงาน/อุดหนุน/กลาง/กู้ — ยืนยันจาก Mapping_Clean
         return "P12"                                              # บริจาค/ดอกเบี้ย/ขาย/อื่น/ของแผ่นดิน
@@ -95,11 +97,15 @@ def planfin_code_fallback(root):
     if d == "5104040102": return "P19"                           # ค่าตอบแทน
     if d == "5101010113":                                        # ค่าจ้าง — ประจำ/ชั่วคราว
         return "P17" if suf in ("101", "102") else "P18"
-    if d in ("5101010101", "5101010103", "5101010109", "5101010116"): return "P17"
+    if d in ("5101010101", "5101010103", "5101010116"): return "P17"
+    # แก้ 2026-07-29: ตรงกับผังทางการ AccCode ใน M5317.mdb (หัวข้อ 3.8) — เดิมจัด P17 ผิด
+    if d == "5101010109": return "P20"                           # เงินตอบแทนพิเศษ (เงินเดือน/ค่าจ้างถึงขั้นสูงสุด)
     if d == "5101010108": return "P19"                           # ค่าล่วงเวลา — แก้ 2026-07-21 (เดิม P17 ผิด)
     if d == "5101010115": return "P17"                           # ค่าตอบแทนพนักงานราชการ — แก้ 2026-07-21 (เดิม P18 ผิด)
     if d == "5101010199":                                        # แก้ 2026-07-21: เดิม P19 ทั้งหมด ผิด .101/.102
         return "P19" if suf == "103" else "P17"                  # .103=ค่าเวร/ผลัด → P19, .101/.102=เงินเพิ่มพิเศษ → P17
+    # แก้ 2026-07-29 ตามผังทางการ: เงินเพิ่มสำหรับตำแหน่งที่มีเหตุพิเศษ = เงินเดือน (P17) ไม่ใช่ P20
+    if d == "5101020114" and suf in ("126", "127"): return "P17"
     if d[:6] in ("510102", "510103", "510104"): return "P20"     # บุคลากรอื่น/ช่วยเหลือ/บำนาญ
     if d[:4] in ("5102", "5103"): return "P21"                   # ฝึกอบรม/เดินทาง → ค่าใช้สอย
     if d in ("5104010104", "5104010110", "5104030206"): return "P23"  # วัสดุ/เชื้อเพลิง/ครุภัณฑ์ต่ำเกณฑ์
@@ -121,12 +127,32 @@ def acc_root(a):
     return p + "." + dd[:3] if dd else a
 
 _PLANFIN_MAP = None
+_OFFICIAL_MAP = None
+OFFICIAL_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "planfin_map_official.csv")
+
+def load_official_map():
+    """ผัง GL→P-code **ทางการ** จากตาราง AccCode ใน M5317.mdb ของ HFO
+    สร้างด้วย `python export_planfin_map.py` (ดู RISK_EXEC_MODEL.md หัวข้อ 3.8)
+    ไม่มีไฟล์ก็ทำงานต่อได้ — ถอยไปใช้ Mapping_Clean.xlsx เหมือนเดิม"""
+    if not os.path.exists(OFFICIAL_CSV):
+        return {}
+    df = pd.read_csv(OFFICIAL_CSV, dtype=str)
+    df = df[df["UseYN"] == "Yes"]
+    return dict(zip(df["CodeL1"].str.strip(), df["PCode"].str.strip()))
 
 def planfin_code(root):
-    """โค้ด Planfin (Pxx) ของรหัสบัญชี — lookup Mapping_Clean.xlsx ก่อน ไม่เจอค่อย fallback (โครงสร้าง MOPH).
+    """โค้ด Planfin (Pxx) ของรหัสบัญชี — ลำดับความน่าเชื่อถือ:
+       1) ผังทางการ planfin_map_official.csv (AccCode ใน M5317.mdb) — 444 รหัส
+       2) Mapping_Clean.xlsx (สำเนาที่ฝ่ายบัญชียืนยันไว้ ต่างจากทางการ 6 รหัส — ดู 3.8)
+       3) planfin_code_fallback() โครงสร้างรหัสบัญชี MOPH สำหรับรหัสที่ไม่อยู่ทั้งสองแหล่ง
     ย้ายกลับเป็น module-level 2026-07-25 ให้ export_exec.py import ได้ (โหลด map ครั้งเดียว cache) — ค่าไม่เปลี่ยน
     (เดิม 2026-07-21 ถูกย้ายเข้า main() เป็น closure → export_exec.py import ไม่ได้ = บั๊กที่ orchestrator จับได้)"""
-    global _PLANFIN_MAP
+    global _PLANFIN_MAP, _OFFICIAL_MAP
+    if _OFFICIAL_MAP is None:
+        _OFFICIAL_MAP = load_official_map()
+    p = _OFFICIAL_MAP.get(root)
+    if p is not None:
+        return p
     if _PLANFIN_MAP is None:
         _PLANFIN_MAP = load_planfin_map()
     p = _PLANFIN_MAP.get(root)

@@ -49,7 +49,12 @@ chk('ทุกแถวมี 8 <td>', bad.length===0, bad.length?'ผิด '+b
 
 // 4) ตัวเลขตรงกับสูตร cn/moeMo และเส้นเทียบ = 12−เดือนที่ผ่าน (เส้นเทียบ ไม่ใช่เพดาน)
 const left=A.wlMoeLeft();
-chk('เดือนที่เหลือถึงสิ้นปีงบ = '+left+' (งวด '+S.period+')', left===12-(S.period%100));
+// เกณฑ์ขั้นต่ำ = 3 เดือนคงที่ (ตาม SU ของ Risk Score) — ห้ามผูกกับงวด ไม่งั้นงวด ก.ย. จะได้ 0 แล้วชิปหาย
+chk('เกณฑ์ขั้นต่ำ = 3 เดือน คงที่ (งวด '+S.period+')', left===3);
+A.setSUMMARY({...S,period:256912});
+chk('งวด ก.ย. (256912) เกณฑ์ยังเป็น 3 ไม่กลายเป็น 0', A.wlMoeLeft()===3, 'ได้ '+A.wlMoeLeft());
+chk('งวด ก.ย. ชิปยังแสดง (ไม่หายทั้งแผง)', /เงินสดพอจ่าย MOE ไม่ถึง 3 เดือน/.test(A.wlMoeChip(S.hospitals.filter(h=>(h.risk||0)>=6))));
+A.setSUMMARY(S);
 const shortAll=A.wlMoeShort(S.hospitals), short6=A.wlMoeShort(rows6);
 const expAll=S.hospitals.filter(h=>h.moeMo>0&&h.cn/h.moeMo<left);
 chk('นับแห่งที่ต่ำกว่าเส้นเทียบทั้งเขต = '+expAll.length, shortAll.length===expAll.length, 'ได้ '+shortAll.length);
