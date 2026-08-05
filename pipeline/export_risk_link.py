@@ -212,7 +212,24 @@ def peer_stats(dim):
     n = j.groupby([dim, "t"])["cr"].count().rename("n")  # จำนวน รพ. ในกลุ่มที่มีข้อมูลงวดนั้น
     return q.join(mn).join(mx).join(n).reset_index()
 
-peer_by = {dim: peer_stats(dim) for dim in ("grp", "level", "prov")}
+j["all"] = "เขต 1"  # มิติ "ทั้งเขต" — แถบเดียวใช้ร่วมทุก รพ. จึงเก็บครั้งเดียวใน summary.json ไม่ซ้ำใน h/*.json
+peer_by = {dim: peer_stats(dim) for dim in ("grp", "level", "prov", "all")}
+
+
+def peer_row(r):
+    """หนึ่งงวดของแถบเปรียบเทียบ — ใช้ทั้งใน h/*.json (grp/level/prov) และ summary.json (all)"""
+    o = {"t": int(r["t"]), "n": None if pd.isna(r["n"]) else int(r["n"])}
+    for m in ("cr", "qr", "cash"):
+        o[m + "_p25"] = rnd(r[m + "_25"])
+        o[m + "_med"] = rnd(r[m + "_50"])
+        o[m + "_p75"] = rnd(r[m + "_75"])
+        o[m + "_p10"] = rnd(r[m + "_10"])
+        o[m + "_p90"] = rnd(r[m + "_90"])
+        o[m + "_min"] = rnd(r[m + "_min"])
+        o[m + "_max"] = rnd(r[m + "_max"])
+    o["opMargin_med"] = rnd(r["opMargin_50"], 1)
+    o["roa_med"] = rnd(r["roa_50"], 1)
+    return o
 
 # ---------- 6) trigger flags (L1) งวดล่าสุด ----------
 T = int(j["t"].max())
@@ -509,20 +526,6 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             continue
         pdf = peer_by[dim]
         sub = pdf[(pdf[dim] == key) & (pdf["t"].isin(hperiods))].sort_values("t")
-        def peer_row(r):
-            o = {"t": int(r["t"]), "n": None if pd.isna(r["n"]) else int(r["n"])}
-            for m in ("cr", "qr", "cash"):
-                o[m + "_p25"] = rnd(r[m + "_25"])
-                o[m + "_med"] = rnd(r[m + "_50"])
-                o[m + "_p75"] = rnd(r[m + "_75"])
-                o[m + "_p10"] = rnd(r[m + "_10"])
-                o[m + "_p90"] = rnd(r[m + "_90"])
-                o[m + "_min"] = rnd(r[m + "_min"])
-                o[m + "_max"] = rnd(r[m + "_max"])
-            o["opMargin_med"] = rnd(r["opMargin_50"], 1)
-            o["roa_med"] = rnd(r["roa_50"], 1)
-            return o
-
         peer[dim] = [peer_row(r) for _, r in sub.iterrows()]
 
     tcur = hperiods[-1]
@@ -599,6 +602,10 @@ with open(os.path.join(OUT_DIR, "summary.json"), "w", encoding="utf-8") as f:
         "period": T, "periodLabel": tlab(T), "periodPrev3": int(TPREV3),
         "generated": pd.Timestamp.now().strftime("%Y-%m-%d"),
         "nHosp": len(summary_rows), "hospitals": summary_rows,
+        # แถบเปรียบเทียบ "ทั้งเขต" — เหมือนกันทุก รพ. จึงเก็บที่นี่ที่เดียว (h/*.json ไม่ต้องแบกซ้ำ 103 ชุด)
+        "peerAll": [peer_row(r) for _, r in
+                    peer_by["all"][peer_by["all"]["t"].isin(sorted(j["t"].unique())[-HIST_N:])]
+                    .sort_values("t").iterrows()],
     }, f, ensure_ascii=False, separators=(",", ":"))
 print(f"WROTE {os.path.join(OUT_DIR, 'summary.json')} ({os.path.getsize(os.path.join(OUT_DIR, 'summary.json'))/1024:.1f} KB)")
 

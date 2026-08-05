@@ -2356,11 +2356,12 @@ function renderDetail(hcode){
         </div>
       </h3>
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px">
-        ${tip('**คืออะไร**: กลุ่มเปรียบเทียบ (peer) 3 มิติ ใช้หาแถบ P25-P75/median ในกราฟด้านบน\n**สูตร**: กลุ่ม = ระดับ+ลักษณะบริการ (พี่ตาล) · ระดับ = A/S/M1/M2/F1/F2/F3 · จังหวัด = สังกัดจริง\n**ข้อมูลจาก**: meta.json (org.grp/level/prov) — percentile คำนวณต่องวดจากทุก รพ.ในกลุ่มเดียวกัน')}
+        ${tip('**คืออะไร**: กลุ่มเปรียบเทียบ (peer) 4 มิติ ใช้หาแถบ P25-P75/median ในกราฟด้านบน\n**สูตร**: กลุ่ม = ระดับ+ลักษณะบริการ (พี่ตาล) · ระดับ = A/S/M1/M2/F1/F2/F3 · จังหวัด = สังกัดจริง · ทั้งเขต = 103 รพ. ทุกระดับรวมกัน\n**ใช้ "ทั้งเขต" เมื่อไร**: เหมาะกับการดูว่าอยู่ตรงไหนของเขตในภาพรวม และใช้แทนได้เมื่อกลุ่มย่อยเล็กเกินไป (21 แห่งมีกลุ่มต่ำกว่า 5) — แต่เพราะรวมทุกระดับเข้าด้วยกัน แถบจะกว้างและ รพศ./รพท. จะอยู่เหนือ P75 แทบตลอดโดยธรรมชาติ (CR กลาง รพศ.A 2.86 vs รพช.F1 1.14) ไม่ได้แปลว่าเก่งกว่า\n**ข้อมูลจาก**: meta.json (org.grp/level/prov) — percentile คำนวณต่องวดจากทุก รพ.ในกลุ่มเดียวกัน')}
         <div class="peer-tabs">
           <button class="mtab${peerDim==='grp'?' on':''}" onclick="setPeerDim('grp')">กลุ่ม ${h.grp||''}</button>
           <button class="mtab${peerDim==='level'?' on':''}" onclick="setPeerDim('level')">ระดับ ${h.level||''}</button>
           <button class="mtab${peerDim==='prov'?' on':''}" onclick="setPeerDim('prov')">จังหวัด ${h.prov||''}</button>
+          ${(SUMMARY&&SUMMARY.peerAll)?`<button class="mtab${peerDim==='all'?' on':''}" onclick="setPeerDim('all')">ทั้งเขต</button>`:''}
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px">
@@ -2374,7 +2375,8 @@ function renderDetail(hcode){
       <div class="chartbox"><canvas id="ratioChart"></canvas></div>
       <div class="note">เส้นทึบ = รพ.นี้ · เส้นประ = median กลุ่ม · แถบเทาเข้ม = ช่วง P25–P75${bandMode==='p25'?'':' · เงาจาง = ช่วง '+(bandMode==='mm'?'Min–Max':'P10–P90')}${peerN(h)?' · กลุ่มเทียบ '+peerN(h)+' แห่ง':''}</div>
       <div class="note" style="margin-top:4px">ℹ️ แถบ P25–P75 คือ<b>ครึ่งกลางของกลุ่ม ไม่ใช่ช่วงที่ควรอยู่</b> — ตามนิยามจะมี รพ. อยู่นอกแถบราวครึ่งหนึ่งเสมอ (วัดจริงทั้งเขต: ในแถบ 48% · ต่ำกว่า P25 26% · สูงกว่า P75 26%) เส้นอยู่ใต้แถบตลอด = อยู่ใน 25% ล่างของกลุ่มจริง ๆ ไม่ใช่กราฟผิด</div>
-      ${peerN(h)!=null&&peerN(h)<5?`<div class="note" style="margin-top:4px;color:var(--orange)">⚠️ กลุ่มเทียบมีแค่ ${peerN(h)} แห่ง — เพอร์เซ็นไทล์จากกลุ่มเล็กไม่เสถียร (รพ. แห่งเดียวขยับก็ทำให้แถบเลื่อนทั้งแถบ) ควรดูมิติเปรียบเทียบอื่นประกอบ</div>`:''}
+      ${peerN(h)!=null&&peerN(h)<5?`<div class="note" style="margin-top:4px;color:var(--orange)">⚠️ กลุ่มเทียบมีแค่ ${peerN(h)} แห่ง — เพอร์เซ็นไทล์จากกลุ่มเล็กไม่เสถียร (รพ. แห่งเดียวขยับก็ทำให้แถบเลื่อนทั้งแถบ) ลองกด <b>"ทั้งเขต"</b> ดูประกอบ</div>`:''}
+      ${peerDim==='all'?`<div class="note" style="margin-top:4px;color:var(--orange)">⚠️ มิติ "ทั้งเขต" รวม รพ. ทุกระดับเข้าด้วยกัน (รพศ. ถึง รพช.F3) แถบจึงกว้างกว่าปกติมาก — ${h.level||'รพ.'} อยู่เหนือหรือใต้แถบนี้ส่วนหนึ่งมาจาก<b>ขนาดและระดับ ไม่ใช่ฝีมือบริหารล้วน ๆ</b> (CR กลางของ รพศ.A = 2.86 เทียบ รพช.F1 = 1.14) ใช้ดูตำแหน่งในภาพรวมเขตได้ แต่ถ้าจะตัดสินผลงานควรกลับไปดูมิติ "กลุ่ม" หรือ "ระดับ"</div>`:''}
       <div class="src-note">📌 ที่มาข้อมูล: ค่า Current/Quick/Cash Ratio ที่ รพ. รายงานจริง (ตาราง <code>risk_scores</code>) — ถ้างวดใดไม่มีรายงาน (ขึ้น "คำนวณจาก GL" ที่หัวหน้าเพจ) จะคำนวณแทนจากงบทดลอง <code>balance_sheet</code> ตามผังบัญชี RatioItemID 1001X/1001Y (CR), 1002X (QR), 1003X (Cash) ของกองเศรษฐกิจสุขภาพ</div>
     </div>
 
@@ -3404,8 +3406,10 @@ function renderEfficiency(h, s){
 function setRatioMetric(m){ratioMetric=m;renderDetail(CUR)}
 function setPeerDim(d){peerDim=d;renderDetail(CUR)}
 function setBandMode(m){bandMode=m;renderDetail(CUR)}
+// แถบ "ทั้งเขต" เหมือนกันทุก รพ. จึงเก็บครั้งเดียวใน summary.json (ไม่ซ้ำใน h/*.json) — ดึงจากคนละที่แต่รูปแบบเดียวกัน
+function peerSeriesOf(h){ return (peerDim==='all' ? (SUMMARY&&SUMMARY.peerAll) : (h.peer&&h.peer[peerDim])) || []; }
 // จำนวน รพ. ในกลุ่มเทียบงวดล่าสุด (ไฟล์ข้อมูลชุดเก่ายังไม่มีฟิลด์ n → คืน null แล้วไม่แสดง)
-function peerN(h){const s=(h.peer&&h.peer[peerDim])||[];return s.length?(s[s.length-1].n??null):null}
+function peerN(h){const s=peerSeriesOf(h);return s.length?(s[s.length-1].n??null):null}
 function setPeriodMode(m){
   periodMode=m;
   document.getElementById('pdMom').classList.toggle('on',m==='mom');
@@ -3419,7 +3423,7 @@ function renderRatioChart(h){
   const ctx=document.getElementById('ratioChart');
   const labels=h.trend.map(r=>tLab(r.t));
   const own=h.trend.map(r=>r[ratioMetric]);
-  const peerSeries=h.peer[peerDim]||[];
+  const peerSeries=peerSeriesOf(h);
   const peerByT={}; for(const p of peerSeries) peerByT[p.t]=p;
   const pk=sfx=>h.trend.map(r=>{const p=peerByT[r.t];return p?(p[ratioMetric+sfx]??null):null});
   const p25=pk('_p25'), p75=pk('_p75'), med=pk('_med');
