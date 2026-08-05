@@ -14,11 +14,11 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exHorLab,tLab,
+const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
   SHOW_TJAR:EX_SHOW_TJAR,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
-const ST=ext=>({crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext,tgt:6,
+const ST=(ext,mmo)=>({mmo,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext,tgt:6,
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
   tj:{mode:'off',scope:'crisis'},inj:{},open:{}});
 const fmtM=v=>{if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()};
@@ -48,20 +48,21 @@ for(const f of ['index.html','explorer.html']){
 console.log();
 console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (ต้องเป็น false = ซ่อนลูกหนี้)\n`);
 
-for(const ext of [0,3,12]){
-  A.setEXST(ST(ext)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1});
+for(const mmo of [1,3,6]){
+  const ext=0;
+  A.setEXST(ST(ext,mmo)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1});
   A.exRender();
   const html=els.exResBox.innerHTML;
   const rows=[...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>m[0]);
   const head=rows[0], main=rows.filter(r=>r.includes('class="ovtgl"'));
   const nTh=(head.match(/<th\b/g)||[]).length;
-  const months=(12-j.hosp[0].bs.mo)+ext;
-  console.log(`━━ ช่วงจำลอง ext=${ext} → ถึง ${A.exHorLab()} · ${months} เดือน ━━`);
+  const months=A.exMoeMonths();
+  console.log(`━━ ทดสอบความทนทาน ${months} เดือน → ถึง ${A.exMoeTargetLab()} ━━`);
   const headTxt=head.replace(/<br\s*\/?>/g,'');   // หัวคอลัมน์ตัดบรรทัดด้วย <br> — ตรวจข้อความจริงไม่ใช่ markup
   chk(nTh===14, `หัวตาราง 14 ช่อง (ได้ ${nTh})`);
   chk(!headTxt.includes('ลูกหนี้'), 'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
-  chk(headTxt.includes('เงินสดสำหรับจ่าย MOE')&&headTxt.includes(A.exHorLab()), `หัวคอลัมน์ระบุเดือนเป้า "${A.exHorLab()}"`);
-  chk(headTxt.includes('เงินที่ต้องเติม'), 'มีคอลัมน์เงินที่ต้องเติม');
+  chk(headTxt.includes('ทนถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนทดสอบ "${A.exMoeTargetLab()}"`);
+  chk(headTxt.includes('ถ้ารายรับ')&&headTxt.includes('ส่วนที่ขาด'), 'หัวคอลัมน์สื่อว่าเป็นการทดสอบ ไม่ใช่คำของบ');
   chk(!headTxt.includes('จะหมด?'), 'คอลัมน์ "เงินสดจะหมด?" ถูกแทนที่แล้ว');
   // คอลัมน์ชื่อ รพ. ต้องตรึงตอนปัดแนวนอน (คลาส ex-sticky + CSS sticky ของ nth-child(2))
   chk(/<table class="wltbl ex-sticky"/.test(html), 'ตารางมีคลาส ex-sticky (ตรึงคอลัมน์ชื่อ รพ.)');
@@ -110,14 +111,53 @@ for(const ext of [0,3,12]){
   chk(w.length===1, `TSV ทุกบรรทัดกว้างเท่ากัน (${w.join(',')} คอลัมน์)`);
   chk(!L[0].includes('ลูกหนี้'), 'TSV ไม่มีคอลัมน์ลูกหนี้ (ตรงกับตาราง)');
   const hh=L[0].split('\t'), tt=L[L.length-1].split('\t');
-  const iTop=hh.findIndex(c=>c.startsWith('เงินที่ต้องเติม'));
+  const iTop=hh.findIndex(c=>c.startsWith('ทดสอบทนทาน: ส่วนที่ขาด'));
   const sumTop=j.hosp.reduce((s,h)=>{const r0=A.exSimPath(h,0);return s+A.exTopUp({h,r0});},0);
-  chk(iTop>=0&&Math.abs(parseFloat(tt[iTop])-sumTop/1e6)<0.02, `ยอดรวมเงินที่ต้องเติมใน TSV ตรง (${tt[iTop]} vs ${(sumTop/1e6).toFixed(2)})`);
+  chk(iTop>=0&&Math.abs(parseFloat(tt[iTop])-sumTop/1e6)<0.02, `ยอดรวมส่วนที่ขาดใน TSV ตรง (${tt[iTop]} vs ${(sumTop/1e6).toFixed(2)})`);
   console.log(`   → รวมเงินที่ต้องเติม ${(sumTop/1e6).toFixed(1)} ลบ. · ${nTop} แห่ง · เจ้าหนี้เกินเงินสด ${nRed} แห่ง\n`);
 }
 
+// ── tooltip หัวคอลัมน์ต้องมาตั้งแต่ "เรนเดอร์ครั้งแรก" ──
+// EX_COLDEF_MAP ต้องถูกตั้งก่อนสร้าง exHeadRow ไม่งั้น exSortTh อ่านแผนที่ว่าง → title หายทั้งแถว
+// (เคยพลาดมาแล้ว ตอนย้ายหัวตารางขึ้นไปสร้างก่อนเพื่อคำนวณ colspan)
+console.log('━━ tooltip หัวคอลัมน์ (เรนเดอร์ครั้งแรก) ━━');
+{
+  const B=new Function(code+`;return {exRender,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
+    setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();   // instance ใหม่ = EX_COLDEF_MAP ว่างจริง
+  B.setEX(j); B.setEXST(ST(0,3)); B.setEXOPEN({}); B.setEXBRK({}); B.setEXSORT({col:null,dir:-1});
+  B.exRender();
+  const ths=[...els.exResBox.innerHTML.matchAll(/<th class="exsortth[^>]*>/g)].map(m=>m[0]);
+  const noTitle=ths.filter(t=>!/ title="[^"]+"/.test(t));
+  chk(ths.length>0&&noTitle.length===0,
+      `หัวคอลัมน์มี tooltip ครบ ${ths.length-noTitle.length}/${ths.length} ตั้งแต่เรนเดอร์แรก`);
+  const bad=ths.filter(t=>/ title="[^"]*"[^ >]/.test(t));   // อัญประกาศใน title ตัด attribute กลางคัน
+  chk(bad.length===0, `title ไม่มีอัญประกาศดิบที่ทำ markup เพี้ยน (พบ ${bad.length})`);
+}
+console.log();
+
+// ── ⭐ หัวใจของการแก้ข้อ 2: คอลัมน์ทดสอบความทนทานต้อง "ไม่" ขยับตาม dropdown ช่วงจำลอง ──
+// เดิมผูกกับ EXST.ext ทำให้เลือก +12 เดือนแล้วตัวเลขบวมเป็นหมื่นล้าน อ่านเป็นเม็ดเงินจริงไม่ได้
+console.log('━━ แยกจากช่วงจำลอง (EXST.ext) ━━');
+const totFor=()=>{ A.exRender(); return j.hosp.reduce((s,h)=>{const r0=A.exSimPath(h,0);return s+A.exTopUp({h,r0});},0); };
+A.setEXST(ST(0,3));  const base=totFor(), baseLab=A.exMoeTargetLab();
+let drift=0;
+for(const ext of [3,6,12]){
+  A.setEXST(ST(ext,3));
+  const v=totFor();
+  const same=Math.abs(v-base)<1 && A.exMoeTargetLab()===baseLab;
+  if(!same) drift++;
+  console.log(`  ${same?'✅':'❌'} ext=${String(ext).padStart(2)} → ส่วนที่ขาดรวม ${(v/1e6).toFixed(1)} ลบ. · เดือนเป้า ${A.exMoeTargetLab()}${same?'  (ไม่ขยับ ถูกต้อง)':'  ← ยังผูกกันอยู่!'}`);
+}
+chk(drift===0, 'เปลี่ยนช่วงจำลองแล้วคอลัมน์ทดสอบความทนทานไม่ขยับ');
+// เพดาน 6 เดือน — ค่าเกินต้องตกกลับเป็นค่าเริ่มต้น ไม่ใช่ยอมรับ
+A.setEXST(ST(0,99)); A.exRender();
+chk(A.exMoeMonths()<=A.EXMAX, `ค่าเกินเพดานถูกจำกัด (mmo=99 → ${A.exMoeMonths()} เดือน · เพดาน ${A.EXMAX})`);
+A.setEXST(ST(0,0)); A.exRender();
+chk(A.exMoeMonths()>=1, `ค่าต่ำกว่า 1 ถูกจำกัด (mmo=0 → ${A.exMoeMonths()} เดือน)`);
+console.log();
+
 // เรียงลำดับคอลัมน์ใหม่
-A.setEXST(ST(0));
+A.setEXST(ST(0,3));
 for(const col of ['moeleft','topup']){
   A.setEXSORT({col,dir:-1}); A.exRender();
   const rr=[...els.exResBox.innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>m[0]).filter(r=>r.includes('class="ovtgl"'));
