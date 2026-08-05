@@ -360,6 +360,10 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
 .nip-row .nip-num{width:64px;font-family:inherit;font-size:12.5px;text-align:right;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums;flex-shrink:0}
 .nip-row .nip-num:focus{outline:none;border-color:var(--blue)}
 .nip-row .u{font-size:10px;color:var(--mut);flex-shrink:0}
+.nip-row.nip-lockrow label{color:var(--mut)}
+.nip-row .nip-slgap{flex:1 1 54px;min-width:42px}   /* กันคอลัมน์ให้ตรงกับแถวที่มีสไลด์บาร์ */
+.nip-row .nip-lockv{width:64px;font-size:12.5px;text-align:right;padding:3px 6px;border:1px dashed var(--line);border-radius:6px;color:var(--mut);font-variant-numeric:tabular-nums;flex-shrink:0;background:var(--th-bg)}
+.nip-lockmsg{font-size:11px;color:var(--mut);background:var(--th-bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;margin-top:6px;line-height:1.5}
 .nip-row .nip-pct{width:28px;text-align:right;font-size:10.5px;color:var(--mut);font-variant-numeric:tabular-nums;flex-shrink:0}
 .nip-row .nip-mbar{width:34px;height:8px;background:var(--bg);border-radius:3px;overflow:hidden;flex-shrink:0}
 .nip-row .nip-mbar-f{display:block;height:100%;border-radius:3px}
@@ -2667,8 +2671,8 @@ function buildSurvCtx(h, s){
   if(h.planfin && h.planfin.rev){
     const pm=(h.planfin.t%100)||mo;
     planSrc='planfin';
-    planRev=h.planfin.rev.map(r=>({name:`${r.p} · ${r.name}`,mo:r.value/pm}));
-    planExp=h.planfin.exp.map(r=>({name:`${r.p} · ${r.name}`,mo:r.value/pm}));
+    planRev=h.planfin.rev.map(r=>({p:r.p,name:`${r.p} · ${r.name}`,mo:r.value/pm}));
+    planExp=h.planfin.exp.map(r=>({p:r.p,name:`${r.p} · ${r.name}`,mo:r.value/pm}));
   } else {
     const wf=h.waterfall&&(h.waterfall.mom||h.waterfall.yoy);
     planRev=wf&&wf.rev?wf.rev.map(r=>({name:r.name,mo:r.value/mo})):null;
@@ -3031,10 +3035,26 @@ function nipStackHtml(list, isExp){
     return `<div class="nip-seg" style="width:${pct}%;background:${segColor(i,isExp)}" title="${c.name} ${pct.toFixed(1)}%"></div>`;
   }).join('');
 }
+// รหัส P ที่ "ระบบบัญชีบันทึกอัตโนมัติ" — รายการระหว่างหน่วยงาน/ปรับเงินฝากคลัง ไม่ใช่ lever ที่ ผอ./CFO สั่งเปลี่ยนได้
+// ล็อกไม่ให้ลากสไลด์ แต่ยังนับในผลรวม NI ตามปกติ (NI ต้องตรงกับงบทดลองที่ใช้คิด Risk Score เสมอ)
+// 12/103 รพ. มีสองรหัสนี้เกิน 20% ของยอดในป็อปอัป — เชียงรายประชานุเคราะห์สูงสุดถึง 58%/63%
+const NIP_LOCK=new Set(['P121','P251']);
+function nipLocked(c){ return !!(c.p && NIP_LOCK.has(c.p)); }
 function niPlanRows(list, kind){
   const total=list.reduce((s,c)=>s+c.mo,0);
   return list.map((c,i)=>{
     const curM=c.mo/1e6;
+    if(nipLocked(c)){
+      const pct=total>0?Math.max(0,c.mo/total*100):0;
+      return `<div class="nip-row nip-lockrow">
+        <label title="${c.name} — ระบบบัญชีบันทึกอัตโนมัติ ปรับไม่ได้">🔒 ${c.name}</label>
+        <span class="nip-slgap"></span>
+        <span class="nip-lockv">${curM.toFixed(2)}</span>
+        <input type="number" class="nip-num" value="${curM.toFixed(2)}" data-kind="${kind}" data-i="${i}" readonly tabindex="-1" aria-hidden="true" style="display:none">
+        <span class="u">ล.</span>
+        <span class="nip-pct" id="nipPct-${kind}${i}">${pct.toFixed(0)}%</span>
+        <span class="nip-mbar"><span class="nip-mbar-f" id="nipMbar-${kind}${i}" style="width:${Math.min(100,pct)}%;background:${segColor(i,kind==='e')}"></span></span></div>`;
+    }
     const maxM=Math.max(Math.abs(curM)*2, 1);            // สเกลสไลด์ต่อหมวด (อย่างน้อย ±1 ล้าน)
     const minM=Math.min(0, curM*2);
     const step=Math.max(maxM/100, 0.01);
@@ -3057,6 +3077,20 @@ function niPlanType(num){
   sl.value=Math.min(Math.max(v,+sl.min),+sl.max);
   niPlanRecalc();
 }
+// คำอธิบายว่าทำไมบางแถวล็อก + บอกสัดส่วนจริงของ รพ. นี้ (รพ.ใหญ่บางแห่งเกินครึ่งของยอดที่โชว์)
+function nipLockMsg(){
+  // ใช้ยอดมีเครื่องหมายเหมือนที่แถวใช้คิด % (c.mo/total) ไม่งั้นตัวเลขสรุปจะไม่ตรงกับ % รายแถว
+  const sum=(l,f)=>l.reduce((s,c)=>s+(f(c)?c.mo:0),0);
+  const lr=sum(SURV.planRev,nipLocked), tr=sum(SURV.planRev,()=>true);
+  const le=sum(SURV.planExp,nipLocked), te=sum(SURV.planExp,()=>true);
+  if(!lr && !le) return '';
+  const pc=(a,b)=>b>0?Math.round(a/b*100):0;
+  return `<div class="nip-lockmsg">🔒 <b>แถวที่ล็อกปรับไม่ได้</b> = รายการที่ระบบบัญชีบันทึกอัตโนมัติ (P121 รายได้อื่น / P251 ค่าใช้จ่ายอื่น)
+    ซึ่งเป็นรายการระหว่างหน่วยงานและการปรับเงินฝากคลัง <b>ไม่ใช่รายการที่ ผอ./CFO สั่งเปลี่ยนได้</b> —
+    ยังนับรวมใน NI ตามปกติเพื่อให้ผลรวมตรงกับงบทดลองที่ใช้คิด Risk Score
+    · ของ รพ. นี้คิดเป็น <b>${pc(lr,tr)}%</b> ของรายได้ และ <b>${pc(le,te)}%</b> ของค่าใช้จ่ายในหน้านี้
+    ${(pc(lr,tr)>=20||pc(le,te)>=20)?'<b style="color:var(--orange)">— สัดส่วนสูง แปลว่าส่วนที่ปรับได้จริงน้อยกว่าที่ตาเห็นมาก</b>':''}</div>`;
+}
 function openNIPlan(){
   if(!SURV || !SURV.planRev){ alert('งวดนี้ไม่มีข้อมูลรายหมวดสำหรับประมาณการ'); return; }
   let el=document.getElementById('niPlanOverlay');
@@ -3074,6 +3108,7 @@ function openNIPlan(){
         <div class="nip-stack" id="nipStackE">${nipStackHtml(SURV.planExp,true)}</div>
         ${niPlanRows(SURV.planExp,'e')}</div>
     </div>
+    ${nipLockMsg()}
     <div class="nip-foot">
       <div class="nip-totline">
         <span>รวมรายได้ <b id="nipRev"></b>/ด.</span>
