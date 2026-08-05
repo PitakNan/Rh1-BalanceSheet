@@ -136,6 +136,14 @@ table.wltbl th.exsortth{cursor:pointer;user-select:none}
 table.wltbl th.exsortth:hover{color:var(--ink)}
 table.wltbl th.exsortth.on{color:var(--blue)}
 table.wltbl td{padding:8px;border-bottom:1px solid var(--row-strip);vertical-align:top}
+/* ตารางผลจำลอง #exec (14 คอลัมน์ กว้างเกินจอมือถือ): ตรึงคอลัมน์ "โรงพยาบาล" ไว้ตอนปัดแนวนอน
+   → ปัดไปดูคอลัมน์ขวาสุดแล้วยังรู้ว่าเป็นแถวของ รพ. ไหน (เดิมหลุดบริบททันทีที่ปัด)
+   ช่องแรก (จังหวัด) ยอมให้เลื่อนลอดใต้ไป — ยังกรองจังหวัดจาก dropdown เหนือตารางได้อยู่
+   ⚠️ พื้นหลังต้องทึบ (var) ไม่งั้นเนื้อคอลัมน์อื่นทะลุขึ้นมาซ้อนตอนเลื่อน · ถูกทั้ง light/dark */
+table.wltbl.ex-sticky th:nth-child(2),
+table.wltbl.ex-sticky td:nth-child(2){position:sticky;left:0;box-shadow:1px 0 0 var(--line)}
+table.wltbl.ex-sticky td:nth-child(2){z-index:2;background:var(--card)}
+table.wltbl.ex-sticky th:nth-child(2){z-index:4;background:var(--th-bg)}
 table.wltbl tr.click{cursor:pointer}
 table.wltbl tr.click:hover{background:var(--hover)}
 table.wltbl .bullets{margin:0;padding-left:14px}
@@ -417,6 +425,9 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
   table.wltbl.wl-card td:nth-child(8)::before{content:'คำแนะนำเฉพาะ รพ.';display:block;font-weight:700;font-size:11.5px;color:var(--mut);margin-bottom:2px}
   /* ตาราง .wltbl ที่เหลือบนมือถือ: เลื่อนแนวนอนได้ ไม่ล้นจอ */
   .acctbl-wrap{overflow-x:auto}
+  /* คอลัมน์ที่ตรึงต้องไม่กินจอ — จำกัดความกว้างแล้วให้ชื่อ รพ. ตัดบรรทัดแทน */
+  table.wltbl.ex-sticky td:nth-child(2){max-width:124px}
+  table.wltbl.ex-sticky td:nth-child(2) .ovlink{font-size:10.5px}
   /* Gap-to-Target: ตาราง 6 คอลัมน์ → การ์ดต่อเกณฑ์ (ไม่ต้องปัดซ้าย-ขวา) */
   table.gaptbl{display:block}
   table.gaptbl tbody{display:block}
@@ -1959,7 +1970,7 @@ function exRender(){
     return [7,6,5,4,3,2,1,0].filter(L=>c[L]).map(L=>`<span class="b" style="background:${riskColor(L)}">${L}×${c[L]}</span>`).join(''); };
   // แถวหัวตาราง — สร้างก่อนแถวข้อมูล เพื่อนับจำนวนคอลัมน์จริงไปใช้เป็น colspan ของแถวย่อย
   // (เดิม hardcode ไว้ ทำให้ลืมแก้ทุกครั้งที่เพิ่ม/ซ่อนคอลัมน์ — ดู RISK_EXEC_MODEL.md 7.7)
-  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้ OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดสำหรับจ่าย MOE<br>ถึง '+horLab,'moeleft')}${exSortTh('เงินที่ต้อง<br>เติม','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
+  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้<br>OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดสำหรับ<br>จ่าย MOE<br>ถึง '+horLab,'moeleft')}${exSortTh('เงินที่<br>ต้องเติม','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
   const EX_NCOL=(exHeadRow.match(/<th\b/g)||[]).length;
   const rowsHtml=items.map(x=>{
     const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc], brkOpen=EXBRK[hc]!=null;
@@ -2074,7 +2085,7 @@ function exRender(){
       <div class="note" style="margin-top:4px;line-height:1.7">${colInfoRows.map(([c,l])=>`<div><b>${l}:</b> ${(EX_COLDEF_MAP[c]||'').replace(/\n/g,'<br>&nbsp;&nbsp;')}</div>`).join('')}</div>
     </details>
     <div class="acctbl-wrap" style="max-height:none;overflow-x:auto">
-      <table class="wltbl" style="min-width:1080px">
+      <table class="wltbl ex-sticky" style="min-width:1000px">
         ${exHeadRow}
         ${rowsHtml}
       </table>

@@ -39,11 +39,14 @@ for(const ext of [0,3,12]){
   const nTh=(head.match(/<th\b/g)||[]).length;
   const months=(12-j.hosp[0].bs.mo)+ext;
   console.log(`━━ ช่วงจำลอง ext=${ext} → ถึง ${A.exHorLab()} · ${months} เดือน ━━`);
+  const headTxt=head.replace(/<br\s*\/?>/g,'');   // หัวคอลัมน์ตัดบรรทัดด้วย <br> — ตรวจข้อความจริงไม่ใช่ markup
   chk(nTh===14, `หัวตาราง 14 ช่อง (ได้ ${nTh})`);
-  chk(!head.includes('ลูกหนี้'), 'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
-  chk(head.includes('เงินสดสำหรับจ่าย MOE')&&head.includes(A.exHorLab()), `หัวคอลัมน์ระบุเดือนเป้า "${A.exHorLab()}"`);
-  chk(head.includes('เงินที่ต้อง'), 'มีคอลัมน์เงินที่ต้องเติม');
-  chk(!head.includes('จะหมด?'), 'คอลัมน์ "เงินสดจะหมด?" ถูกแทนที่แล้ว');
+  chk(!headTxt.includes('ลูกหนี้'), 'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
+  chk(headTxt.includes('เงินสดสำหรับจ่าย MOE')&&headTxt.includes(A.exHorLab()), `หัวคอลัมน์ระบุเดือนเป้า "${A.exHorLab()}"`);
+  chk(headTxt.includes('เงินที่ต้องเติม'), 'มีคอลัมน์เงินที่ต้องเติม');
+  chk(!headTxt.includes('จะหมด?'), 'คอลัมน์ "เงินสดจะหมด?" ถูกแทนที่แล้ว');
+  // คอลัมน์ชื่อ รพ. ต้องตรึงตอนปัดแนวนอน (คลาส ex-sticky + CSS sticky ของ nth-child(2))
+  chk(/<table class="wltbl ex-sticky"/.test(html), 'ตารางมีคลาส ex-sticky (ตรึงคอลัมน์ชื่อ รพ.)');
   chk(main.length===j.hosp.length, `แถวหลักครบ ${main.length}/${j.hosp.length}`);
 
   let badCol=0,badLeft=0,badTop=0,badRed=0,badSub=0,nRed=0,nTop=0;
