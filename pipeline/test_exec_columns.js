@@ -48,7 +48,7 @@ for(const f of ['index.html','explorer.html']){
 console.log();
 console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (ต้องเป็น false = ซ่อนลูกหนี้)\n`);
 
-for(const mmo of [1,3,6]){
+for(const mmo of [1,3,6,13]){
   const ext=0;
   A.setEXST(ST(ext,mmo)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1});
   A.exRender();
@@ -65,7 +65,9 @@ for(const mmo of [1,3,6]){
   chk(!inHead('ลูกหนี้'), 'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
   chk(inHead('เงินสดคงเหลือหลังภาระ MOE ถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนประเมิน "${A.exMoeTargetLab()}"`);
   chk(inHead('ส่วนขาดสภาพคล่อง'), 'มีคอลัมน์ส่วนขาดสภาพคล่อง');
-  chk(/สมมติฐานว่ารายรับหยุดสนิท/.test(html)&&/ไม่ใช่คำของบ/.test(html), 'กล่องเหนือตารางระบุสมมติฐาน + ไม่ใช่คำของบ');
+  chk(/กรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด \(ไม่มีรายรับเข้าเลย\)/.test(html)&&/ไม่ใช่คำของบ/.test(html), 'กล่องเหนือตารางระบุสมมติฐาน + ไม่ใช่คำของบ');
+  // สำนวนเดิม "รายรับหยุด/หยุดสนิท" เลิกใช้แล้ว (5 ส.ค. 69) — กันหลุดกลับมาในข้อความที่ผู้ใช้เห็น
+  chk(!/รายรับหยุด/.test(html), 'ไม่มีสำนวนเดิม "รายรับหยุด" เหลือในหน้า');
   chk(!inHead('จะหมด?'), 'คอลัมน์ "เงินสดจะหมด?" ถูกแทนที่แล้ว');
   // คอลัมน์ชื่อ รพ. ต้องตรึงตอนปัดแนวนอน (คลาส ex-sticky + CSS sticky ของ nth-child(2))
   chk(/<table class="wltbl ex-sticky"/.test(html), 'ตารางมีคลาส ex-sticky (ตรึงคอลัมน์ชื่อ รพ.)');
@@ -117,8 +119,44 @@ for(const mmo of [1,3,6]){
   const iTop=hh.findIndex(c=>c.startsWith('ส่วนขาดสภาพคล่อง'));
   const sumTop=j.hosp.reduce((s,h)=>{const r0=A.exSimPath(h,0);return s+A.exTopUp({h,r0});},0);
   chk(iTop>=0&&Math.abs(parseFloat(tt[iTop])-sumTop/1e6)<0.02, `ยอดรวมส่วนขาดสภาพคล่องใน TSV ตรง (${tt[iTop]} vs ${(sumTop/1e6).toFixed(2)})`);
+  // ── ยอดรวม 2 ก้อนใหม่ข้างหัวข้อ (5 ส.ค. 69) ต้องตรงกับผลรวมคอลัมน์ในตาราง ──
+  const chipTop=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง ([^:<]+): <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
+  chk(!!chipTop&&chipTop[1].trim()===A.exMoeTargetLab()&&chipTop[2]===fmtM(sumTop)&&+chipTop[3]===nTop,
+      `ยอด "รวมเงินเติมตามสภาพคล่อง" ข้างหัวข้อตรงกับคอลัมน์ (${chipTop?chipTop[2]+' / '+chipTop[3]+' แห่ง':'ไม่พบ'} vs ${fmtM(sumTop)} / ${nTop} แห่ง)`);
+  const sumPay=j.hosp.reduce((s,h)=>s+A.exPayIn(h),0), nPay=j.hosp.filter(h=>A.exPayIn(h)>0).length;
+  const chipPay=html.match(/รวมเจ้าหนี้ OP-UC นอก CUP: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
+  chk(!!chipPay&&chipPay[1]===fmtM(sumPay)&&+chipPay[2]===nPay,
+      `ยอด "รวมเจ้าหนี้ OP-UC นอก CUP" ตรงกับคอลัมน์ (${chipPay?chipPay[1]+' / '+chipPay[2]+' แห่ง':'ไม่พบ'} vs ${fmtM(sumPay)} / ${nPay} แห่ง)`);
+  // dropdown ต้องมีตัวเลือกครบถึงเพดาน (ผู้ใช้เลือก 13 เดือนได้จริง)
+  const opts=[...html.matchAll(/<option value="(\d+)"[^>]*>[^<]*เดือน\)/g)].map(m=>+m[1]);
+  chk(opts.length===A.EXMAX&&opts[opts.length-1]===A.EXMAX,
+      `dropdown 💧 มีตัวเลือก 1–${A.EXMAX} เดือนครบ (ได้ ${opts.length} ตัวเลือก สูงสุด ${opts[opts.length-1]||'—'})`);
   console.log(`   → ส่วนขาดสภาพคล่องรวม ${(sumTop/1e6).toFixed(1)} ลบ. · เปราะ ${nTop} แห่ง · เจ้าหนี้เกินเงินสด ${nRed} แห่ง\n`);
 }
+
+// ── ยอดรวมข้างหัวข้อต้องผูกกับตัวกรองจังหวัด (ไม่ใช่ยอดทั้งเขตค้างอยู่) ──
+console.log('━━ ยอดรวมข้างหัวข้อ × ตัวกรองจังหวัด ━━');
+{
+  const provs=[...new Set(j.hosp.map(h=>h.prov))].filter(Boolean);
+  let badPv=0;
+  for(const pv of provs){
+    const st=ST(0,3); st.prov=pv;
+    A.setEXST(st); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1}); A.exRender();
+    const html=els.exResBox.innerHTML;
+    const inPv=j.hosp.filter(h=>h.prov===pv);
+    const wTop=inPv.reduce((s,h)=>s+A.exTopUp({h,r0:A.exSimPath(h,0)}),0);
+    const wNTop=inPv.filter(h=>A.exTopUp({h,r0:A.exSimPath(h,0)})>0).length;
+    const wPay=inPv.reduce((s,h)=>s+A.exPayIn(h),0), wNPay=inPv.filter(h=>A.exPayIn(h)>0).length;
+    const cT=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:<]+: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
+    const cP=html.match(/รวมเจ้าหนี้ OP-UC นอก CUP: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
+    const ok=cT&&cP&&cT[1]===fmtM(wTop)&&+cT[2]===wNTop&&cP[1]===fmtM(wPay)&&+cP[2]===wNPay;
+    if(!ok) badPv++;
+    console.log(`  ${ok?'✅':'❌'} ${pv} (${inPv.length} แห่ง) → เติมสภาพคล่อง ${cT?cT[1]:'—'} [ควร ${fmtM(wTop)}] · เจ้าหนี้ ${cP?cP[1]:'—'} [ควร ${fmtM(wPay)}]`);
+  }
+  chk(badPv===0, `ยอดรวมทั้งสองก้อนขยับตามจังหวัดที่กรองทุกจังหวัด (ผิด ${badPv}/${provs.length})`);
+  A.setEXST(ST(0,3));
+}
+console.log();
 
 // ── สาขาเตือน "เงินสดติดลบ" ต้องเรนเดอร์ได้จริง ──
 // ข้อมูลจริงงวดนี้ทุกแห่งเงินสดไม่ติดลบ สาขานี้จึงไม่เคยถูกรัน — ต้องยิงด้วยเคสสังเคราะห์
@@ -173,7 +211,7 @@ for(const ext of [3,6,12]){
   console.log(`  ${same?'✅':'❌'} ext=${String(ext).padStart(2)} → ส่วนที่ขาดรวม ${(v/1e6).toFixed(1)} ลบ. · เดือนเป้า ${A.exMoeTargetLab()}${same?'  (ไม่ขยับ ถูกต้อง)':'  ← ยังผูกกันอยู่!'}`);
 }
 chk(drift===0, 'เปลี่ยนช่วงจำลองแล้วคอลัมน์ประเมินสภาพคล่องไม่ขยับ');
-// เพดาน 6 เดือน — ค่าเกินต้องตกกลับเป็นค่าเริ่มต้น ไม่ใช่ยอมรับ
+// เพดาน EX_MMO_MAX เดือน — ค่าเกินต้องตกกลับเป็นค่าเริ่มต้น ไม่ใช่ยอมรับ
 A.setEXST(ST(0,99)); A.exRender();
 chk(A.exMoeMonths()<=A.EXMAX, `ค่าเกินเพดานถูกจำกัด (mmo=99 → ${A.exMoeMonths()} เดือน · เพดาน ${A.EXMAX})`);
 A.setEXST(ST(0,0)); A.exRender();
