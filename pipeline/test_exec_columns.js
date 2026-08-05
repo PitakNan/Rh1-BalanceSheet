@@ -14,7 +14,7 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exHorLab,
+const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exHorLab,tLab,
   SHOW_TJAR:EX_SHOW_TJAR,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
@@ -28,6 +28,24 @@ const chk=(ok,msg)=>{ console.log(`  ${ok?'✅':'❌'} ${msg}`); if(!ok) fail.pu
 
 A.setEX(j);
 console.log(`ไฟล์: ${SRC}`);
+
+// ── ป้ายงวด tLab: เดือนงบ 1-3 (ต.ค.-ธ.ค.) อยู่ในปีปฏิทินก่อนหน้าปีงบ ──
+console.log('\n━━ ป้ายงวด tLab (ข้ามรอยต่อปีงบ) ━━');
+let badLab=0;
+for(const [t,want,real] of [[256901,'ต.ค.68','ตุลาคม 2568'],[256903,'ธ.ค.68','ธันวาคม 2568'],
+                            [256904,'ม.ค.69','มกราคม 2569'],[256909,'มิ.ย.69','มิถุนายน 2569'],
+                            [256912,'ก.ย.69','กันยายน 2569'],[257001,'ต.ค.69','ตุลาคม 2569'],
+                            [257003,'ธ.ค.69','ธันวาคม 2569'],[257012,'ก.ย.70','กันยายน 2570']]){
+  const got=A.tLab(t); if(got!==want) badLab++;
+  console.log(`  ${got===want?'✅':'❌'} ${t} → ${got}${got===want?'':' (ควรเป็น '+want+')'}  [${real}]`);
+}
+chk(badLab===0, `ป้ายงวดถูกต้องทุกเดือน (ผิด ${badLab})`);
+// หน้าอื่นต้องใช้สูตรเดียวกัน — กันหน้าใดหน้าหนึ่งตกขบวนอีก
+for(const f of ['index.html','explorer.html']){
+  const src=fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/'+f,'utf8');
+  chk(/fm<=3\?fy-1:fy|m<=3\?1:0/.test(src), `${f} ใช้สูตรปีปฏิทินเดียวกัน (ไม่หลุดออกจากกัน)`);
+}
+console.log();
 console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (ต้องเป็น false = ซ่อนลูกหนี้)\n`);
 
 for(const ext of [0,3,12]){

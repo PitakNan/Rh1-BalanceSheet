@@ -565,7 +565,12 @@ let ratioChart=null;
 const H_CACHE={};
 
 const TH_M=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
-function tLab(t){return TH_M[t%100-1]+String(t).slice(2,4)}
+// ป้ายงวด: t = ปีงบ(พ.ศ.)*100 + เดือนงบ (1=ต.ค. … 12=ก.ย.)
+// ⚠️ เดือนงบ 1-3 (ต.ค./พ.ย./ธ.ค.) อยู่ใน "ปีปฏิทินก่อนหน้าปีงบ" จึงต้องลบ 1
+//    เช่น 257003 = ธ.ค. ของปีงบ 2570 = ธันวาคม 2569 → "ธ.ค.69" ไม่ใช่ "ธ.ค.70"
+//    (สูตรเดียวกับ index.html และ explorer.html ที่แก้ไว้ก่อนแล้ว — หน้านี้ตกขบวน แก้ 5 ส.ค. 69)
+function tLab(t){const fy=Math.floor(t/100),fm=t%100;const by=fm<=3?fy-1:fy;
+  return TH_M[fm-1]+String(by%100).padStart(2,'0');}
 function fmtM(v){if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()}
 function fmtR(v){return v==null?'—':v.toFixed(2)}
 // ── ไอคอน ⓘ tooltip: ความหมาย/สูตร/ที่มาข้อมูล — hover (desktop) หรือแตะ (มือถือ ผ่าน tabindex+click toggle) ──
