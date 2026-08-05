@@ -202,10 +202,15 @@ j["grp"] = j["org5"].map(lambda o: orgs.get(o, {}).get("grp"))
 j["level"] = j["org5"].map(lambda o: orgs.get(o, {}).get("level"))
 
 def peer_stats(dim):
+    # P25-P75 = แถบหลัก · P10-P90/Min-Max = ขอบเขตกลุ่มเต็ม (ผู้ใช้สลับดูได้ในกราฟ)
+    # Min-Max มี outlier แรง (บางกลุ่ม max/p75 ถึง 26 เท่า) จึงไม่ใช่ค่าเริ่มต้นของกราฟ
     g = j.groupby([dim, "t"])[["cr", "qr", "cash", "opMargin", "roa"]]
-    q = g.quantile([0.25, 0.5, 0.75]).unstack()
-    q.columns = [f"{c}_{int(p*100)}" for c, p in q.columns]
-    return q.reset_index()
+    q = g.quantile([0.10, 0.25, 0.5, 0.75, 0.90]).unstack()
+    q.columns = [f"{c}_{int(round(p * 100))}" for c, p in q.columns]
+    mn = g.min().add_suffix("_min")
+    mx = g.max().add_suffix("_max")
+    n = j.groupby([dim, "t"])["cr"].count().rename("n")  # จำนวน รพ. ในกลุ่มที่มีข้อมูลงวดนั้น
+    return q.join(mn).join(mx).join(n).reset_index()
 
 peer_by = {dim: peer_stats(dim) for dim in ("grp", "level", "prov")}
 
@@ -504,14 +509,21 @@ for idx, org5 in enumerate(sorted(orgs.keys())):
             continue
         pdf = peer_by[dim]
         sub = pdf[(pdf[dim] == key) & (pdf["t"].isin(hperiods))].sort_values("t")
-        peer[dim] = [
-            {"t": int(r["t"]),
-             "cr_p25": rnd(r["cr_25"]), "cr_med": rnd(r["cr_50"]), "cr_p75": rnd(r["cr_75"]),
-             "qr_p25": rnd(r["qr_25"]), "qr_med": rnd(r["qr_50"]), "qr_p75": rnd(r["qr_75"]),
-             "cash_p25": rnd(r["cash_25"]), "cash_med": rnd(r["cash_50"]), "cash_p75": rnd(r["cash_75"]),
-             "opMargin_med": rnd(r["opMargin_50"], 1), "roa_med": rnd(r["roa_50"], 1)}
-            for _, r in sub.iterrows()
-        ]
+        def peer_row(r):
+            o = {"t": int(r["t"]), "n": None if pd.isna(r["n"]) else int(r["n"])}
+            for m in ("cr", "qr", "cash"):
+                o[m + "_p25"] = rnd(r[m + "_25"])
+                o[m + "_med"] = rnd(r[m + "_50"])
+                o[m + "_p75"] = rnd(r[m + "_75"])
+                o[m + "_p10"] = rnd(r[m + "_10"])
+                o[m + "_p90"] = rnd(r[m + "_90"])
+                o[m + "_min"] = rnd(r[m + "_min"])
+                o[m + "_max"] = rnd(r[m + "_max"])
+            o["opMargin_med"] = rnd(r["opMargin_50"], 1)
+            o["roa_med"] = rnd(r["roa_50"], 1)
+            return o
+
+        peer[dim] = [peer_row(r) for _, r in sub.iterrows()]
 
     tcur = hperiods[-1]
     tmom = hperiods[-2] if len(hperiods) >= 2 else None

@@ -567,6 +567,7 @@ let sortMode='risk';
 let periodMode='mom';   // mom | yoy
 let ratioMetric='cr';   // cr | qr | cash
 let peerDim='grp';      // grp | level | prov
+let bandMode='p10';     // p25 = แถบ P25-P75 อย่างเดียว | p10 = +P10-P90 (ค่าเริ่มต้น) | mm = +Min-Max
 let ratioChart=null;
 const H_CACHE={};
 
@@ -2343,7 +2344,7 @@ function renderDetail(hcode){
     </div>
 
     <div class="panel">
-      <h3>เทรนด์ Ratio เทียบกลุ่มเปรียบเทียบ ${tip('**คืออะไร**: เทรนด์ 3 อัตราส่วนสภาพคล่อง เทียบแถบ P25-P75+median ของกลุ่มเปรียบเทียบ\n**สูตร**: CR=สินทรัพย์หมุนเวียน÷หนี้สินหมุนเวียน · QR=สินทรัพย์เร็ว÷หนี้สินหมุนเวียน · Cash=เงินสด+เงินฝาก÷หนี้สินหมุนเวียน\n**ข้อมูลจาก**: ค่ารายงานจริงตาราง risk_scores หรืองบทดลอง RatioItemID 1001X/1001Y/1002X/1003X ถ้าไม่มีรายงาน')}<span class="sp"></span>
+      <h3>เทรนด์ Ratio เทียบกลุ่มเปรียบเทียบ ${tip('**คืออะไร**: เทรนด์ 3 อัตราส่วนสภาพคล่อง เทียบแถบ P25-P75+median ของกลุ่มเปรียบเทียบ\n**อ่านยังไง**: แถบเทาเข้ม = ช่วง P25–P75 คือ "ครึ่งกลางของกลุ่ม" ไม่ใช่ช่วงที่ควรอยู่ — ตามนิยามจะมี รพ. อยู่นอกแถบราวครึ่งหนึ่งเสมอ (ต่ำกว่า P25 ราว 25% + สูงกว่า P75 ราว 25%) เส้นอยู่ใต้แถบ = อยู่ใน 25% ล่างของกลุ่ม\n**สูตร**: CR=สินทรัพย์หมุนเวียน÷หนี้สินหมุนเวียน · QR=สินทรัพย์เร็ว÷หนี้สินหมุนเวียน · Cash=เงินสด+เงินฝาก÷หนี้สินหมุนเวียน\n**ข้อมูลจาก**: ค่ารายงานจริงตาราง risk_scores หรืองบทดลอง RatioItemID 1001X/1001Y/1002X/1003X ถ้าไม่มีรายงาน')}<span class="sp"></span>
         <div class="metric-tabs">
           <button class="mtab${ratioMetric==='cr'?' on':''}" onclick="setRatioMetric('cr')">Current Ratio</button>
           <button class="mtab${ratioMetric==='qr'?' on':''}" onclick="setRatioMetric('qr')">Quick Ratio</button>
@@ -2358,8 +2359,18 @@ function renderDetail(hcode){
           <button class="mtab${peerDim==='prov'?' on':''}" onclick="setPeerDim('prov')">จังหวัด ${h.prov||''}</button>
         </div>
       </div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:6px">
+        ${tip('**คืออะไร**: เลือกว่าจะวาดขอบเขตกลุ่มกว้างแค่ไหนเป็นเงาจาง ๆ นอกแถบ P25–P75\n**ทำไมค่าเริ่มต้นเป็น P10–P90**: Min–Max มี รพ. สุดขั้วดึงสเกลแกน Y จนกราฟแบน (บางกลุ่มค่าสูงสุดเป็น 26 เท่าของ P75) — P10–P90 กว้างกว่า P75 เฉลี่ยแค่ 1.4 เท่า จึงอ่านง่ายกว่า\n**ข้อมูลจาก**: เพอร์เซ็นไทล์/ค่าต่ำสุด-สูงสุดต่องวด คำนวณจาก รพ. ทุกแห่งในกลุ่มเดียวกัน (export_risk_link.py)')}
+        <div class="peer-tabs">
+          <button class="mtab${bandMode==='p25'?' on':''}" onclick="setBandMode('p25')">P25–P75</button>
+          <button class="mtab${bandMode==='p10'?' on':''}" onclick="setBandMode('p10')">+ P10–P90</button>
+          <button class="mtab${bandMode==='mm'?' on':''}" onclick="setBandMode('mm')">+ Min–Max</button>
+        </div>
+      </div>
       <div class="chartbox"><canvas id="ratioChart"></canvas></div>
-      <div class="note">เส้นทึบ = รพ.นี้ · เส้นประ = median กลุ่ม · แถบเทา = ช่วง P25–P75 ของกลุ่ม</div>
+      <div class="note">เส้นทึบ = รพ.นี้ · เส้นประ = median กลุ่ม · แถบเทาเข้ม = ช่วง P25–P75${bandMode==='p25'?'':' · เงาจาง = ช่วง '+(bandMode==='mm'?'Min–Max':'P10–P90')}${peerN(h)?' · กลุ่มเทียบ '+peerN(h)+' แห่ง':''}</div>
+      <div class="note" style="margin-top:4px">ℹ️ แถบ P25–P75 คือ<b>ครึ่งกลางของกลุ่ม ไม่ใช่ช่วงที่ควรอยู่</b> — ตามนิยามจะมี รพ. อยู่นอกแถบราวครึ่งหนึ่งเสมอ (วัดจริงทั้งเขต: ในแถบ 48% · ต่ำกว่า P25 26% · สูงกว่า P75 26%) เส้นอยู่ใต้แถบตลอด = อยู่ใน 25% ล่างของกลุ่มจริง ๆ ไม่ใช่กราฟผิด</div>
+      ${peerN(h)!=null&&peerN(h)<5?`<div class="note" style="margin-top:4px;color:var(--orange)">⚠️ กลุ่มเทียบมีแค่ ${peerN(h)} แห่ง — เพอร์เซ็นไทล์จากกลุ่มเล็กไม่เสถียร (รพ. แห่งเดียวขยับก็ทำให้แถบเลื่อนทั้งแถบ) ควรดูมิติเปรียบเทียบอื่นประกอบ</div>`:''}
       <div class="src-note">📌 ที่มาข้อมูล: ค่า Current/Quick/Cash Ratio ที่ รพ. รายงานจริง (ตาราง <code>risk_scores</code>) — ถ้างวดใดไม่มีรายงาน (ขึ้น "คำนวณจาก GL" ที่หัวหน้าเพจ) จะคำนวณแทนจากงบทดลอง <code>balance_sheet</code> ตามผังบัญชี RatioItemID 1001X/1001Y (CR), 1002X (QR), 1003X (Cash) ของกองเศรษฐกิจสุขภาพ</div>
     </div>
 
@@ -3357,6 +3368,9 @@ function renderEfficiency(h, s){
 
 function setRatioMetric(m){ratioMetric=m;renderDetail(CUR)}
 function setPeerDim(d){peerDim=d;renderDetail(CUR)}
+function setBandMode(m){bandMode=m;renderDetail(CUR)}
+// จำนวน รพ. ในกลุ่มเทียบงวดล่าสุด (ไฟล์ข้อมูลชุดเก่ายังไม่มีฟิลด์ n → คืน null แล้วไม่แสดง)
+function peerN(h){const s=(h.peer&&h.peer[peerDim])||[];return s.length?(s[s.length-1].n??null):null}
 function setPeriodMode(m){
   periodMode=m;
   document.getElementById('pdMom').classList.toggle('on',m==='mom');
@@ -3372,23 +3386,45 @@ function renderRatioChart(h){
   const own=h.trend.map(r=>r[ratioMetric]);
   const peerSeries=h.peer[peerDim]||[];
   const peerByT={}; for(const p of peerSeries) peerByT[p.t]=p;
-  const p25=h.trend.map(r=>{const p=peerByT[r.t];return p?p[ratioMetric+'_p25']:null});
-  const p75=h.trend.map(r=>{const p=peerByT[r.t];return p?p[ratioMetric+'_p75']:null});
-  const med=h.trend.map(r=>{const p=peerByT[r.t];return p?p[ratioMetric+'_med']:null});
+  const pk=sfx=>h.trend.map(r=>{const p=peerByT[r.t];return p?(p[ratioMetric+sfx]??null):null});
+  const p25=pk('_p25'), p75=pk('_p75'), med=pk('_med');
   const ink=getCss('--ink'), blue=getCss('--blue'), mut=getCss('--mut'), line=getCss('--line');
+
+  // แถบนอก (ขอบเขตกลุ่มเต็ม) — ข้อมูลชุดเก่าที่ยังไม่มีฟิลด์นี้จะได้ null ทั้งชุด แล้วข้ามไปเงียบ ๆ
+  const OUT={p10:['_p10','_p90','P10–P90'], mm:['_min','_max','Min–Max']}[bandMode];
+  let outLo=null,outHi=null,outLabel='';
+  if(OUT){
+    const lo=pk(OUT[0]), hi=pk(OUT[1]);
+    if(lo.some(v=>v!=null)&&hi.some(v=>v!=null)){ outLo=lo; outHi=hi; outLabel='ช่วง '+OUT[2]+' ของกลุ่ม'; }
+  }
+
+  const ds=[];
+  if(outLo){
+    ds.push({label:'_outHi',data:outHi,borderWidth:0,pointRadius:0,fill:false,order:5,_helper:true});
+    ds.push({label:outLabel,data:outLo,borderWidth:0,pointRadius:0,fill:'-1',backgroundColor:mut+'1f',order:5,_pairHi:outHi});
+  }
+  ds.push({label:'_p75Hi',data:p75,borderWidth:0,pointRadius:0,fill:false,order:4,_helper:true});
+  ds.push({label:'ช่วง P25–P75 ของกลุ่ม',data:p25,borderWidth:0,pointRadius:0,fill:'-1',backgroundColor:mut+'33',order:4,_pairHi:p75});
+  ds.push({label:'Median กลุ่ม',data:med,borderColor:mut,borderDash:[4,4],borderWidth:1.5,pointRadius:0,fill:false,order:2});
+  ds.push({label:h.name,data:own,borderColor:blue,backgroundColor:blue,borderWidth:2.5,pointRadius:2,fill:false,order:1});
 
   if(ratioChart) ratioChart.destroy();
   ratioChart=new Chart(ctx,{
     type:'line',
-    data:{labels, datasets:[
-      {label:'P75 กลุ่ม',data:p75,borderWidth:0,pointRadius:0,fill:false,order:3},
-      {label:'ช่วง P25–P75',data:p25,borderWidth:0,pointRadius:0,fill:'-1',backgroundColor:mut+'33',order:3},
-      {label:'Median กลุ่ม',data:med,borderColor:mut,borderDash:[4,4],borderWidth:1.5,pointRadius:0,fill:false,order:2},
-      {label:h.name,data:own,borderColor:blue,backgroundColor:blue,borderWidth:2.5,pointRadius:2,fill:false,order:1},
-    ]},
+    data:{labels, datasets:ds},
     options:{responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
-      plugins:{legend:{labels:{font:{family:'Sarabun',size:11},color:ink},filter:it=>it.text!=='P75 กลุ่ม'}},
+      plugins:{
+        // ⚠️ filter ต้องอยู่ใต้ labels (ของเดิมวางไว้ที่ legend ตรง ๆ Chart.js จึงไม่เรียกใช้ = เส้นช่วยหลุดเข้า legend)
+        legend:{labels:{font:{family:'Sarabun',size:11},color:ink,filter:it=>!ds[it.datasetIndex]._helper}},
+        tooltip:{filter:it=>!it.dataset._helper,
+          callbacks:{label:it=>{
+            const d=it.dataset, v=it.parsed.y;
+            if(d._pairHi){ const hi=d._pairHi[it.dataIndex];
+              return d.label+': '+(v==null?'—':fmtR(v))+' – '+(hi==null?'—':fmtR(hi)); }
+            return d.label+': '+(v==null?'—':fmtR(v));
+          }}},
+      },
       scales:{
         x:{ticks:{font:{family:'Sarabun',size:10},color:mut,maxRotation:45},grid:{color:line}},
         y:{ticks:{font:{size:10},color:mut},grid:{color:line}},
