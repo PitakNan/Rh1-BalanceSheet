@@ -95,15 +95,15 @@ for(const mmo of [1,3,6]){
     if(gap>0){ nRed++;
       if(!/var\(--red\)/.test(cPay)||!cPay.includes('ขาด '+fmtM(gap))) badRed++; }
     else if(pay>0&&/var\(--red\)/.test(cPay)) badRed++;
-    // บรรทัดเล็ก = ข้อความเดิมของ "เงินสดจะหมด?"
-    const wantSub=r0.cashOut!=null?'เงินสดหมด':'จำลองแล้วเงินสดไม่หมด';
-    if(!cLeft.includes(wantSub)) badSub++;
+    // เซลล์ต้องติดป้ายสมมติฐานให้ทั้ง 2 บรรทัด ไม่งั้นอ่านแล้วดูขัดกันเอง (ข้อ 4)
+    const wantSub=r0.cashOut!=null?'กรณีรายรับปกติ: เงินสดติดลบ':'กรณีรายรับปกติ: เงินสดไม่ติดลบ';
+    if(!cLeft.includes(wantSub)||!cLeft.includes('สมมติรายรับหยุด')) badSub++;
   }
   chk(badCol===0, `ทุกแถวมี td ครบเท่าหัว (ผิด ${badCol})`);
   chk(badLeft===0, `เงินสดคงเหลือหลังภาระ MOE ตรงสูตร (เงินสด−เจ้าหนี้)−MOE×${months} ทุกแห่ง (ผิด ${badLeft})`);
   chk(badTop===0, `ส่วนขาดสภาพคล่อง = ส่วนที่ติดลบ ทุกแห่ง (ผิด ${badTop}) · เปราะ ${nTop} แห่ง`);
   chk(badRed===0, `เจ้าหนี้ไฮไลต์แดง+บอกส่วนขาดถูกต้อง (ผิด ${badRed}) · แดง ${nRed} แห่ง`);
-  chk(badSub===0, `บรรทัดเล็กเก็บข้อความ "เงินสดจะหมด?" เดิมไว้ครบ (ผิด ${badSub})`);
+  chk(badSub===0, `ทั้ง 2 บรรทัดในเซลล์ติดป้ายสมมติฐานครบ (ผิด ${badSub})`);
   // colspan ต้องเท่าหัวตารางเสมอ
   A.setEXOPEN({[j.hosp[0].hcode]:true}); A.setEXBRK({[j.hosp[1].hcode]:6}); A.exRender();
   const cs=[...els.exResBox.innerHTML.matchAll(/<tr class="ovsub"><td colspan="(\d+)"/g)].map(m=>+m[1]);
@@ -119,6 +119,27 @@ for(const mmo of [1,3,6]){
   chk(iTop>=0&&Math.abs(parseFloat(tt[iTop])-sumTop/1e6)<0.02, `ยอดรวมส่วนขาดสภาพคล่องใน TSV ตรง (${tt[iTop]} vs ${(sumTop/1e6).toFixed(2)})`);
   console.log(`   → ส่วนขาดสภาพคล่องรวม ${(sumTop/1e6).toFixed(1)} ลบ. · เปราะ ${nTop} แห่ง · เจ้าหนี้เกินเงินสด ${nRed} แห่ง\n`);
 }
+
+// ── สาขาเตือน "เงินสดติดลบ" ต้องเรนเดอร์ได้จริง ──
+// ข้อมูลจริงงวดนี้ทุกแห่งเงินสดไม่ติดลบ สาขานี้จึงไม่เคยถูกรัน — ต้องยิงด้วยเคสสังเคราะห์
+// ไม่งั้นเป็นโค้ดที่ไม่มีใครทดสอบ แล้วพังเงียบตอนมี รพ. เข้าเงื่อนไขจริง
+console.log('━━ สาขาเตือน "เงินสดติดลบ" (เคสสังเคราะห์) ━━');
+{
+  const k=JSON.parse(JSON.stringify(j));
+  const t=k.hosp[0];
+  t.bs.cn=200000; t.bs.depMo=0; t.bs.donMo=0; t.rev={};   // เงินสดน้อย + ไม่มีรายรับ + ไม่มีค่าเสื่อมกลบ
+  A.setEX(k); A.setEXST(ST(0,3)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1});
+  A.exRender();
+  const row=[...els.exResBox.innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>m[0])
+    .find(x=>x.includes('<b>'+t.name+'</b>'));
+  const td=[...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)][7][1];
+  const plain=td.replace(/<[^>]*>/g,'');
+  chk(/cellsub warn/.test(td), 'ใช้สไตล์เตือน (สีแดง) เมื่อแบบจำลองบอกว่าเงินสดติดลบ');
+  chk(/กรณีรายรับปกติ: เงินสดติดลบ [ก-ฮ]/.test(plain), `ระบุเดือนที่เงินสดติดลบ (${(plain.match(/เงินสดติดลบ \S+/)||[])[0]||'—'})`);
+  chk(plain.includes('สมมติรายรับหยุด'), 'ยังติดป้ายสมมติฐานให้บรรทัดบนครบ');
+  A.setEX(j);   // คืนข้อมูลจริงให้การทดสอบถัดไป
+}
+console.log();
 
 // ── tooltip หัวคอลัมน์ต้องมาตั้งแต่ "เรนเดอร์ครั้งแรก" ──
 // EX_COLDEF_MAP ต้องถูกตั้งก่อนสร้าง exHeadRow ไม่งั้น exSortTh อ่านแผนที่ว่าง → title หายทั้งแถว
