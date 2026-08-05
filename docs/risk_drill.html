@@ -139,11 +139,15 @@ table.wltbl td{padding:8px;border-bottom:1px solid var(--row-strip);vertical-ali
 /* ตารางผลจำลอง #exec (14 คอลัมน์ กว้างเกินจอมือถือ): ตรึงคอลัมน์ "โรงพยาบาล" ไว้ตอนปัดแนวนอน
    → ปัดไปดูคอลัมน์ขวาสุดแล้วยังรู้ว่าเป็นแถวของ รพ. ไหน (เดิมหลุดบริบททันทีที่ปัด)
    ช่องแรก (จังหวัด) ยอมให้เลื่อนลอดใต้ไป — ยังกรองจังหวัดจาก dropdown เหนือตารางได้อยู่
-   ⚠️ พื้นหลังต้องทึบ (var) ไม่งั้นเนื้อคอลัมน์อื่นทะลุขึ้นมาซ้อนตอนเลื่อน · ถูกทั้ง light/dark */
-table.wltbl.ex-sticky th:nth-child(2),
-table.wltbl.ex-sticky td:nth-child(2){position:sticky;left:0;box-shadow:1px 0 0 var(--line)}
-table.wltbl.ex-sticky td:nth-child(2){z-index:2;background:var(--card)}
-table.wltbl.ex-sticky th:nth-child(2){z-index:4;background:var(--th-bg)}
+   ⚠️ พื้นหลังต้องทึบ (var) ไม่งั้นเนื้อคอลัมน์อื่นทะลุขึ้นมาซ้อนตอนเลื่อน · ถูกทั้ง light/dark
+   ── เพิ่ม 5 ส.ค. 69: ตรึงหัวตารางแนวตั้งด้วย (เลื่อนลงดูแถวล่างแล้วยังเห็นชื่อคอลัมน์) ──
+   ⚠️ sticky top ทำงานได้ต่อเมื่อกรอบที่ครอบมี max-height จริง (เกิดการเลื่อนในกรอบ)
+      ถ้ากรอบเป็น max-height:none กรอบนั้นไม่เคยเลื่อนแนวตั้ง หัวตารางจะไม่ติดตามเลย — ดู #exTblWrap
+   ⚠️ ขอบล่างหัวตารางใช้ box-shadow ไม่ใช้ border เพราะ border ของเซลล์ sticky หายตอนเลื่อนในบางเบราว์เซอร์
+   ⚠️ z-index: หัวมุมซ้าย (ชื่อ รพ. × หัวตาราง) ต้องสูงสุด ไม่งั้นถูกทับตอนเลื่อนสองแกนพร้อมกัน */
+table.wltbl.ex-sticky th{position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--line)}
+table.wltbl.ex-sticky td:nth-child(2){position:sticky;left:0;z-index:2;background:var(--card);box-shadow:1px 0 0 var(--line)}
+table.wltbl.ex-sticky th:nth-child(2){left:0;z-index:5;background:var(--th-bg);box-shadow:1px 0 0 var(--line),0 1px 0 var(--line)}
 table.wltbl tr.click{cursor:pointer}
 table.wltbl tr.click:hover{background:var(--hover)}
 table.wltbl .bullets{margin:0;padding-left:14px}
@@ -487,6 +491,8 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
   .dwrap{max-width:100%!important;padding:0!important;gap:10px!important}
   .panel{overflow:visible!important;box-shadow:none!important;break-inside:avoid;page-break-inside:avoid}
   .acctbl-wrap{max-height:none!important;overflow:visible!important}
+  /* ตอนพิมพ์ต้องคลาย sticky ออก ไม่งั้นหัวตาราง/คอลัมน์ที่ตรึงลอยทับเนื้อในหน้าที่ 2 ขึ้นไป */
+  table.wltbl.ex-sticky th,table.wltbl.ex-sticky td{position:static!important;box-shadow:none!important}
   table.wltbl{min-width:0!important;font-size:9.5px!important}
   input[type=range],.ovbulkbtn,.ovtgl,.tgt-apply,.exnum,.colinfo,.no-print,select,#themeBtn,.lvlbtns{display:none!important}
   details:not([open])>summary{display:none}
@@ -1807,6 +1813,10 @@ function exRender(){
   // จำ scrollTop ไว้ก่อนแล้วคืนค่าหลัง render เสร็จ กันหน้าเด้งกลับบนสุดทุกครั้งที่ติ๊ก/ปรับค่า
   const exScrollEl=document.getElementById('right');
   const exScrollTop=exScrollEl?exScrollEl.scrollTop:0;
+  // กรอบตารางผลจำลองเลื่อนในตัวเอง (ตรึงหัวตาราง+คอลัมน์ชื่อ รพ.) — ต้องจำตำแหน่งทั้งสองแกนด้วย
+  // ไม่งั้นทุกครั้งที่ปรับสไลด์ ตารางเด้งกลับแถวแรก/คอลัมน์ซ้ายสุด ทั้งที่หน้ายังอยู่ที่เดิม
+  const exTblEl=document.getElementById('exTblWrap');
+  const exTblPos=exTblEl?{t:exTblEl.scrollTop,l:exTblEl.scrollLeft}:null;
   EXTJ=exTjCalc();
   if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
     const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe});
@@ -2110,7 +2120,7 @@ function exRender(){
     <details class="colinfo" style="margin:0 0 8px"><summary style="cursor:pointer;font-weight:700;font-size:12.5px;color:var(--blue)">ⓘ ความหมาย/สมการแต่ละคอลัมน์ (แตะดู — บนมือถือก็เห็น)</summary>
       <div class="note" style="margin-top:4px;line-height:1.7">${colInfoRows.map(([c,l])=>`<div><b>${l}:</b> ${(EX_COLDEF_MAP[c]||'').replace(/\n/g,'<br>&nbsp;&nbsp;')}</div>`).join('')}</div>
     </details>
-    <div class="acctbl-wrap" style="max-height:none;overflow-x:auto">
+    <div class="acctbl-wrap" id="exTblWrap" style="max-height:78vh;overflow:auto">
       <table class="wltbl ex-sticky" style="min-width:1000px">
         ${exHeadRow}
         ${rowsHtml}
@@ -2157,6 +2167,8 @@ function exRender(){
       <div class="tgt-row tgt-note"><b>ที่มา:</b> ระดับตอนนี้ = คะแนนงวด ${EX.periodLabel} — ${exRiskSrcLab()} (badge เดียวกับหน้าหลัก) · MOE = นิยามกองเศรษฐกิจสุขภาพ (ดูรายบัญชีใน panel MOE) · เงินสนับสนุน = ผล Solver หาค่าต่ำสุดที่ทำให้ระดับ ณ ${horLab} ≤ ${EXST.tgt} และเงินสดไม่หมดระหว่างทาง (ปรับเองรายแห่งได้ในปุ่ม "ปรับรายแห่ง")</div>
     </div>`;
   if(exScrollEl) exScrollEl.scrollTop=exScrollTop;
+  if(exTblPos){ const el=document.getElementById('exTblWrap');
+    if(el){ el.scrollTop=exTblPos.t; el.scrollLeft=exTblPos.l; } }
 }
 // TSV: นิยามคอลัมน์ที่เดียว — label / ค่าแต่ละแถว / ยอดรวม อยู่ในก้อนเดียวกัน
 // (เดิมเป็นอาเรย์ตำแหน่งคงที่ 3 ชุดแยกกัน นับช่องว่างผิดทีเดียวแถวรวมเลื่อนทั้งแถว)

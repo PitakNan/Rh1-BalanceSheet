@@ -190,5 +190,34 @@ for(const col of ['moeleft','topup']){
   const want=vals.sort((a,b)=>b.v-a.v)[0].n;
   chk(first===want, `sort ${col} มาก→น้อย แถวแรก = ${first}`);
 }
+// ── ตรึงหัวตาราง + คอลัมน์ชื่อ รพ. (เพิ่ม 5 ส.ค. 69) ──
+// 🪤 กับดัก: sticky top:0 "เงียบ" ถ้ากรอบที่ครอบไม่มี max-height จริง — กรอบไม่เคยเลื่อนแนวตั้ง
+//    หัวตารางจึงไม่มีอะไรให้ตรึง (ของเดิมกรอบเป็น max-height:none) · ชุดตรวจนี้ไม่มีเอนจินจัดหน้า
+//    วัดพฤติกรรมจริงไม่ได้ จึงตรวจ "เงื่อนไขที่ทำให้ sticky ทำงาน" จาก CSS/HTML ที่ deploy จริง
+console.log('━━ ตรึงหัวตาราง+คอลัมน์ชื่อ รพ. (sticky) ━━');
+{
+  const src=fs.readFileSync(SRC,'utf8');
+  const css=(src.match(/<style>([\s\S]*?)<\/style>/)||[])[1]||'';
+  const wrap=(els.exResBox.innerHTML.match(/<div[^>]*id="exTblWrap"[^>]*>/)||[])[0]||'';
+  chk(!!wrap, 'กรอบตารางมี id="exTblWrap" (ให้ CSS/ชุดตรวจ/โค้ดจำตำแหน่งเลื่อน อ้างถึงได้)');
+  const mh=((wrap.match(/max-height:\s*([^;"']+)/)||[])[1]||'').trim();
+  chk(!!mh&&mh!=='none', `กรอบมี max-height จริง (${mh||'ไม่มี'}) — ถ้าเป็น none หัวตารางจะไม่ตรึงเลย`);
+  chk(/overflow(-y)?:\s*(auto|scroll)/.test(wrap), 'กรอบเลื่อนแนวตั้งได้ (overflow auto/scroll)');
+  const rule=n=>(css.match(new RegExp('table\\.wltbl\\.ex-sticky '+n+'\\{([^}]*)\\}'))||[])[1]||'';
+  const th=rule('th'), corner=rule('th:nth-child\\(2\\)'), cell=rule('td:nth-child\\(2\\)');
+  chk(/position:sticky/.test(th)&&/top:0/.test(th), 'หัวตารางทุกช่อง sticky top:0');
+  chk(/position:sticky/.test(cell)&&/left:0/.test(cell), 'คอลัมน์ชื่อ รพ. ยัง sticky left:0 (ของเดิมไม่หาย)');
+  chk(/left:0/.test(corner), 'ช่องหัวมุมซ้ายตรึงสองแกน (left:0 + top:0 ที่รับจาก th)');
+  const z=s=>+((s.match(/z-index:(\d+)/)||[])[1]||0);
+  chk(z(corner)>z(th)&&z(th)>z(cell),
+      `ลำดับ z-index ถูก: หัวมุมซ้าย ${z(corner)} > หัวตาราง ${z(th)} > ชื่อ รพ. ${z(cell)}`);
+  chk(/background:var\(--th-bg\)/.test(corner)&&/background:var\(--card\)/.test(cell),
+      'เซลล์ที่ตรึงมีพื้นหลังทึบ (ไม่โปร่งให้เนื้อคอลัมน์อื่นทะลุขึ้นมาซ้อน)');
+  const pr=(css.match(/@media print\{([\s\S]*?)\n\}/)||[])[1]||'';
+  chk(/ex-sticky[^{]*\{[^}]*position:static!important/.test(pr), 'ตอนพิมพ์คลาย sticky ออก (ไม่ลอยทับหน้าถัดไป)');
+  chk(/exTblWrap[\s\S]{0,400}scrollLeft/.test(code), 'จำตำแหน่งเลื่อนของกรอบตอน re-render (ปรับสไลด์แล้วไม่เด้งกลับแถวแรก)');
+}
+console.log();
+
 console.log('\n'+(fail.length?`❌ ไม่ผ่าน ${fail.length} ข้อ:\n  `+fail.join('\n  '):'✅ ผ่านทุกข้อ'));
 process.exit(fail.length?1:0);
