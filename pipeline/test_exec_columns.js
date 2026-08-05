@@ -1,4 +1,4 @@
-// ตรวจคอลัมน์ชุดใหม่ในตาราง #exec: ซ่อนลูกหนี้ · เจ้าหนี้เตือนแดง · เงินสดสำหรับจ่าย MOE · เงินที่ต้องเติม
+// ตรวจคอลัมน์ชุดใหม่ในตาราง #exec: ซ่อนลูกหนี้ · เจ้าหนี้เตือนแดง · เงินสดคงเหลือหลังภาระ MOE · ส่วนขาดสภาพคล่อง
 // ตรวจ "สูตรรายแห่งครบ 103" ไม่ใช่แค่จำนวนคอลัมน์ + ตรวจว่าเปลี่ยนช่วงจำลองแล้วตัวเลขขยับจริง
 const fs=require('fs');
 const SRC=process.env.RD_SRC||'D:/Github/Rh1-BalanceSheet/docs/risk_drill.html';
@@ -57,13 +57,16 @@ for(const mmo of [1,3,6]){
   const head=rows[0], main=rows.filter(r=>r.includes('class="ovtgl"'));
   const nTh=(head.match(/<th\b/g)||[]).length;
   const months=A.exMoeMonths();
-  console.log(`━━ ทดสอบความทนทาน ${months} เดือน → ถึง ${A.exMoeTargetLab()} ━━`);
-  const headTxt=head.replace(/<br\s*\/?>/g,'');   // หัวคอลัมน์ตัดบรรทัดด้วย <br> — ตรวจข้อความจริงไม่ใช่ markup
+  console.log(`━━ ประเมินสภาพคล่อง ${months} เดือน → ถึง ${A.exMoeTargetLab()} ━━`);
+  // หัวคอลัมน์ตัดบรรทัดด้วย <br> — เทียบแบบตัดช่องว่างทิ้งทั้งหมด จะได้ไม่พังเวลาย้ายตำแหน่งตัดบรรทัด
+  const norm=s=>s.replace(/<br\s*\/?>/g,' ').replace(/\s+/g,'');
+  const headTxt=norm(head), inHead=s=>headTxt.includes(norm(s));
   chk(nTh===14, `หัวตาราง 14 ช่อง (ได้ ${nTh})`);
-  chk(!headTxt.includes('ลูกหนี้'), 'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
-  chk(headTxt.includes('ทนถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนทดสอบ "${A.exMoeTargetLab()}"`);
-  chk(headTxt.includes('ถ้ารายรับ')&&headTxt.includes('ส่วนที่ขาด'), 'หัวคอลัมน์สื่อว่าเป็นการทดสอบ ไม่ใช่คำของบ');
-  chk(!headTxt.includes('จะหมด?'), 'คอลัมน์ "เงินสดจะหมด?" ถูกแทนที่แล้ว');
+  chk(!inHead('ลูกหนี้'), 'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
+  chk(inHead('เงินสดคงเหลือหลังภาระ MOE ถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนประเมิน "${A.exMoeTargetLab()}"`);
+  chk(inHead('ส่วนขาดสภาพคล่อง'), 'มีคอลัมน์ส่วนขาดสภาพคล่อง');
+  chk(/สมมติฐานว่ารายรับหยุดสนิท/.test(html)&&/ไม่ใช่คำของบ/.test(html), 'กล่องเหนือตารางระบุสมมติฐาน + ไม่ใช่คำของบ');
+  chk(!inHead('จะหมด?'), 'คอลัมน์ "เงินสดจะหมด?" ถูกแทนที่แล้ว');
   // คอลัมน์ชื่อ รพ. ต้องตรึงตอนปัดแนวนอน (คลาส ex-sticky + CSS sticky ของ nth-child(2))
   chk(/<table class="wltbl ex-sticky"/.test(html), 'ตารางมีคลาส ex-sticky (ตรึงคอลัมน์ชื่อ รพ.)');
   chk(main.length===j.hosp.length, `แถวหลักครบ ${main.length}/${j.hosp.length}`);
@@ -97,8 +100,8 @@ for(const mmo of [1,3,6]){
     if(!cLeft.includes(wantSub)) badSub++;
   }
   chk(badCol===0, `ทุกแถวมี td ครบเท่าหัว (ผิด ${badCol})`);
-  chk(badLeft===0, `เงินสดสำหรับจ่าย MOE ตรงสูตร (เงินสด−เจ้าหนี้)−MOE×${months} ทุกแห่ง (ผิด ${badLeft})`);
-  chk(badTop===0, `เงินที่ต้องเติม = ส่วนที่ขาด ทุกแห่ง (ผิด ${badTop}) · มีที่ต้องเติม ${nTop} แห่ง`);
+  chk(badLeft===0, `เงินสดคงเหลือหลังภาระ MOE ตรงสูตร (เงินสด−เจ้าหนี้)−MOE×${months} ทุกแห่ง (ผิด ${badLeft})`);
+  chk(badTop===0, `ส่วนขาดสภาพคล่อง = ส่วนที่ติดลบ ทุกแห่ง (ผิด ${badTop}) · เปราะ ${nTop} แห่ง`);
   chk(badRed===0, `เจ้าหนี้ไฮไลต์แดง+บอกส่วนขาดถูกต้อง (ผิด ${badRed}) · แดง ${nRed} แห่ง`);
   chk(badSub===0, `บรรทัดเล็กเก็บข้อความ "เงินสดจะหมด?" เดิมไว้ครบ (ผิด ${badSub})`);
   // colspan ต้องเท่าหัวตารางเสมอ
@@ -111,10 +114,10 @@ for(const mmo of [1,3,6]){
   chk(w.length===1, `TSV ทุกบรรทัดกว้างเท่ากัน (${w.join(',')} คอลัมน์)`);
   chk(!L[0].includes('ลูกหนี้'), 'TSV ไม่มีคอลัมน์ลูกหนี้ (ตรงกับตาราง)');
   const hh=L[0].split('\t'), tt=L[L.length-1].split('\t');
-  const iTop=hh.findIndex(c=>c.startsWith('ทดสอบทนทาน: ส่วนที่ขาด'));
+  const iTop=hh.findIndex(c=>c.startsWith('ส่วนขาดสภาพคล่อง'));
   const sumTop=j.hosp.reduce((s,h)=>{const r0=A.exSimPath(h,0);return s+A.exTopUp({h,r0});},0);
-  chk(iTop>=0&&Math.abs(parseFloat(tt[iTop])-sumTop/1e6)<0.02, `ยอดรวมส่วนที่ขาดใน TSV ตรง (${tt[iTop]} vs ${(sumTop/1e6).toFixed(2)})`);
-  console.log(`   → รวมเงินที่ต้องเติม ${(sumTop/1e6).toFixed(1)} ลบ. · ${nTop} แห่ง · เจ้าหนี้เกินเงินสด ${nRed} แห่ง\n`);
+  chk(iTop>=0&&Math.abs(parseFloat(tt[iTop])-sumTop/1e6)<0.02, `ยอดรวมส่วนขาดสภาพคล่องใน TSV ตรง (${tt[iTop]} vs ${(sumTop/1e6).toFixed(2)})`);
+  console.log(`   → ส่วนขาดสภาพคล่องรวม ${(sumTop/1e6).toFixed(1)} ลบ. · เปราะ ${nTop} แห่ง · เจ้าหนี้เกินเงินสด ${nRed} แห่ง\n`);
 }
 
 // ── tooltip หัวคอลัมน์ต้องมาตั้งแต่ "เรนเดอร์ครั้งแรก" ──
@@ -148,7 +151,7 @@ for(const ext of [3,6,12]){
   if(!same) drift++;
   console.log(`  ${same?'✅':'❌'} ext=${String(ext).padStart(2)} → ส่วนที่ขาดรวม ${(v/1e6).toFixed(1)} ลบ. · เดือนเป้า ${A.exMoeTargetLab()}${same?'  (ไม่ขยับ ถูกต้อง)':'  ← ยังผูกกันอยู่!'}`);
 }
-chk(drift===0, 'เปลี่ยนช่วงจำลองแล้วคอลัมน์ทดสอบความทนทานไม่ขยับ');
+chk(drift===0, 'เปลี่ยนช่วงจำลองแล้วคอลัมน์ประเมินสภาพคล่องไม่ขยับ');
 // เพดาน 6 เดือน — ค่าเกินต้องตกกลับเป็นค่าเริ่มต้น ไม่ใช่ยอมรับ
 A.setEXST(ST(0,99)); A.exRender();
 chk(A.exMoeMonths()<=A.EXMAX, `ค่าเกินเพดานถูกจำกัด (mmo=99 → ${A.exMoeMonths()} เดือน · เพดาน ${A.EXMAX})`);
