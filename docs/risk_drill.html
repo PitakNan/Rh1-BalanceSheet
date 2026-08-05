@@ -1154,11 +1154,25 @@ let EXBRK={};   // hcode -> ระดับเป้าที่กางแผ�
 let _refundCache={sig:null, refund:null};   // cache ผล solver "ยกหนี้เจาะจง" (คำนวณใหม่เฉพาะตอน state กระทบ sim เปลี่ยน)
 let EXSORT={col:null,dir:-1};
 const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
+// ซ่อนคอลัมน์ "ลูกหนี้ UC-OP นอก CUP" ไว้ก่อน (เจ้าของงานสั่ง 5 ส.ค. 69 — ซ่อน ไม่ใช่ลบ)
+// เปิดกลับเป็น true ได้ทันที · โค้ด/สูตร/ตัวเรียงลำดับยังอยู่ครบ ไม่ต้องเขียนใหม่
+const EX_SHOW_TJAR=false;
+// ── ภาระเงินสดถึงเดือนเป้า: "เจ้าหนี้มาก่อน MOE" (เจ้าของงานสั่ง — กันนับเงินสดก้อนเดียวซ้ำสองภาระ) ──
+// จำนวนเดือน = เดือนที่เหลือถึงสิ้นปีงบ + ช่วงขยาย (ผูกกับตัวเลือก "ช่วงจำลอง" ตัวเดียวกับแบบจำลอง exSimPath)
+function exHorMonths(h){ return (12-h.bs.mo)+(+EXST.ext||0); }
+function exPayIn(h){ return (h.tj&&h.tj.payIn)||0; }
+// เงินสดหลังหักเจ้าหนี้ตามจ่ายแล้ว เหลือพอจ่าย MOE ถึงเดือนเป้าหรือไม่ (ติดลบ = ขาด)
+// ⚠️ เป็นการเทียบ "เงินสดคงเหลือล้วนๆ" ไม่นับรายรับที่จะเข้ามาระหว่างทาง — ฐานเดียวกับ
+//    ตัวชี้วัด "เงินสดพอจ่าย MOE" ที่ใช้อยู่แล้วทั้ง Watchlist และ #exec (RISK_EXEC_MODEL.md 3.6)
+function exMoeLeft(x){ return (x.h.bs.cn-exPayIn(x.h)) - (x.r0.moeMo||0)*exHorMonths(x.h); }
+// เงินที่ต้องเติมขั้นต่ำให้ "อยู่รอด" ถึงเดือนเป้า — คนละตัวกับเงินสนับสนุน Solver (ซึ่งเล็งระดับวิกฤต)
+function exTopUp(x){ const v=exMoeLeft(x); return v<0?-v:0; }
 const EX_SORT_GETTERS={
   prov:x=>x.h.prov||'', name:x=>x.h.name||'',
   risk0:x=>x.h.risk??-1, moe:x=>x.r0.moeMo||0, ni:x=>x.r0.niM||0,
   cash:x=>x.r0.cashOut==null?Infinity:x.r0.cashOut, cashbal:x=>x.h.bs.cn||0,
-  tjpay:x=>(x.h.tj&&x.h.tj.payIn)||0, tjar:x=>(x.h.tj&&x.h.tj.arIn)||0,
+  tjpay:x=>exPayIn(x.h), tjar:x=>(x.h.tj&&x.h.tj.arIn)||0,
+  moeleft:x=>exMoeLeft(x), topup:x=>exTopUp(x),
   sep0:x=>x.r0.sepRisk??-1, give:x=>x.give||0, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
 };
 function exSetSort(col){
@@ -1943,6 +1957,10 @@ function exRender(){
   items.forEach(x=>{ if(x.inj>0) byProv[x.h.prov]=(byProv[x.h.prov]||0)+x.inj; });
   const hist=lv=>{ const c={}; items.forEach(x=>{ const v=lv(x); if(v!=null) c[v]=(c[v]||0)+1; });
     return [7,6,5,4,3,2,1,0].filter(L=>c[L]).map(L=>`<span class="b" style="background:${riskColor(L)}">${L}×${c[L]}</span>`).join(''); };
+  // แถวหัวตาราง — สร้างก่อนแถวข้อมูล เพื่อนับจำนวนคอลัมน์จริงไปใช้เป็น colspan ของแถวย่อย
+  // (เดิม hardcode ไว้ ทำให้ลืมแก้ทุกครั้งที่เพิ่ม/ซ่อนคอลัมน์ — ดู RISK_EXEC_MODEL.md 7.7)
+  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้ OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดสำหรับจ่าย MOE<br>ถึง '+horLab,'moeleft')}${exSortTh('เงินที่ต้อง<br>เติม','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
+  const EX_NCOL=(exHeadRow.match(/<th\b/g)||[]).length;
   const rowsHtml=items.map(x=>{
     const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc], brkOpen=EXBRK[hc]!=null;
     const main=`<tr>
@@ -1960,21 +1978,37 @@ function exRender(){
         const rw=h.bs.cn/mm, short=rw<left;
         return `<span class="cellsub${short?' warn':''}">พอจ่าย MOE ${rw.toFixed(1)} เดือน${short?' ⚠️':''}</span>`;
       })()}</td>
-      <td>${(h.tj&&h.tj.payIn>0)?fmtM(h.tj.payIn):'<span class="tgt-note">–</span>'}</td>
-      <td>${(h.tj&&h.tj.arIn>0)?fmtM(h.tj.arIn):'<span class="tgt-note">–</span>'}</td>
-      <td>${r0.cashOut!=null?`<span class="tgt-warn">${r0.cashOut===0?'ติดลบแล้ว':'เดือน '+r0.cashOut+' ('+tLab(addMo(h.bs.t,r0.cashOut))+')'}</span>`:'<span style="color:var(--green)">ไม่หมด</span>'}</td>
+      ${(()=>{
+        // เจ้าหนี้ตามจ่าย: เตือนแดงเมื่อเงินสด+เทียบเท่าไม่พอจ่ายเจ้าหนี้ก้อนนี้ พร้อมบอกส่วนที่ขาด
+        const pay=exPayIn(h), gap=pay-h.bs.cn;
+        if(!(pay>0)) return '<td><span class="tgt-note">–</span></td>';
+        return `<td${gap>0?' style="color:var(--red);font-weight:700"':''}>${fmtM(pay)}${
+          gap>0?`<span class="cellsub warn">เงินสดไม่พอจ่าย ขาด ${fmtM(gap)} ⚠️</span>`:''}</td>`;
+      })()}
+      ${EX_SHOW_TJAR?`<td>${(h.tj&&h.tj.arIn>0)?fmtM(h.tj.arIn):'<span class="tgt-note">–</span>'}</td>`:''}
+      ${(()=>{
+        // เงินสดสำหรับจ่าย MOE ถึงเดือนเป้า = (เงินสด − เจ้าหนี้ตามจ่าย) − MOE/เดือน × เดือนที่เหลือ
+        // บรรทัดเล็กใต้ตัวเลข = ข้อความเดิมของคอลัมน์ "เงินสดจะหมด?" (ผลจากแบบจำลองที่นับรายรับด้วย)
+        const left=exMoeLeft(x), mm=exHorMonths(h);
+        const sub=r0.cashOut!=null
+          ? `<span class="cellsub warn">(เงินสดหมด${r0.cashOut===0?'แล้ว':' เดือน '+r0.cashOut+' — '+tLab(addMo(h.bs.t,r0.cashOut))})</span>`
+          : `<span class="cellsub">(จำลองแล้วเงินสดไม่หมด)</span>`;
+        return `<td${left<0?' style="color:var(--red);font-weight:700"':''}>${
+          left<0?'ขาด '+fmtM(-left):fmtM(left)}<span class="cellsub">ภาระ MOE ${mm} เดือน ${fmtM((r0.moeMo||0)*mm)}</span>${sub}</td>`;
+      })()}
+      <td>${exTopUp(x)>0?`<b style="color:var(--red)">${fmtM(exTopUp(x))}</b>`:'<span class="tgt-note">–</span>'}</td>
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
       <td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>
       <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<span class="tgt-note">–</span>')}</td>
       <td><span class="badge brkbadge${brkOpen?' on':''}" style="background:${riskColor(r1.sepRisk)}" title="คลิกดูเกณฑ์ทั้ง 7 คะแนน ก่อน/หลังช่วย ณ ${sepLab} — เลือกดูระดับเป้าอื่นได้" onclick="exBrkToggle('${hc}')">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
     </tr>`;
-    const brkRow=brkOpen?`<tr class="ovsub"><td colspan="14">${exBrkHtml(x,sepLab)}</td></tr>`:'';
+    const brkRow=brkOpen?`<tr class="ovsub"><td colspan="${EX_NCOL}">${exBrkHtml(x,sepLab)}</td></tr>`:'';
     if(!open) return main+brkRow;
     const segs=[];
     for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
       for(const g of ['op','ip','pp','oth']){ if(r[g]) segs.push({p,g,v:r[g]}); } }
-    const sub=`<tr class="ovsub"><td colspan="14"><div class="ovsub-box">
+    const sub=`<tr class="ovsub"><td colspan="${EX_NCOL}"><div class="ovsub-box">
       <div class="fld"><label>💰 เงินสนับสนุนกำหนดเอง (ล้านบาท — เว้นว่าง = ใช้ค่า Solver อัตโนมัติ):
         <input type="number" class="exnum" step="0.5" min="0" value="${x.manual?(EXST.inj[hc]/1e6):''}" placeholder="อัตโนมัติ"
           onchange="exSetInj('${hc}',this.value)"></label></div>
@@ -2013,15 +2047,19 @@ function exRender(){
     moe:'ค่าใช้จ่ายจำเป็นต่อเดือน (นิยามกองเศรษฐกิจสุขภาพ) = Σ(ยอดจ่ายจริงสะสม ÷ เดือน) × (1 + %ปรับรายหมวด)',
     ni:'กำไร/ขาดทุนสุทธิจำลอง/เดือน = รายรับกองทุน×(1+%) − MOE − ค่าใช้จ่ายนอกนิยาม(run-rate) − รายการไม่ใช่เงินสด',
     cashbal:cashTitle+'\n\nบรรทัดล่าง "พอจ่าย MOE X เดือน" = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็น (MOE) ได้กี่เดือน\n= เงินสด ÷ MOE/เดือน · ไม่ใช่เพดาน ค่าจริงเกินได้\n⚠️ เตือนเมื่อน้อยกว่า 3 เดือน (เกณฑ์ขั้นต่ำตามหลักอัตราความอยู่รอด SU ของ Risk Score)\n= ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่จะเข้ามาระหว่างทาง',
-    tjpay:'เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (บัญชี 2101020199.202) — ยอดที่ รพ.นี้บันทึกว่าค้างจ่ายให้ รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพช. ค้าง รพศ./รพท.)\nเป็นหนี้สินหมุนเวียน ยิ่งมากยิ่งกดสภาพคล่อง (CR/QR) · เป็นฐานของ Option ตามจ่าย/ยกหนี้ด้านบน',
+    tjpay:'เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (บัญชี 2101020199.202) — ยอดที่ รพ.นี้บันทึกว่าค้างจ่ายให้ รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพช. ค้าง รพศ./รพท.)\nครอบคลุมผู้ป่วยนอก UC ที่ไปรับบริการนอก CUP ทุกกรณี — ทั้ง OP Refer (ส่งต่อ) และ OP Anywhere (30 บาทรักษาทุกที่) ไม่ใช่เฉพาะกรณีส่งต่อ\n🔴 แดง = เงินสด+เทียบเท่าไม่พอจ่ายเจ้าหนี้ก้อนนี้ พร้อมบอกส่วนที่ขาด\nเป็นหนี้สินหมุนเวียน ยิ่งมากยิ่งกดสภาพคล่อง (CR/QR) · เป็นฐานของ Option ตามจ่าย/ยกหนี้ด้านบน',
     tjar:'ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (บัญชี 1102050101.203 + 1102050194.204) — ยอดที่ รพ.นี้บันทึกว่าควรได้รับจาก รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพศ./รพท. รอรับจาก รพช.)\n⚠️ สองฝั่งบันทึกแยกเล่ม ยอดเจ้าหนี้กับลูกหนี้จึงไม่เท่ากัน — ดูรายละเอียดที่ตาราง Option ตามจ่าย',
+    moeleft:'เงินสดที่เหลือไว้จ่ายค่าใช้จ่ายจำเป็น (MOE) จนถึง '+horLab+'\n= (เงินสด+เทียบเท่า − เจ้าหนี้ OP-UC นอก CUP) − MOE/เดือน × '+((12-EX.hosp[0].bs.mo)+(+EXST.ext||0))+' เดือน\n⚠️ หักเจ้าหนี้ตามจ่ายออกก่อน (เจ้าหนี้มาก่อน MOE) เพราะเป็นเงินสดก้อนเดียวกัน จะนับซ้ำสองภาระไม่ได้\nติดลบ = เงินสดที่มีไม่พอ ต้องเติม (ดูคอลัมน์ถัดไป)\nคิดจากเงินสดคงเหลือล้วนๆ ไม่นับรายรับที่จะเข้ามาระหว่างทาง — ฐานเดียวกับตัวชี้วัด "เงินสดพอจ่าย MOE"\nบรรทัดในวงเล็บ = ผลจากแบบจำลองที่นับรายรับด้วย (เดือนที่เงินสดจะติดลบ) จึงอาจบอกว่า "ไม่หมด" แม้ช่องนี้ติดลบ\nเปลี่ยนเดือนเป้าได้ที่ "ช่วงจำลอง" ด้านบน',
+    topup:'เงินก้อนขั้นต่ำที่ต้องเติมเพื่อให้ "อยู่รอด" ถึง '+horLab+' = ส่วนที่ขาดของคอลัมน์ก่อนหน้า\n⛔ คนละตัวกับ "เงินสนับสนุนที่ต้องใช้" — ตัวนี้คือ Step แรกให้มีเงินสดพอจ่ายเจ้าหนี้ + MOE เท่านั้น ยังไม่ได้ทำให้พ้นระดับวิกฤต\nส่วน "เงินสนับสนุนที่ต้องใช้" คือเงินที่ทำให้ระดับวิกฤตลงถึงเป้าที่ตั้งไว้ (หาด้วย Solver) จึงเป็นคนละวัตถุประสงค์',
     cash:'เดือนที่เงินสดจะติดลบระหว่างจำลอง (ไม่หมด = ไม่ติดลบตลอดช่วง) · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด',
     sep0:'ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก)',
     give:'เงินยกหนี้/คืน จาก Option ตามจ่าย · ยกหนี้: รพช.รับเต็ม, รพศ./รพท.ยกให้ · ยกหนี้เจาะจง: เงินคืนขั้นต่ำให้ระดับ ≤3 · ไม่ใช้/จ่ายจริง: ไม่มี',
     need:'เงินก้อนขั้นต่ำ (เติมครั้งเดียวเดือน 0) ให้ระดับ ณ '+sepLab+' ≤ เป้าที่ตั้ง และเงินสดไม่หมด — หาด้วย Solver (binary search)\nรับรู้เป็นรายได้เงินอุดหนุนจากหน่วยงานภาครัฐ จึงเพิ่มทั้งสภาพคล่อง (CA/QN/เงินสด) และ NI',
     sep1:'ระดับวิกฤต ณ '+sepLab+' หลังเติมเงินสนับสนุนแล้ว',
   };
-  const colInfoRows=[['risk0','ระดับตอนนี้'],['moe','MOE/เดือน'],['ni','NI จำลอง/เดือน'],['cashbal','เงินสด+เทียบเท่า'],['tjpay','เจ้าหนี้ OP-UC นอก CUP'],['tjar','ลูกหนี้ UC-OP นอก CUP'],['cash','เงินสดจะหมด?'],['sep0','ระดับ '+sepLab+' ก่อนช่วย'],['give','เงินที่ยกให้'],['need','เงินสนับสนุนที่ต้องใช้'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
+  const colInfoRows=[['risk0','ระดับตอนนี้'],['moe','MOE/เดือน'],['ni','NI จำลอง/เดือน'],['cashbal','เงินสด+เทียบเท่า'],['tjpay','เจ้าหนี้ OP-UC นอก CUP'],
+    ...(EX_SHOW_TJAR?[['tjar','ลูกหนี้ UC-OP นอก CUP']]:[]),
+    ['moeleft','เงินสดสำหรับจ่าย MOE ถึง '+horLab],['topup','เงินที่ต้องเติม'],['sep0','ระดับ '+sepLab+' ก่อนช่วย'],['give','เงินที่ยกให้'],['need','เงินสนับสนุนที่ต้องใช้'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span><span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span></h3>
     <div class="exctl" style="margin:0 0 8px 0">
@@ -2036,8 +2074,8 @@ function exRender(){
       <div class="note" style="margin-top:4px;line-height:1.7">${colInfoRows.map(([c,l])=>`<div><b>${l}:</b> ${(EX_COLDEF_MAP[c]||'').replace(/\n/g,'<br>&nbsp;&nbsp;')}</div>`).join('')}</div>
     </details>
     <div class="acctbl-wrap" style="max-height:none;overflow-x:auto">
-      <table class="wltbl" style="min-width:1000px">
-        <tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้ OP-UC<br>นอก CUP','tjpay')}${exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar')}${exSortTh('เงินสด<br>จะหมด?','cash')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>
+      <table class="wltbl" style="min-width:1080px">
+        ${exHeadRow}
         ${rowsHtml}
       </table>
     </div>
@@ -2045,6 +2083,26 @@ function exRender(){
       <h4 style="margin:0">📋 สรุประดับเขต</h4>
       <div class="tgt-row">ช่วย ${nHelp} แห่ง จาก ${rows.length} แห่งที่เลือก${nFail?` · <span class="tgt-warn">⚠️ ${nFail} แห่งเงินก้อนอย่างเดียวไม่ถึงเป้า (ต้องแก้ NI/รายรับร่วมด้วย)</span>`:''}${Object.keys(byProv).length?` · <span class="tgt-note">${Object.entries(byProv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')}</span>`:''}</div>
       <div class="tgt-row">ระดับวิกฤต ณ ${sepLab}: ก่อนช่วย <span class="exhist">${hist(x=>x.r0.sepRisk)}</span> → หลังช่วย <span class="exhist">${hist(x=>x.r1.sepRisk)}</span></div>
+      ${(()=>{
+        // สรุป "เงินที่ต้องเติมให้อยู่รอด" — Step แรก (เงินสดพอจ่ายเจ้าหนี้+MOE) คนละตัวกับเงินสนับสนุนให้พ้นวิกฤต
+        const t=items.filter(x=>exTopUp(x)>0);
+        const nPay=items.filter(x=>exPayIn(x.h)-x.h.bs.cn>0);
+        const payGap=nPay.reduce((s,x)=>s+(exPayIn(x.h)-x.h.bs.cn),0);
+        const parts=[];
+        if(nPay.length) parts.push(`<div class="tgt-row"><span class="tgt-warn">🔴 เงินสดไม่พอจ่ายเจ้าหนี้ OP-UC นอก CUP: <b>${nPay.length}</b> แห่ง · ขาดรวม ${fmtM(payGap)}</span>
+          <span class="tgt-note">— ${nPay.sort((a,b)=>(exPayIn(b.h)-b.h.bs.cn)-(exPayIn(a.h)-a.h.bs.cn)).slice(0,5).map(x=>x.h.name+' ขาด '+fmtM(exPayIn(x.h)-x.h.bs.cn)).join(' · ')}</span></div>`);
+        if(t.length){
+          const tot=t.reduce((s,x)=>s+exTopUp(x),0);
+          const byPv={}; t.forEach(x=>{ byPv[x.h.prov]=(byPv[x.h.prov]||0)+exTopUp(x); });
+          parts.push(`<div class="tgt-row" style="font-weight:600">🩹 เงินที่ต้องเติมให้อยู่รอดถึง ${horLab} (Step แรก): <b style="color:var(--red)">${fmtM(tot)}</b> · <b>${t.length}</b> จาก ${rows.length} แห่ง
+            <span class="tgt-note" style="font-weight:400">— ${Object.entries(byPv).sort((a,b)=>b[1]-a[1]).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')}</span></div>
+            <div class="tgt-row tgt-note">มากสุด: ${t.slice().sort((a,b)=>exTopUp(b)-exTopUp(a)).slice(0,5).map(x=>x.h.name+' '+fmtM(exTopUp(x))).join(' · ')}
+            · ⛔ คนละตัวกับ "เงินสนับสนุน ${fmtM(sumNeed)}" ด้านล่าง — ตัวนี้แค่ให้มีเงินสดพอจ่ายเจ้าหนี้+MOE ยังไม่ได้ทำให้พ้นระดับวิกฤต</div>
+            ${(+EXST.ext||0)>0?`<div class="tgt-row"><span class="tgt-warn">⚠️ ช่วงจำลองขยายเป็น ${(12-EX.hosp[0].bs.mo)+(+EXST.ext||0)} เดือน (ถึง ${horLab})</span>
+              <span class="tgt-note">— ตัวเลขนี้คิดจาก<b>เงินสดคงเหลือล้วนๆ ไม่นับรายรับที่จะเข้ามาระหว่างทาง</b> ยิ่งช่วงยาวยิ่งเกินจริงมาก (รายรับเข้าทุกเดือนแต่ไม่ถูกนับ) — ใช้เปรียบเทียบระหว่าง รพ. ได้ แต่<b>อย่าอ่านเป็นเม็ดเงินที่ต้องของบจริง</b> เม็ดเงินจริงให้ดู "เงินสนับสนุนที่ต้องใช้" ซึ่งคำนวณจากแบบจำลองที่นับรายรับแล้ว</span></div>`:''}`);
+        }
+        return parts.join('');
+      })()}
       ${(()=>{
         // สรุปเงินสดพอจ่าย MOE: แห่งที่เงินสดพอจ่าย MOE ไม่ถึงเกณฑ์ขั้นต่ำ 3 เดือน (ไม่ใช่วิกฤตเฉพาะหน้า
         // เพราะรายรับยังเข้าทุกเดือน — แต่เป็นกลุ่มที่จะกระทบก่อนถ้ารายรับสะดุด)
@@ -2065,15 +2123,42 @@ function exRender(){
     </div>`;
   if(exScrollEl) exScrollEl.scrollTop=exScrollTop;
 }
+// TSV: นิยามคอลัมน์ที่เดียว — label / ค่าแต่ละแถว / ยอดรวม อยู่ในก้อนเดียวกัน
+// (เดิมเป็นอาเรย์ตำแหน่งคงที่ 3 ชุดแยกกัน นับช่องว่างผิดทีเดียวแถวรวมเลื่อนทั้งแถว)
 function exBuildTSV(items, horLab){
   const M=v=>v==null?'':(v/1e6).toFixed(2);
-  const head=['จังหวัด','โรงพยาบาล','ประเภท','ระดับปัจจุบัน','ที่มาคะแนน','รายรับจำลอง/เดือน(ลบ.)','MOE กองเศรษฐฯ/เดือน(ลบ.)','คชจ.นอกนิยาม/เดือน(ลบ.)','NIจำลอง/เดือน(ลบ.)','เงินสด+เทียบเท่า(ลบ.)','เงินสดพอจ่าย MOE(เดือน)','เจ้าหนี้ OP-UC นอก CUP ในจังหวัด 2101020199.202(ลบ.)','ลูกหนี้ UC-OP นอก CUP ในจังหวัด 1102050101.203+1102050194.204(ลบ.)','เงินสดหมดเดือนที่','ระดับก่อนช่วย','เงินที่ยกให้(ลบ. · +ได้รับ/−ยกให้)','เงินสนับสนุน(ลบ.)','ระดับหลังช่วย ณ '+horLab].join('\t');
   const srcT=s=>s==='gl'?'คำนวณจากงบทดลอง':(s==='rep'?'ทางการ(รพ.รายงาน)':'');
-  const rw=(h,r0)=>r0.moeMo>0?(h.bs.cn/r0.moeMo).toFixed(1):'';
-  const lines=items.map(({h,need,inj,r0,r1,give,role})=>[h.prov||'',h.name,h.type,h.risk!=null?h.risk:'',srcT(h.src),M(r0.revMo),M(r0.moeMo),M(r0.xmoeMo),M(r0.niM),M(h.bs.cn),rw(h,r0),M(h.tj?h.tj.payIn:0),M(h.tj?h.tj.arIn:0),r0.cashOut!=null?r0.cashOut:'-',r0.sepRisk!=null?r0.sepRisk:'-',give>0?((role==='give'?'-':'')+(give/1e6).toFixed(2)):'',need==null?'ไม่พอ':M(inj),r1.sepRisk!=null?r1.sepRisk:'-'].join('\t'));
-  const tot=['รวม','','','','','','','','',M(items.reduce((s,x)=>s+(x.h.bs.cn||0),0)),'',
-    M(items.reduce((s,x)=>s+((x.h.tj&&x.h.tj.payIn)||0),0)),M(items.reduce((s,x)=>s+((x.h.tj&&x.h.tj.arIn)||0),0)),'','',M(items.filter(x=>x.role==='got').reduce((s,x)=>s+x.give,0)),M(items.reduce((s,x)=>s+(x.inj||0),0)),''].join('\t');
-  return [head,...lines,tot].join('\n');
+  const sum=f=>M(items.reduce((s,x)=>s+(f(x)||0),0));
+  const COLS=[
+    {h:'จังหวัด', v:x=>x.h.prov||'', t:()=>'รวม'},
+    {h:'โรงพยาบาล', v:x=>x.h.name},
+    {h:'ประเภท', v:x=>x.h.type},
+    {h:'ระดับปัจจุบัน', v:x=>x.h.risk!=null?x.h.risk:''},
+    {h:'ที่มาคะแนน', v:x=>srcT(x.h.src)},
+    {h:'รายรับจำลอง/เดือน(ลบ.)', v:x=>M(x.r0.revMo)},
+    {h:'MOE กองเศรษฐฯ/เดือน(ลบ.)', v:x=>M(x.r0.moeMo), t:()=>sum(x=>x.r0.moeMo)},
+    {h:'คชจ.นอกนิยาม/เดือน(ลบ.)', v:x=>M(x.r0.xmoeMo)},
+    {h:'NIจำลอง/เดือน(ลบ.)', v:x=>M(x.r0.niM)},
+    {h:'เงินสด+เทียบเท่า(ลบ.)', v:x=>M(x.h.bs.cn), t:()=>sum(x=>x.h.bs.cn)},
+    {h:'เงินสดพอจ่าย MOE(เดือน)', v:x=>x.r0.moeMo>0?(x.h.bs.cn/x.r0.moeMo).toFixed(1):''},
+    {h:'เจ้าหนี้ OP-UC นอก CUP ในจังหวัด 2101020199.202(ลบ.)', v:x=>M(exPayIn(x.h)), t:()=>sum(x=>exPayIn(x.h))},
+    {h:'เงินสดไม่พอจ่ายเจ้าหนี้ ขาด(ลบ.)', v:x=>{const g=exPayIn(x.h)-x.h.bs.cn; return g>0?M(g):'';},
+     t:()=>sum(x=>Math.max(0,exPayIn(x.h)-x.h.bs.cn))},
+    ...(EX_SHOW_TJAR?[{h:'ลูกหนี้ UC-OP นอก CUP ในจังหวัด 1102050101.203+1102050194.204(ลบ.)',
+       v:x=>M((x.h.tj&&x.h.tj.arIn)||0), t:()=>sum(x=>(x.h.tj&&x.h.tj.arIn)||0)}]:[]),
+    {h:'ภาระ MOE ถึง '+horLab+'(ลบ.)', v:x=>M((x.r0.moeMo||0)*exHorMonths(x.h)), t:()=>sum(x=>(x.r0.moeMo||0)*exHorMonths(x.h))},
+    {h:'เงินสดสำหรับจ่าย MOE ถึง '+horLab+'(ลบ. · ติดลบ=ขาด)', v:x=>M(exMoeLeft(x)), t:()=>sum(x=>exMoeLeft(x))},
+    {h:'เงินที่ต้องเติมให้อยู่รอดถึง '+horLab+'(ลบ.)', v:x=>{const t=exTopUp(x); return t>0?M(t):'';}, t:()=>sum(x=>exTopUp(x))},
+    {h:'เงินสดหมดเดือนที่(แบบจำลอง นับรายรับด้วย)', v:x=>x.r0.cashOut!=null?x.r0.cashOut:'-'},
+    {h:'ระดับก่อนช่วย', v:x=>x.r0.sepRisk!=null?x.r0.sepRisk:'-'},
+    {h:'เงินที่ยกให้(ลบ. · +ได้รับ/−ยกให้)', v:x=>x.give>0?((x.role==='give'?'-':'')+(x.give/1e6).toFixed(2)):'',
+     t:()=>sum(x=>x.role==='got'?x.give:0)},
+    {h:'เงินสนับสนุนให้พ้นวิกฤต(ลบ.)', v:x=>x.need==null?'ไม่พอ':M(x.inj), t:()=>sum(x=>x.inj)},
+    {h:'ระดับหลังช่วย ณ '+horLab, v:x=>x.r1.sepRisk!=null?x.r1.sepRisk:'-'},
+  ];
+  return [COLS.map(c=>c.h).join('\t'),
+          ...items.map(x=>COLS.map(c=>c.v(x)).join('\t')),
+          COLS.map(c=>c.t?c.t():'').join('\t')].join('\n');
 }
 function exCopyTSV(){
   const done=ok=>{ const el=document.getElementById('exCopyMsg'); if(el) el.textContent=ok?'คัดลอกแล้ว ✓':'คัดลอกไม่ได้'; };
