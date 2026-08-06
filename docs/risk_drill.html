@@ -1907,7 +1907,9 @@ function exRender(){
   const exTblPos=exTblEl?{t:exTblEl.scrollTop,l:exTblEl.scrollLeft}:null;
   EXTJ=exTjCalc();
   if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
-    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct()});
+    // ⚠️ hub ต้องอยู่ใน sig ด้วย (เพิ่ม 6 ส.ค. 69) — hub เปลี่ยน → shares เปลี่ยน → sepRisk ของ
+    //    รพช. hub (ซึ่งเป็นลูกหนี้ด้วย) เปลี่ยน → เงินคืนที่ต้องใช้เปลี่ยน · ถ้าไม่ใส่จะได้ผลเก่าค้าง
+    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct(),hub:[...EXTJHUB].sort().join(',')});
     if(_refundCache.sig===sig && _refundCache.refund) EXTJ.refund=_refundCache.refund;
     else { exTjSolveRefunds(); _refundCache={sig, refund:EXTJ.refund}; }
   }
@@ -2079,6 +2081,17 @@ function exRender(){
           <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> → <span class="badge" style="background:${riskColor(r.sepRisk)}">${r.sepRisk!=null?r.sepRisk:'–'}</span></td></tr>`;}).join('')}
       </table>
     </div>
+    ${(()=>{
+      // ⚠️ อธิบายว่าทำไมผู้รับภาระบางแห่ง "ไม่ขึ้นตาราง" (เจ้าของงานถามเรื่อง รพ.ปัว 6 ส.ค. 69)
+      // เหตุหลัก: จังหวัดนั้นไม่มี รพช. ที่เข้าขอบเขตที่เลือก → ไม่มีหนี้ให้เกลี่ยในจังหวัดเลย
+      // ถ้าไม่บอก ผู้ใช้จะนึกว่าเพิ่ม hub ไม่สำเร็จ/ระบบพัง ทั้งที่เป็นผลลัพธ์ที่ถูกต้อง
+      const miss=EX.hosp.filter(h=>exIsCred(h) && exArIn(h)>0 && !(EXTJ.shares[h.hcode]>0));
+      if(!miss.length) return '';
+      const why=h=>EXTJ.byProv[h.prov]>0?'ลูกหนี้ในจังหวัดถูกเกลี่ยหมดแล้ว':`${h.prov}ไม่มี รพช. ที่เข้าขอบเขตที่เลือก`;
+      const byWhy={}; miss.forEach(h=>{ const w=why(h); (byWhy[w]=byWhy[w]||[]).push(h.name+(EXTJHUB.has(h.hcode)?' 🔁':'')); });
+      return `<div class="note" style="margin-top:4px">ℹ️ <b>ผู้รับภาระ ${miss.length} แห่งไม่ขึ้นในตารางนี้</b> (มีลูกหนี้นอก CUP แต่ได้ส่วนแบ่ง 0) — ${Object.entries(byWhy).map(([w,ns])=>`<b>${ns.join(', ')}</b>: ${w}`).join(' · ')}
+        · แก้ได้โดยเปลี่ยน<b>ขอบเขต</b>ด้านบนเป็น "รพช. ทุกแห่ง" ${EXST.tj.scope==='crisis'?'(ตอนนี้เลือก "เฉพาะวิกฤต 6-7" อยู่)':''} · 🔁 = รพช. ที่ตั้งเป็น hub ไว้</div>`;
+    })()}
     <div class="note" style="margin-top:4px">การเกลี่ยภาระเป็น<b>การประมาณตามสัดส่วน</b>ลูกหนี้นอก CUP ในจังหวัดเดียวกัน — คู่หนี้จริงอาจต่างจากนี้ ต้องยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขตก่อนสั่งการจริง</div>`}
     <div class="note" style="margin-top:4px">⚠️ <b>ทั้งเขตลูกหนี้ ${fmtM(exTjGapAll().ar)} มากกว่าเจ้าหนี้ ${fmtM(exTjGapAll().pay)} อยู่ ${fmtM(exTjGapAll().gap)}</b> — นอกจากเหตุ "บันทึกแยกเล่ม" แล้ว ส่วนต่างนี้ยังชี้ว่าคู่หนี้บางส่วนน่าจะเป็นหน่วยบริการ<b>ที่ไม่อยู่ในชุด 103 แห่งนี้</b> (รพ.รัฐสังกัดกรมอื่น เช่น กรมการแพทย์/กรมสุขภาพจิต · รพ.นอกเขต · เอกชนคู่สัญญา) ซึ่ง Option นี้เกลี่ยให้ไม่ได้ ต้องตามเก็บจากหน่วยต้นทางจริง · <b>ยังไม่ได้ยืนยันคู่หนี้รายตัวกับตารางเคลียร์ริ่งของ สสจ./เขต</b></div>
     <div class="note" style="margin-top:4px"><b>ที่มา:</b> ยอดคงเหลืองบทดลองงวด ${EX.periodLabel} — เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (2101020199.202) ฝั่ง รพช. ↔ ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (1102050101.203, 1102050194.204) ฝั่ง รพศ./รพท. · การยกหนี้ลงบัญชีตามผัง MOPH: รพช. รับรู้ "รายได้จากการยกหนี้กรณีส่งต่อผู้ป่วยระหว่างรพ." (4301020105.256) · รพศ./รพท. บันทึกค่าใช้จ่ายอุดหนุนหน่วยงานภาครัฐ (5107010101)</div>`;

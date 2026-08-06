@@ -182,5 +182,47 @@ console.log('━━ 9) คำเตือนส่วนต่าง ลูก�
 }
 console.log();
 
+console.log('━━ 10) อธิบายว่าทำไมผู้รับภาระบางแห่งไม่ขึ้นตาราง (เคส รพ.ปัว 6 ส.ค. 69) ━━');
+{
+  // น่าน/แม่ฮ่องสอน ไม่มี รพช. ระดับ 6-7 → ขอบเขต "เฉพาะวิกฤต" จึงไม่มีหนี้ให้เกลี่ยในจังหวัดนั้นเลย
+  // ปัว (hub) จึงได้ส่วนแบ่ง 0 และหายจากตาราง — ถูกต้อง แต่ต้องบอกเหตุผล ไม่ให้เข้าใจว่าเพิ่ม hub ไม่สำเร็จ
+  const A=mkA(); A.setEX(j);
+  const PUA='11453';
+  A.setEXST(ST('forgive','crisis')); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1});
+  const Tc=A.exTjCalc();
+  chk(!(Tc.shares[PUA]>0), 'ขอบเขต "เฉพาะวิกฤต 6-7": ปัวได้ส่วนแบ่ง 0 (น่านไม่มี รพช. วิกฤต) — พฤติกรรมที่ถูกต้อง');
+  A.exRender();
+  const tjHtml=els.exTjBox.innerHTML;
+  chk(/ผู้รับภาระ \d+ แห่งไม่ขึ้นในตารางนี้/.test(tjHtml), 'มีคำอธิบายว่าผู้รับภาระบางแห่งไม่ขึ้นตาราง');
+  chk(/สมเด็จพระยุพราชปัว/.test(tjHtml), 'คำอธิบายระบุชื่อ "สมเด็จพระยุพราชปัว" ตรง ๆ (ผู้ใช้หาเจอ)');
+  chk(/น่านไม่มี รพช\. ที่เข้าขอบเขตที่เลือก/.test(tjHtml), 'คำอธิบายบอกเหตุผลที่ถูกต้อง (จังหวัดไม่มี รพช. ในขอบเขต)');
+  chk(/รพช\. ทุกแห่ง/.test(tjHtml), 'คำอธิบายบอกวิธีแก้ (เปลี่ยนขอบเขตเป็น รพช. ทุกแห่ง)');
+  // พอเปลี่ยนขอบเขตแล้วต้องขึ้นจริง + คำอธิบายต้องหายไป (ไม่ค้าง)
+  A.setEXST(ST('forgive','all')); A.exRender();
+  const Ta=A.exTjCalc();
+  chk(Ta.shares[PUA]>0, `ขอบเขต "ทุกแห่ง": ปัวขึ้นตารางพร้อมส่วนแบ่ง ${fmtM(Ta.shares[PUA])}`);
+  chk(!/ผู้รับภาระ \d+ แห่งไม่ขึ้นในตารางนี้/.test(els.exTjBox.innerHTML), 'เปลี่ยนขอบเขตแล้วคำอธิบายหายไป (ไม่ค้างเป็นข้อความเก่า)');
+}
+console.log();
+
+console.log('━━ 11) cache ผลคืนเงิน (smart) ต้องรู้จัก hub — กัน stale ━━');
+{
+  // exTjSolveRefunds() ถูก cache ด้วย signature · ถ้า sig ไม่นับ hub เข้าไป การเพิ่ม/ลบ hub
+  // จะได้ผลเก่าค้าง เพราะ hub เปลี่ยน shares → sepRisk ของ hub (ที่เป็นลูกหนี้ด้วย) เปลี่ยน
+  const src=fs.readFileSync(SRC,'utf8');
+  const sig=(src.match(/const sig=JSON\.stringify\(\{[^}]*\}\)/)||[])[0]||'';
+  chk(/hub:/.test(sig), 'signature ของ cache มี hub อยู่ด้วย (ไม่งั้นสลับ hub แล้วได้ผลคืนเงินเก่าค้าง)');
+  // ยิงจริง: สลับ hub ไป-กลับแล้วผลต้องกลับมาเท่าเดิมเป๊ะ (ไม่ใช่ค้างค่ากลาง)
+  const A=mkA(); A.setEX(j); A.setEXST(ST('smart','all')); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1});
+  const tot=()=>{ A.exRender(); const m=els.exResBox.innerHTML.match(/เงินคืนเจาะจงรวม \(Option ยกหนี้เจาะจง\): <b>([^<]+)/); return m?m[1]:'—'; };
+  const a=tot();
+  for(const hc in HUB_NAMES) A.exTjHubDel(hc);
+  const b=tot();
+  for(const hc in HUB_NAMES) A.exTjHubAdd(hc);
+  const c=tot();
+  chk(a===c, `สลับ hub ออก-เข้า แล้วเงินคืนรวมกลับค่าเดิม (${a} → ${b} → ${c})`);
+}
+console.log();
+
 console.log('\n'+(fail.length?`❌ ไม่ผ่าน ${fail.length} ข้อ:\n  `+fail.join('\n  '):'✅ ผ่านทุกข้อ'));
 process.exit(fail.length?1:0);
