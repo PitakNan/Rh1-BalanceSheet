@@ -2249,7 +2249,7 @@ function exRender(){
         </select></label>
       ${exMoeVer()==='69p'?`<label title="จ่ายเงินสดกี่ % ของยอดยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (${EX.moeVers?EX.moeVers.nP9:9} บัญชี) · 100% = เท่า Ver69 · 0% = ไม่จ่ายเลย">🧾 จ่ายหนี้การค้า:
         <input type="number" class="exnum" style="width:64px" step="5" min="0" max="100" value="${exPayPct()}" onchange="exSetPayPct(this.value)"> %</label>
-      <span class="tgt-note">ค้างชำระไว้ ${fmtM(stretchTot)}/ด. → เจ้าหนี้การค้าโตเดือนละเท่านี้ · NI ไม่เปลี่ยน</span>`:''}
+      <span class="tgt-note" title="ยืดหนี้ = ไม่จ่ายเงินสดออก แต่ไปกองเป็นเจ้าหนี้การค้าเท่ากันเป๊ะ&#10;• เงินสด (CA) เพิ่ม X · เจ้าหนี้ (CL) เพิ่ม X เท่ากัน&#10;• NWC = CA − CL จึงเท่าเดิมทุกบาท&#10;• NI เท่าเดิม (เกณฑ์คงค้าง — ค่าใช้จ่ายเกิดแล้ว เพียงยังไม่จ่าย)&#10;• CR/QR/Cash ratio ขยับเล็กน้อยเท่านั้น&#10;รพ. ที่ต้องเติมเงินติดเกณฑ์ NWC ติดลบ + NI ติดลบ ซึ่งการยืดหนี้แตะไม่ได้ทั้งคู่ → เงินสนับสนุนจึงเท่าเดิม">ค้างชำระไว้ ${fmtM(stretchTot)}/ด. → เจ้าหนี้การค้าโตเดือนละเท่านี้ · NI ไม่เปลี่ยน · <b>💰 เงินสนับสนุนมักไม่ขยับตาม %</b> (ยืดหนี้ไม่ใช่เงินใหม่ — CA กับ CL โตเท่ากัน NWC/NI จึงเท่าเดิม) ℹ️</span>`:''}
       <label>🔎 กรองจังหวัด:
         <select onchange="exSet('prov',this.value)">
           <option value="all" ${EXST.prov==='all'?'selected':''}>ทุกจังหวัด</option>

@@ -224,5 +224,39 @@ console.log('━━ 11) cache ผลคืนเงิน (smart) ต้อง�
 }
 console.log();
 
+console.log('━━ 12) %จ่ายหนี้การค้า: ยืนยันกลไก + หน้าจอต้องอธิบายว่าทำไมเงินสนับสนุนไม่ขยับ ━━');
+{
+  // เจ้าของงานถามเรื่องนี้ 2 ครั้ง → หน้าจอต้องบอกเอง ไม่ใช่ให้จำจากคำตอบครั้งก่อน
+  const B=new Function(code+`;return {exRender,exSimPath,exSolve,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
+    setEXTJ:v=>{EXTJ=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
+  B.setEX(j); B.setEXTJ({debtors:new Set(),shares:{},refund:{},total:0,uncovered:0});
+  const S=p=>({mmo:3,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',
+    moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
+    tj:{mode:'off',scope:'crisis'},inj:{},open:{},moeVer:'69p',payPct:p});
+  const mw=j.hosp.find(h=>h.name==='แม่วาง');
+  B.setEXST(S(100)); const a=B.exSimPath(mw,0), na=B.exSolve(mw);
+  B.setEXST(S(0));   const b=B.exSimPath(mw,0), nb=B.exSolve(mw);
+  // กลไกต้องทำงานจริง: เงินสดกับเจ้าหนี้ต้องโตเท่ากันเป๊ะ
+  const dCash=b.cnEnd-a.cnEnd, dCl=b.clEnd-a.clEnd;
+  chk(dCash>1e6 && Math.abs(dCash-dCl)<1,
+    `ยืดหนี้ 100%→0%: เงินสดปลายงวด +${fmtM(dCash)} และเจ้าหนี้ +${fmtM(dCl)} โตเท่ากันเป๊ะ (ผลต่าง ${(dCash-dCl).toFixed(2)} บาท)`);
+  // NWC ต้องเท่าเดิมเป๊ะ = เหตุผลที่เงินสนับสนุนไม่ขยับ
+  if(a.sepBreak&&b.sepBreak){
+    chk(a.sepBreak.nwc===b.sepBreak.nwc, `NWC ณ ก.ย. เท่าเดิมทุกบาท (${a.sepBreak.nwc} = ${b.sepBreak.nwc})`);
+    chk(a.sepBreak.ni===b.sepBreak.ni, `NI สะสม ณ ก.ย. เท่าเดิม (เกณฑ์คงค้าง) (${a.sepBreak.ni})`);
+    chk(b.sepBreak.cash>a.sepBreak.cash, `Cash ratio ดีขึ้นเล็กน้อยจริง (${a.sepBreak.cash.toFixed(3)} → ${b.sepBreak.cash.toFixed(3)}) — กลไกไม่ได้ตายด้าน`);
+  }
+  chk(na===nb, `เงินสนับสนุนของแม่วางเท่าเดิม ${fmtM(na)} ทั้งจ่าย 100% และ 0% — ผลที่ถูกต้อง (ติดเกณฑ์ NWC/NI)`);
+  // หน้าจอต้องอธิบายเรื่องนี้ตอนเลือกโหมด 69p
+  B.setEXST(S(50)); B.setEXOPEN({}); B.setEXBRK({}); B.setEXSORT({col:null,dir:-1}); B.exRender();
+  const html=els.exResBox.innerHTML;
+  chk(/เงินสนับสนุนมักไม่ขยับตาม %/.test(html), 'หน้าจอเตือนไว้ว่าเงินสนับสนุนมักไม่ขยับตาม % (กันถามซ้ำ)');
+  chk(/CA กับ CL โตเท่ากัน/.test(html), 'หน้าจอบอกเหตุผลสั้น ๆ ไว้ด้วย (CA กับ CL โตเท่ากัน)');
+  // โหมดอื่นต้องไม่มีข้อความนี้ (ไม่เกี่ยวกัน อย่ารก)
+  const S69=S(100); S69.moeVer='69'; B.setEXST(S69); B.exRender();
+  chk(!/เงินสนับสนุนมักไม่ขยับตาม %/.test(els.exResBox.innerHTML), 'โหมด Ver69 ปกติไม่มีข้อความนี้ (แสดงเฉพาะตอนเลือกจ่ายหนี้การค้า)');
+}
+console.log();
+
 console.log('\n'+(fail.length?`❌ ไม่ผ่าน ${fail.length} ข้อ:\n  `+fail.join('\n  '):'✅ ผ่านทุกข้อ'));
 process.exit(fail.length?1:0);
