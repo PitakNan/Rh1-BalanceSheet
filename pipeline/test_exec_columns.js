@@ -14,7 +14,7 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
+const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
   SHOW_TJAR:EX_SHOW_TJAR,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
@@ -46,7 +46,8 @@ for(const f of ['index.html','explorer.html']){
   chk(/fm<=3\?fy-1:fy|m<=3\?1:0/.test(src), `${f} ใช้สูตรปีปฏิทินเดียวกัน (ไม่หลุดออกจากกัน)`);
 }
 console.log();
-console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (ต้องเป็น false = ซ่อนลูกหนี้)\n`);
+console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (${A.SHOW_TJAR?'เปิดคอลัมน์ลูกหนี้':'ซ่อนคอลัมน์ลูกหนี้'})\n`);
+const TJOFF=A.SHOW_TJAR?1:0;   // คอลัมน์ลูกหนี้แทรกอยู่ต่อจากเจ้าหนี้ (ถัดจาก index 6) เมื่อเปิด — ดัชนีคอลัมน์หลังจากนี้ต้องขยับตาม
 
 for(const mmo of [1,3,6,13]){
   const ext=0;
@@ -61,8 +62,8 @@ for(const mmo of [1,3,6,13]){
   // หัวคอลัมน์ตัดบรรทัดด้วย <br> — เทียบแบบตัดช่องว่างทิ้งทั้งหมด จะได้ไม่พังเวลาย้ายตำแหน่งตัดบรรทัด
   const norm=s=>s.replace(/<br\s*\/?>/g,' ').replace(/\s+/g,'');
   const headTxt=norm(head), inHead=s=>headTxt.includes(norm(s));
-  chk(nTh===14, `หัวตาราง 14 ช่อง (ได้ ${nTh})`);
-  chk(!inHead('ลูกหนี้'), 'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
+  chk(nTh===14+TJOFF, `หัวตาราง ${14+TJOFF} ช่อง (ได้ ${nTh})`);
+  chk(inHead('ลูกหนี้')===A.SHOW_TJAR, A.SHOW_TJAR?'มีคอลัมน์ลูกหนี้ในหัวตาราง':'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
   chk(inHead('เงินสดคงเหลือหลังภาระ MOE ถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนประเมิน "${A.exMoeTargetLab()}"`);
   chk(inHead('ส่วนขาดสภาพคล่อง'), 'มีคอลัมน์ส่วนขาดสภาพคล่อง');
   chk(/กรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด \(ไม่มีรายรับเข้าเลย\)/.test(html)&&/ไม่ใช่คำของบ/.test(html), 'กล่องเหนือตารางระบุสมมติฐาน + ไม่ใช่คำของบ');
@@ -80,17 +81,17 @@ for(const mmo of [1,3,6,13]){
     if(tds.length!==nTh) badCol++;
     const r0=A.exSimPath(h,0);
     const x={h,r0};
-    const pay=A.exPayIn(h);
-    const expLeft=(h.bs.cn-pay)-(r0.moeMo||0)*months;
+    const pay=A.exPayIn(h), arIn=A.exArIn(h);
+    const expLeft=(h.bs.cn-pay+arIn)-(r0.moeMo||0)*months;
     const expTop=expLeft<0?-expLeft:0;
     // ตรวจว่า helper ตรงกับสูตรที่ตั้งใจ (ไม่ใช่แค่ตรงกับตัวเอง)
     if(Math.abs(A.exMoeLeft(x)-expLeft)>1) badLeft++;
     if(Math.abs(A.exTopUp(x)-expTop)>1) badTop++;
     if(A.exHorMonths(h)!==months) badLeft++;
-    const cLeft=txt(tds[7][1]), cTop=txt(tds[8][1]), cPay=tds[6][0];
+    const cLeft=txt(tds[7+TJOFF][1]), cTop=txt(tds[8+TJOFF][1]), cPay=tds[6][0];
     // เซลล์ต้องแสดงตัวเลขตรงกับสูตร
     if(expLeft<0 ? !cLeft.startsWith('ขาด '+fmtM(-expLeft)) : !cLeft.startsWith(fmtM(expLeft))) badLeft++;
-    if(expTop>0){ nTop++; if(!txt(tds[8][1]).startsWith(fmtM(expTop))) badTop++; }
+    if(expTop>0){ nTop++; if(!cTop.startsWith(fmtM(expTop))) badTop++; }
     else if(cTop!=='–') badTop++;
     // เจ้าหนี้: แดงเมื่อเงินสดไม่พอ + บอกส่วนขาด
     const gap=pay-h.bs.cn;
@@ -114,7 +115,7 @@ for(const mmo of [1,3,6,13]){
   // TSV
   const L=A.getTSV().split('\n'), w=[...new Set(L.map(l=>l.split('\t').length))];
   chk(w.length===1, `TSV ทุกบรรทัดกว้างเท่ากัน (${w.join(',')} คอลัมน์)`);
-  chk(!L[0].includes('ลูกหนี้'), 'TSV ไม่มีคอลัมน์ลูกหนี้ (ตรงกับตาราง)');
+  chk(L[0].includes('ลูกหนี้')===A.SHOW_TJAR, (A.SHOW_TJAR?'มี':'ไม่มี')+'คอลัมน์ลูกหนี้ใน TSV (ตรงกับตาราง)');
   const hh=L[0].split('\t'), tt=L[L.length-1].split('\t');
   const iTop=hh.findIndex(c=>c.startsWith('ส่วนขาดสภาพคล่อง'));
   const sumTop=j.hosp.reduce((s,h)=>{const r0=A.exSimPath(h,0);return s+A.exTopUp({h,r0});},0);
@@ -127,6 +128,12 @@ for(const mmo of [1,3,6,13]){
   const chipPay=html.match(/รวมเจ้าหนี้ OP-UC นอก CUP: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
   chk(!!chipPay&&chipPay[1]===fmtM(sumPay)&&+chipPay[2]===nPay,
       `ยอด "รวมเจ้าหนี้ OP-UC นอก CUP" ตรงกับคอลัมน์ (${chipPay?chipPay[1]+' / '+chipPay[2]+' แห่ง':'ไม่พบ'} vs ${fmtM(sumPay)} / ${nPay} แห่ง)`);
+  // ── ยอดรวมลูกหนี้ (6 ส.ค. 69) — ชิปข้างหัวข้อเมื่อเปิดคอลัมน์ EX_SHOW_TJAR ──
+  const sumAr=j.hosp.reduce((s,h)=>s+A.exArIn(h),0), nAr=j.hosp.filter(h=>A.exArIn(h)>0).length;
+  const chipAr=html.match(/รวมลูกหนี้ UC-OP นอก CUP: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
+  chk(A.SHOW_TJAR===!!chipAr, A.SHOW_TJAR?'มีชิป "รวมลูกหนี้" ข้างหัวข้อ':'ไม่มีชิป "รวมลูกหนี้" ข้างหัวข้อ (คอลัมน์ปิดอยู่)');
+  if(A.SHOW_TJAR) chk(chipAr[1]===fmtM(sumAr)&&+chipAr[2]===nAr,
+      `ยอด "รวมลูกหนี้ UC-OP นอก CUP" ตรงกับคอลัมน์ (${chipAr?chipAr[1]+' / '+chipAr[2]+' แห่ง':'ไม่พบ'} vs ${fmtM(sumAr)} / ${nAr} แห่ง)`);
   // dropdown ต้องมีตัวเลือกครบถึงเพดาน (ผู้ใช้เลือก 13 เดือนได้จริง)
   const opts=[...html.matchAll(/<option value="(\d+)"[^>]*>[^<]*เดือน\)/g)].map(m=>+m[1]);
   chk(opts.length===A.EXMAX&&opts[opts.length-1]===A.EXMAX,
@@ -170,7 +177,7 @@ console.log('━━ สาขาเตือน "เงินสดติดล�
   A.exRender();
   const row=[...els.exResBox.innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>m[0])
     .find(x=>x.includes('<b>'+t.name+'</b>'));
-  const td=[...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)][7][1];
+  const td=[...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)][7+TJOFF][1];
   const plain=td.replace(/<[^>]*>/g,'');
   chk(/cellsub warn/.test(td), 'ใช้สไตล์เตือน (สีแดง) เมื่อแบบจำลองบอกว่าเงินสดติดลบ');
   chk(/กรณีรายรับปกติ: เงินสดติดลบ [ก-ฮ]/.test(plain), `ระบุเดือนที่เงินสดติดลบ (${(plain.match(/เงินสดติดลบ \S+/)||[])[0]||'—'})`);

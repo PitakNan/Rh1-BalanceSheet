@@ -333,6 +333,8 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
 .exctl select{font-family:inherit;font-size:12px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:4px 6px}
 .optgrp{border:1px solid var(--line);border-radius:10px;padding:6px 12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:var(--bg)}
 .optgrp-lbl{font-weight:700;color:var(--mut);font-size:11px;white-space:nowrap;text-transform:uppercase;letter-spacing:.3px}
+.hubchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:3px 4px 3px 9px}
+.hubchip b{cursor:pointer;color:var(--red);font-weight:700;padding:0 3px}
 /* บรรทัดย่อยในเซลล์ตาราง (เช่น "พอจ่าย MOE X เดือน" ใต้ยอดเงินสด) */
 .cellsub{display:block;font-size:10.5px;font-weight:400;color:var(--mut);white-space:nowrap}
 .cellsub.warn{color:var(--red)}
@@ -1182,9 +1184,18 @@ let EXBRK={};   // hcode -> ระดับเป้าที่กางแผ�
 let _refundCache={sig:null, refund:null};   // cache ผล solver "ยกหนี้เจาะจง" (คำนวณใหม่เฉพาะตอน state กระทบ sim เปลี่ยน)
 let EXSORT={col:null,dir:-1};
 const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
-// ซ่อนคอลัมน์ "ลูกหนี้ UC-OP นอก CUP" ไว้ก่อน (เจ้าของงานสั่ง 5 ส.ค. 69 — ซ่อน ไม่ใช่ลบ)
-// เปิดกลับเป็น true ได้ทันที · โค้ด/สูตร/ตัวเรียงลำดับยังอยู่ครบ ไม่ต้องเขียนใหม่
-const EX_SHOW_TJAR=false;
+// เปิดคอลัมน์ "ลูกหนี้ UC-OP นอก CUP" กลับมา (เจ้าของงานสั่ง 6 ส.ค. 69 — เดิมซ่อนไว้ตั้งแต่ 5 ส.ค. 69)
+const EX_SHOW_TJAR=true;
+// รพช. บางแห่งทำหน้าที่เหมือน Hub รับส่งต่อ (มีลูกหนี้ตามจ่ายก้อนใหญ่จริงจากบัญชี แม้ประเภทงานขึ้นทะเบียนเป็น รพช.)
+// เจ้าของงานสั่ง 6 ส.ค. 69 ให้นับ 4 แห่งนี้เป็น "ผู้รับภาระ" ได้เหมือน รพศ./รพท. ในตาราง Option พิเศษ
+// เพิ่ม/ลดเพิ่มเติมได้ชั่วคราวจากปุ่มในตาราง (exTjHubAdd/exTjHubDel) — EXTJHUB เป็น let ธรรมดา ไม่เซฟ localStorage
+// รีเฟรชหน้าแล้วกลับเป็นชุดเริ่มต้นนี้เสมอ
+const EX_TJHUB_DEFAULT=new Set(['11194','11128','11147','11453']);   // แม่สาย(เชียงราย) สันป่าตอง(เชียงใหม่) เกาะคา(ลำปาง) สมเด็จพระยุพราชปัว(น่าน)
+let EXTJHUB=new Set(EX_TJHUB_DEFAULT);
+function exTjHubAdd(hc){ if(hc) EXTJHUB.add(hc); exRender(); }
+function exTjHubDel(hc){ EXTJHUB.delete(hc); exRender(); }
+// เจ้าหนี้เดิม (ผู้รับภาระ) ใน Option พิเศษ = รพศ./รพท. ทุกแห่ง + รพช. hub ที่เพิ่มเข้ามา (EXTJHUB)
+function exIsCred(h){ return h.type==='รพศ.'||h.type==='รพท.'||EXTJHUB.has(h.hcode); }
 // ── 💧 ประเมินสภาพคล่อง: เงินสดคงเหลือหลังภาระ MOE กรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลย) ──
 // ⚠️ เป็นการประเมินภายใต้สมมติฐาน (stress test) ไม่ใช่คำของบ — ตัวเลขคือ "ต้องมีเงินเท่าไหร่ถ้าไม่มีรายรับเข้าเลย" ไม่ใช่เงินที่ต้องขอจริง
 //    ถ้านับรายรับตามแบบจำลอง ไม่มี รพ. ไหนเงินสดหมดเลยแม้ 15 เดือน (ดู RISK_EXEC_MODEL.md 7.8 ⑦)
@@ -1199,17 +1210,25 @@ function exMoeMonths(){ const v=+EXST.mmo; return (v>=1&&v<=EX_MMO_MAX)?v:exMoeM
 function exMoeTargetLab(){ return tLab(addMo(EX.hosp[0].bs.t, exMoeMonths())); }
 function exHorMonths(h){ return exMoeMonths(); }
 function exPayIn(h){ return (h.tj&&h.tj.payIn)||0; }
-// เงินสดหลังหักเจ้าหนี้ตามจ่ายแล้ว เหลือพอจ่าย MOE ถึงเดือนเป้าหรือไม่ (ติดลบ = ขาด)
+function exArIn(h){ return (h.tj&&h.tj.arIn)||0; }
+// ── ส่วนต่างลูกหนี้−เจ้าหนี้ "ทั้งเขต" (ไม่ผูกตัวกรองจังหวัด) — ใช้ในคำเตือนว่าคู่หนี้อยู่นอกชุด 103 แห่ง ──
+// คำนวณสดทุกครั้ง ห้าม hardcode เพราะยอดเปลี่ยนทุกงวด (กับดักเดิมของผัง lineage — ดู 7.5)
+function exTjGapAll(){
+  const pay=EX.hosp.reduce((s,h)=>s+exPayIn(h),0), ar=EX.hosp.reduce((s,h)=>s+exArIn(h),0);
+  return {pay, ar, gap:ar-pay};
+}
+// เงินสดหลังหักเจ้าหนี้ตามจ่าย + บวกลูกหนี้ตามจ่ายที่คาดว่าจะเก็บได้ เหลือพอจ่าย MOE ถึงเดือนเป้าหรือไม่ (ติดลบ = ขาด)
 // ⚠️ เป็นการเทียบ "เงินสดคงเหลือล้วนๆ" ไม่นับรายรับที่จะเข้ามาระหว่างทาง — ฐานเดียวกับ
 //    ตัวชี้วัด "เงินสดพอจ่าย MOE" ที่ใช้อยู่แล้วทั้ง Watchlist และ #exec (RISK_EXEC_MODEL.md 3.6)
-function exMoeLeft(x){ return (x.h.bs.cn-exPayIn(x.h)) - (x.r0.moeMo||0)*exHorMonths(x.h); }
+// เพิ่มลูกหนี้ (6 ส.ค. 69) — สมมติว่าเก็บได้เต็มจำนวนจากฝั่งที่ต้องจ่ายเจ้าหนี้ ไม่ได้หักส่วนที่เกลี่ยไม่ได้ (uncovered)
+function exMoeLeft(x){ return (x.h.bs.cn-exPayIn(x.h)+exArIn(x.h)) - (x.r0.moeMo||0)*exHorMonths(x.h); }
 // เงินที่ต้องเติมขั้นต่ำให้ "อยู่รอด" ถึงเดือนเป้า — คนละตัวกับเงินสนับสนุน Solver (ซึ่งเล็งระดับวิกฤต)
 function exTopUp(x){ const v=exMoeLeft(x); return v<0?-v:0; }
 const EX_SORT_GETTERS={
   prov:x=>x.h.prov||'', name:x=>x.h.name||'',
   risk0:x=>x.h.risk??-1, moe:x=>x.r0.moeMo||0, ni:x=>x.r0.niM||0,
   cash:x=>x.r0.cashOut==null?Infinity:x.r0.cashOut, cashbal:x=>x.h.bs.cn||0,
-  tjpay:x=>exPayIn(x.h), tjar:x=>(x.h.tj&&x.h.tj.arIn)||0,
+  tjpay:x=>exPayIn(x.h), tjar:x=>exArIn(x.h),
   moeleft:x=>exMoeLeft(x), topup:x=>exTopUp(x),
   sep0:x=>x.r0.sepRisk??-1, give:x=>x.give||0, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
 };
@@ -1299,7 +1318,7 @@ function exTjCalc(){
   debtors.forEach(h=>{ byProv[h.prov]=(byProv[h.prov]||0)+h.tj.payIn; });
   const shares={}; let uncovered=0;
   for(const prov in byProv){
-    const creds=EX.hosp.filter(h=>(h.type==='รพศ.'||h.type==='รพท.') && h.prov===prov && h.tj.arIn>0);
+    const creds=EX.hosp.filter(h=>exIsCred(h) && h.prov===prov && h.tj.arIn>0);
     const w=creds.reduce((s,h)=>s+h.tj.arIn,0);
     if(!w){ uncovered+=byProv[prov]; continue; }
     let left=byProv[prov];
@@ -1310,18 +1329,26 @@ function exTjCalc(){
           total:debtors.reduce((s,h)=>s+h.tj.payIn,0), uncovered};
 }
 // ── เงินที่ "ยกให้/ได้รับ" ต่อ รพ. จาก Option ตามจ่าย ──
-// forgive: รพช.(ลูกหนี้)=ได้รับยกหนี้เต็ม (payIn) · รพศ./รพท.(เจ้าหนี้)=ยกหนี้ให้ตามสัดส่วน (shares)
+// forgive: รพช.(ลูกหนี้)=ได้รับยกหนี้เต็ม (payIn) · ผู้รับภาระ(เจ้าหนี้)=ยกหนี้ให้ตามสัดส่วน (shares)
+//   ⚠️ รพช. hub (EXTJHUB) เป็นได้ทั้งสองบทบาทพร้อมกัน (ค้างเองด้วย + เป็นผู้รับภาระของ รพช. เล็กด้วย)
+//   จึงต้องหักลบกันเป็นค่าสุทธิ (ได้รับเต็ม − ยกให้ตามสัดส่วน) ไม่ใช่แค่เช็คว่าเป็นลูกหนี้แล้วคืนเลย
 // smart(ยกหนี้เจาะจง): รพช.=ได้รับเงินคืนเฉพาะที่จำเป็น (refund R, 0 ถ้าระดับ≤3 หลังจ่าย) · เจ้าหนี้=0 (ได้รับชำระแล้ว เงินคืนมาจากเขต)
 // off/pay: 0 (ไม่มีการยกให้)
 function exTjGive(h){
   if(!EXTJ) return 0;
-  if(EXST.tj.mode==='forgive'){ if(EXTJ.debtors.has(h.hcode)) return h.tj.payIn; return EXTJ.shares[h.hcode]||0; }
+  if(EXST.tj.mode==='forgive'){
+    const got=EXTJ.debtors.has(h.hcode)?h.tj.payIn:0, away=EXTJ.shares[h.hcode]||0;
+    return Math.abs(got-away);
+  }
   if(EXST.tj.mode==='smart'){ return EXTJ.debtors.has(h.hcode) ? ((EXTJ.refund&&EXTJ.refund[h.hcode])||0) : 0; }
   return 0;
 }
 function exTjRole(h){
   if(!EXTJ) return '';
-  if(EXST.tj.mode==='forgive'){ if(EXTJ.debtors.has(h.hcode)) return 'got'; return (EXTJ.shares[h.hcode]||0)>0?'give':''; }
+  if(EXST.tj.mode==='forgive'){
+    const got=EXTJ.debtors.has(h.hcode)?h.tj.payIn:0, away=EXTJ.shares[h.hcode]||0, net=got-away;
+    return net>0?'got':net<0?'give':'';
+  }
   if(EXST.tj.mode==='smart'){ return (EXTJ.debtors.has(h.hcode) && ((EXTJ.refund&&EXTJ.refund[h.hcode])||0)>0) ? 'got' : ''; }
   return '';
 }
@@ -2028,22 +2055,32 @@ function exRender(){
         <label><input type="radio" name="extjs" ${EXST.tj.scope==='crisis'?'checked':''} onchange="exSetTj('scope','crisis')"> เฉพาะ รพช. วิกฤต 6-7</label>
         <label><input type="radio" name="extjs" ${EXST.tj.scope==='all'?'checked':''} onchange="exSetTj('scope','all')"> รพช. ทุกแห่ง</label>
       </div>
+      <div class="optgrp" title="รพช. ที่ทำหน้าที่เหมือน Hub รับส่งต่อ — นับเป็นผู้รับภาระ (เจ้าหนี้เดิม) ได้เหมือน รพศ./รพท.&#10;ชั่วคราว: เพิ่ม/ลดที่นี่ไม่บันทึกถาวร รีเฟรชหน้าแล้วกลับเป็นค่าเริ่มต้น 4 แห่ง">
+        <span class="optgrp-lbl">รพช. hub เพิ่มเติม</span>
+        ${[...EXTJHUB].map(hc=>{ const h=EX.hosp.find(x=>x.hcode===hc); if(!h) return '';
+          return `<span class="hubchip">${h.name}<b onclick="exTjHubDel('${hc}')" title="ถอดออกจากรายชื่อ Hub (ชั่วคราว)">✕</b></span>`; }).join('')}
+        <select onchange="if(this.value){exTjHubAdd(this.value);this.value='';}">
+          <option value="">+ เพิ่ม รพช. เป็น hub ชั่วคราว…</option>
+          ${EX.hosp.filter(h=>h.type==='รพช.'&&!EXTJHUB.has(h.hcode)).sort((a,b)=>a.name.localeCompare(b.name,'th')).map(h=>`<option value="${h.hcode}">${h.name} (${h.prov})</option>`).join('')}
+        </select>
+      </div>
     </div>
-    ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า · <b>🎯 ยกหนี้เจาะจง</b>: สมมติ รพช. จ่ายจริงก่อน แล้ว<b>เขตคืนเงินเฉพาะเท่าที่จำเป็น</b>ให้ระดับ ณ ${sepLab} ≤3 — รพช. ที่ยังไหว (≤3 หลังจ่าย) ไม่ได้รับ, ที่ >3 คืนขั้นต่ำพอลงถึง 3 (ไม่เกินยอดที่จ่าย) · เจ้าหนี้ได้รับชำระครบ — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่ง รพศ./รพท. ${fmtM(EX.hosp.filter(h=>h.type!=='รพช.').reduce((s,h)=>s+h.tj.arIn,0))}</div>`
+    ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า · <b>🎯 ยกหนี้เจาะจง</b>: สมมติ รพช. จ่ายจริงก่อน แล้ว<b>เขตคืนเงินเฉพาะเท่าที่จำเป็น</b>ให้ระดับ ณ ${sepLab} ≤3 — รพช. ที่ยังไหว (≤3 หลังจ่าย) ไม่ได้รับ, ที่ >3 คืนขั้นต่ำพอลงถึง 3 (ไม่เกินยอดที่จ่าย) · เจ้าหนี้ได้รับชำระครบ — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่งผู้รับภาระ (รพศ./รพท.+รพช. hub) ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+h.tj.arIn,0))}</div>`
     :`<div class="tgt-row" style="margin-top:8px">${EXST.tj.mode==='smart'
       ?`🎯 คืนเงินเจาะจงรวม: <b>${fmtM(refundTot)}</b> ให้ รพช. ${nRefund} แห่ง <span class="tgt-note">(เฉพาะที่ระดับ >3 ณ ${sepLab} หลังจ่าย · ที่ระดับ ≤3 ไม่ได้รับ · ยอดจ่ายเต็มก่อนคืน ${fmtM(EXTJ.total)} จาก ${EXTJ.debtors.size} แห่ง)</span>`
       :`ยอดหนี้ที่เคลียร์: <b>${fmtM(EXTJ.total)}</b> จาก รพช. ${EXTJ.debtors.size} แห่ง <span class="tgt-note">(${Object.entries(EXTJ.byProv).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')})</span>${EXTJ.uncovered>1?` <span class="tgt-warn">⚠️ ${fmtM(EXTJ.uncovered)} เกลี่ยไม่ได้ (ลูกหนี้ฝั่งรับในจังหวัดไม่พอ/ไม่มี)</span>`:''}`}</div>
-    <div class="note" style="margin-top:6px"><b>ภาระที่รับ</b> = min( ลูกหนี้ตัวเอง , รพช.ค้างรวมจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมจังหวัด ) — <b>ต่างจาก "ลูกหนี้นอก CUP"</b> เพราะฝั่ง รพช.(ค้าง) กับฝั่ง รพศ./รพท.(ลูกหนี้) บันทึกแยกเล่ม ยอดไม่ตรงกัน จึงเกลี่ยได้แค่เท่าที่ รพช. ยอมรับว่าค้าง</div>
+    <div class="note" style="margin-top:6px"><b>ภาระที่รับ</b> = min( ลูกหนี้ตัวเอง , รพช.ค้างรวมจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมจังหวัด ) — <b>ต่างจาก "ลูกหนี้นอก CUP"</b> เพราะฝั่ง รพช.(ค้าง) กับฝั่งผู้รับภาระ(ลูกหนี้) บันทึกแยกเล่ม ยอดไม่ตรงกัน จึงเกลี่ยได้แค่เท่าที่ รพช. ยอมรับว่าค้าง</div>
     <div class="acctbl-wrap" style="max-height:260px;margin-top:6px;overflow-x:auto">
       <table class="wltbl" style="min-width:640px">
-        <tr><th title="โรงพยาบาลเจ้าหนี้ (รพศ./รพท.) ที่รับภาระหนี้ค่ารักษาตามจ่ายจาก รพช. ที่ส่งต่อคนไข้เข้ามารักษา">ผู้รับภาระ (เจ้าหนี้เดิม)</th><th title="เกลี่ยหนี้เฉพาะระหว่าง รพช. ↔ รพศ./รพท. ในจังหวัดเดียวกัน">จังหวัด</th><th title="ยอดที่เจ้าหนี้บันทึกเองว่าถูกค้างชำระ (บัญชี 1102050101.203 + 1102050194.204) = สิ่งที่ รพศ./รพท. คิดว่าควรได้">ลูกหนี้นอก CUP</th><th title="ส่วนแบ่งหนี้ที่ รพช. ค้างจริง (2101020199.202) เกลี่ยมาให้เจ้าหนี้นี้ = min(ลูกหนี้ตัวเอง, ยอด รพช.ค้างรวมในจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมในจังหวัด) — ต่างจากลูกหนี้เพราะสองฝั่งบันทึกแยกเล่ม ยอดไม่ตรงกัน">ภาระที่รับ</th><th title="ผลต่องบเจ้าหนี้ — จ่ายจริง/เจาะจง: ได้เงินสดเข้า · ยกหนี้: ตัดลูกหนี้เป็นค่าใช้จ่ายอุดหนุน (ไม่ได้เงินสด)">ผลกระทบ</th><th title="ระดับวิกฤตของเจ้าหนี้ ก่อน → หลัง รับภาระตาม Option ที่เลือก">ระดับ ณ ${sepLab}</th></tr>
+        <tr><th title="โรงพยาบาลเจ้าหนี้ (รพศ./รพท. + รพช. ที่ตั้งเป็น hub ชั่วคราว) ที่รับภาระหนี้ค่ารักษาตามจ่ายจาก รพช. ที่ส่งต่อคนไข้เข้ามารักษา">ผู้รับภาระ (เจ้าหนี้เดิม)</th><th title="เกลี่ยหนี้เฉพาะระหว่าง รพช. ↔ รพศ./รพท. ในจังหวัดเดียวกัน">จังหวัด</th><th title="ยอดที่เจ้าหนี้บันทึกเองว่าถูกค้างชำระ (บัญชี 1102050101.203 + 1102050194.204) = สิ่งที่ รพศ./รพท. คิดว่าควรได้">ลูกหนี้นอก CUP</th><th title="ส่วนแบ่งหนี้ที่ รพช. ค้างจริง (2101020199.202) เกลี่ยมาให้เจ้าหนี้นี้ = min(ลูกหนี้ตัวเอง, ยอด รพช.ค้างรวมในจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมในจังหวัด) — ต่างจากลูกหนี้เพราะสองฝั่งบันทึกแยกเล่ม ยอดไม่ตรงกัน">ภาระที่รับ</th><th title="ผลต่องบเจ้าหนี้ — จ่ายจริง/เจาะจง: ได้เงินสดเข้า · ยกหนี้: ตัดลูกหนี้เป็นค่าใช้จ่ายอุดหนุน (ไม่ได้เงินสด)">ผลกระทบ</th><th title="ระดับวิกฤตของเจ้าหนี้ ก่อน → หลัง รับภาระตาม Option ที่เลือก">ระดับ ณ ${sepLab}</th></tr>
         ${creds.map(h=>{ const S=EXTJ.shares[h.hcode]; const r=exSimPath(h,0);
-          return `<tr><td><b>${h.name}</b> <span class="tgt-note">${h.type}</span></td><td>${h.prov}</td><td>${fmtM(h.tj.arIn)}</td><td><b>${fmtM(S)}</b></td>
+          return `<tr><td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.type==='รพช.'?' 🔁 hub':''}</span></td><td>${h.prov}</td><td>${fmtM(h.tj.arIn)}</td><td><b>${fmtM(S)}</b></td>
           <td class="tgt-note">${(EXST.tj.mode==='pay'||EXST.tj.mode==='smart')?'ได้เงินสด +'+fmtM(S):'ตัดลูกหนี้เป็น คชจ. −'+fmtM(S)}</td>
           <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> → <span class="badge" style="background:${riskColor(r.sepRisk)}">${r.sepRisk!=null?r.sepRisk:'–'}</span></td></tr>`;}).join('')}
       </table>
     </div>
     <div class="note" style="margin-top:4px">การเกลี่ยภาระเป็น<b>การประมาณตามสัดส่วน</b>ลูกหนี้นอก CUP ในจังหวัดเดียวกัน — คู่หนี้จริงอาจต่างจากนี้ ต้องยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขตก่อนสั่งการจริง</div>`}
+    <div class="note" style="margin-top:4px">⚠️ <b>ทั้งเขตลูกหนี้ ${fmtM(exTjGapAll().ar)} มากกว่าเจ้าหนี้ ${fmtM(exTjGapAll().pay)} อยู่ ${fmtM(exTjGapAll().gap)}</b> — นอกจากเหตุ "บันทึกแยกเล่ม" แล้ว ส่วนต่างนี้ยังชี้ว่าคู่หนี้บางส่วนน่าจะเป็นหน่วยบริการ<b>ที่ไม่อยู่ในชุด 103 แห่งนี้</b> (รพ.รัฐสังกัดกรมอื่น เช่น กรมการแพทย์/กรมสุขภาพจิต · รพ.นอกเขต · เอกชนคู่สัญญา) ซึ่ง Option นี้เกลี่ยให้ไม่ได้ ต้องตามเก็บจากหน่วยต้นทางจริง · <b>ยังไม่ได้ยืนยันคู่หนี้รายตัวกับตารางเคลียร์ริ่งของ สสจ./เขต</b></div>
     <div class="note" style="margin-top:4px"><b>ที่มา:</b> ยอดคงเหลืองบทดลองงวด ${EX.periodLabel} — เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (2101020199.202) ฝั่ง รพช. ↔ ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (1102050101.203, 1102050194.204) ฝั่ง รพศ./รพท. · การยกหนี้ลงบัญชีตามผัง MOPH: รพช. รับรู้ "รายได้จากการยกหนี้กรณีส่งต่อผู้ป่วยระหว่างรพ." (4301020105.256) · รพศ./รพท. บันทึกค่าใช้จ่ายอุดหนุนหน่วยงานภาครัฐ (5107010101)</div>`;
   // ── Results ──
   const items=rows.map(h=>{
@@ -2067,6 +2104,8 @@ function exRender(){
   const nTopUp=items.filter(x=>exTopUp(x)>0).length;
   const sumPayIn=items.reduce((s,x)=>s+exPayIn(x.h),0);
   const nPayIn=items.filter(x=>exPayIn(x.h)>0).length;
+  const sumArIn=items.reduce((s,x)=>s+exArIn(x.h),0);
+  const nArIn=items.filter(x=>exArIn(x.h)>0).length;
   const nHelp=items.filter(x=>(x.inj||0)>0).length;
   const nFail=items.filter(x=>x.need==null).length;
   const byProv={};
@@ -2088,8 +2127,8 @@ function exRender(){
     ni:'กำไร/ขาดทุนสุทธิจำลอง/เดือน = รายรับกองทุน×(1+%) − MOE − ค่าใช้จ่ายนอกนิยาม(run-rate) − รายการไม่ใช่เงินสด',
     cashbal:cashTitle+'\n\nบรรทัดล่าง "พอจ่าย MOE X เดือน" = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็น (MOE) ได้กี่เดือน\n= เงินสด ÷ MOE/เดือน · ไม่ใช่เพดาน ค่าจริงเกินได้\n⚠️ เตือนเมื่อน้อยกว่า 3 เดือน (เกณฑ์ขั้นต่ำตามหลักอัตราความอยู่รอด SU ของ Risk Score)\n= ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่จะเข้ามาระหว่างทาง',
     tjpay:'เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (บัญชี 2101020199.202) — ยอดที่ รพ.นี้บันทึกว่าค้างจ่ายให้ รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพช. ค้าง รพศ./รพท.)\nครอบคลุมผู้ป่วยนอก UC ที่ไปรับบริการนอก CUP ทุกกรณี — ทั้ง OP Refer (ส่งต่อ) และ OP Anywhere (30 บาทรักษาทุกที่) ไม่ใช่เฉพาะกรณีส่งต่อ\n🔴 แดง = เงินสด+เทียบเท่าไม่พอจ่ายเจ้าหนี้ก้อนนี้ พร้อมบอกส่วนที่ขาด\nเป็นหนี้สินหมุนเวียน ยิ่งมากยิ่งกดสภาพคล่อง (CR/QR) · เป็นฐานของ Option ตามจ่าย/ยกหนี้ด้านบน',
-    tjar:'ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (บัญชี 1102050101.203 + 1102050194.204) — ยอดที่ รพ.นี้บันทึกว่าควรได้รับจาก รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพศ./รพท. รอรับจาก รพช.)\n⚠️ สองฝั่งบันทึกแยกเล่ม ยอดเจ้าหนี้กับลูกหนี้จึงไม่เท่ากัน — ดูรายละเอียดที่ตาราง Option ตามจ่าย',
-    moeleft:'เงินสดคงเหลือหลังหักภาระค่าใช้จ่ายจำเป็น (MOE) ถึง '+exMoeTargetLab()+'\n= (เงินสด+เทียบเท่า − เจ้าหนี้ OP-UC นอก CUP) − MOE/เดือน × '+exMoeMonths()+' เดือน\n⚠️ ประเมินกรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลย) — ไม่นับรายรับที่จะเข้ามาระหว่างทาง\n⚠️ หักเจ้าหนี้ตามจ่ายออกก่อน (เจ้าหนี้มาก่อน MOE) เพราะเป็นเงินสดก้อนเดียวกัน จะนับซ้ำสองภาระไม่ได้\n⛔ ไม่ใช่คำของบ — เป็นสถานการณ์สมมติ ซึ่งไม่ได้เกิดจริง\n\nในเซลล์นี้มี 2 บรรทัดที่มาจากคนละสมมติฐาน — ดูป้ายกำกับหน้าบรรทัด\n• กรณีรายรับไม่เป็นไปตามแผน = ตัวเลขใหญ่ + ภาระ MOE (สถานการณ์สมมติ)\n• กรณีรายรับปกติ = ผลจากแบบจำลองที่นับรายรับตามจริง (เงินสดติดลบเดือนไหน)\nจึงมีได้ที่ตัวเลขใหญ่ติดลบ แต่บรรทัดล่างบอกว่าเงินสดไม่ติดลบ — ถูกทั้งคู่ คนละกรณีกัน\nถ้านับรายรับตามแบบจำลอง ไม่มี รพ. ไหนเงินสดติดลบเลย\nเปลี่ยนเดือนได้ที่ 💧 ประเมินสภาพคล่องถึง เหนือตาราง (สูงสุด '+EX_MMO_MAX+' เดือน)',
+    tjar:'ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (บัญชี 1102050101.203 + 1102050194.204) — ยอดที่ รพ.นี้บันทึกว่าควรได้รับจาก รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพศ./รพท. รอรับจาก รพช.)\n⚠️ สองฝั่งบันทึกแยกเล่ม ยอดเจ้าหนี้กับลูกหนี้จึงไม่เท่ากัน — ดูรายละเอียดที่ตาราง Option ตามจ่าย\n⚠️ ลูกหนี้รวมทั้งเขต ('+fmtM(exTjGapAll().ar)+') มากกว่าเจ้าหนี้รวม ('+fmtM(exTjGapAll().pay)+') อยู่ '+fmtM(exTjGapAll().gap)+' — คู่หนี้บางส่วนจึงน่าจะเป็นหน่วยบริการที่ไม่อยู่ในชุด 103 แห่งนี้ (รพ.รัฐสังกัดกรมอื่น เช่น กรมการแพทย์/กรมสุขภาพจิต · นอกเขต · เอกชนคู่สัญญา) ยอดส่วนนี้เกลี่ยกันเองในเขตไม่ได้ · ⚠️ ยังไม่ได้ยืนยันกับตารางเคลียร์ริ่ง สสจ./เขต\n🟢 นับเป็นเงินที่คาดว่าจะได้รับ บวกเข้าคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" ทางขวา (สมมติเก็บได้เต็มจำนวน)',
+    moeleft:'เงินสดคงเหลือหลังหักภาระค่าใช้จ่ายจำเป็น (MOE) ถึง '+exMoeTargetLab()+'\n= (เงินสด+เทียบเท่า + ลูกหนี้ตามจ่าย − เจ้าหนี้ OP-UC นอก CUP) − MOE/เดือน × '+exMoeMonths()+' เดือน\n⚠️ ประเมินกรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลย) — ไม่นับรายรับที่จะเข้ามาระหว่างทาง\n⚠️ หักเจ้าหนี้ตามจ่ายออกก่อน + บวกลูกหนี้ตามจ่ายเข้าก่อน (เจ้าหนี้/ลูกหนี้มาก่อน MOE) เพราะเป็นเงินสดก้อนเดียวกัน จะนับซ้ำสองภาระไม่ได้\n🟢 สมมติเก็บลูกหนี้ได้เต็มจำนวน (เพราะฝั่งที่ค้างจ่ายคือกลุ่มที่ต้องชำระเจ้าหนี้ OP-UC นอก CUP อยู่แล้ว) ไม่ได้หักส่วนที่อาจเกลี่ยไม่ได้จริง\n⛔ ไม่ใช่คำของบ — เป็นสถานการณ์สมมติ ซึ่งไม่ได้เกิดจริง\n\nในเซลล์นี้มี 2 บรรทัดที่มาจากคนละสมมติฐาน — ดูป้ายกำกับหน้าบรรทัด\n• กรณีรายรับไม่เป็นไปตามแผน = ตัวเลขใหญ่ + ภาระ MOE (สถานการณ์สมมติ)\n• กรณีรายรับปกติ = ผลจากแบบจำลองที่นับรายรับตามจริง (เงินสดติดลบเดือนไหน)\nจึงมีได้ที่ตัวเลขใหญ่ติดลบ แต่บรรทัดล่างบอกว่าเงินสดไม่ติดลบ — ถูกทั้งคู่ คนละกรณีกัน\nถ้านับรายรับตามแบบจำลอง ไม่มี รพ. ไหนเงินสดติดลบเลย\nเปลี่ยนเดือนได้ที่ 💧 ประเมินสภาพคล่องถึง เหนือตาราง (สูงสุด '+EX_MMO_MAX+' เดือน)',
     topup:'ส่วนขาดสภาพคล่อง = ส่วนที่ติดลบของคอลัมน์ก่อนหน้า — ถ้ารายรับไม่เป็นไปตามแผนถึงขั้นไม่มีรายรับเข้าเลยจนถึง '+exMoeTargetLab()+' จะขาดเงินเท่าไหร่\n⛔ เป็นผลการประเมินภายใต้สมมติฐาน ไม่ใช่เม็ดเงินที่ต้องของบจริง\nเม็ดเงินจริงให้ดูคอลัมน์ เงินสนับสนุนที่ต้องใช้ ซึ่งคำนวณจากแบบจำลองที่นับรายรับแล้ว\nใช้จัดลำดับว่า รพ. ใดมีสภาพคล่องเปราะที่สุดหากรายรับสะดุด',
     cash:'เดือนที่เงินสดจะติดลบระหว่างจำลอง (ไม่หมด = ไม่ติดลบตลอดช่วง) · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด',
     sep0:'ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก)',
@@ -2128,15 +2167,15 @@ function exRender(){
       ${EX_SHOW_TJAR?`<td>${(h.tj&&h.tj.arIn>0)?fmtM(h.tj.arIn):'<span class="tgt-note">–</span>'}</td>`:''}
       ${(()=>{
         // เซลล์นี้มี 2 บรรทัดที่มาจาก "คนละสมมติฐาน" — ต้องติดป้ายกำกับให้ชัด ไม่งั้นอ่านแล้วดูขัดกันเอง
-        //   ตัวเลขใหญ่  = กรณีรายรับไม่เป็นไปตามแผน  → (เงินสด − เจ้าหนี้ตามจ่าย) − MOE/เดือน × เดือนที่ประเมิน
+        //   ตัวเลขใหญ่  = กรณีรายรับไม่เป็นไปตามแผน  → (เงินสด + ลูกหนี้ตามจ่าย − เจ้าหนี้ตามจ่าย) − MOE/เดือน × เดือนที่ประเมิน
         //   บรรทัดล่าง = รายรับปกติ (ผลจาก exSimPath ที่นับรายรับ) → เงินสดติดลบเดือนไหน
         // จึงมีได้ที่ตัวเลขใหญ่ติดลบ แต่บรรทัดล่างบอกว่าเงินสดไม่ติดลบ — ถูกทั้งคู่ คนละกรณีกัน
-        const left=exMoeLeft(x), mm=exHorMonths(h);
+        const left=exMoeLeft(x), mm=exHorMonths(h), arIn=exArIn(h);
         const sub=r0.cashOut!=null
           ? `<span class="cellsub warn">กรณีรายรับปกติ: เงินสดติดลบ${r0.cashOut===0?'แล้ว':' '+tLab(addMo(h.bs.t,r0.cashOut))}</span>`
           : `<span class="cellsub" style="color:var(--green)">กรณีรายรับปกติ: เงินสดไม่ติดลบ</span>`;
         return `<td${left<0?' style="color:var(--red);font-weight:700"':''}>${
-          left<0?'ขาด '+fmtM(-left):fmtM(left)}<span class="cellsub">กรณีรายรับไม่เป็นไปตามแผน · ภาระ MOE ${mm} ด. ${fmtM((r0.moeMo||0)*mm)}</span>${sub}</td>`;
+          left<0?'ขาด '+fmtM(-left):fmtM(left)}<span class="cellsub">กรณีรายรับไม่เป็นไปตามแผน · ภาระ MOE ${mm} ด. ${fmtM((r0.moeMo||0)*mm)}${arIn>0?' · +ลูกหนี้ '+fmtM(arIn):''}</span>${sub}</td>`;
       })()}
       <td>${exTopUp(x)>0?`<b style="color:var(--red)">${fmtM(exTopUp(x))}</b>`:'<span class="tgt-note">–</span>'}</td>
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
@@ -2187,7 +2226,7 @@ function exRender(){
       <span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end">
       <span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span>
       <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;ส่วนขาดสภาพคล่อง&quot; ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov}) ประเมินถึง ${exMoeTargetLab()} = ${exMoeMonths()} เดือน&#10;⛔ ไม่ใช่คำของบ — เป็นสถานการณ์สมมติกรณีรายรับไม่เป็นไปตามแผน ใช้จัดลำดับความเปราะ&#10;เปลี่ยนเดือนได้ที่ 💧 ประเมินสภาพคล่องถึง ใต้หัวข้อนี้">💧 รวมเงินเติมตามสภาพคล่อง ถึง ${exMoeTargetLab()}: <span style="font-size:16px;color:var(--red)">${fmtM(sumTopUp)}</span> <span class="tgt-note" style="font-weight:400">(${nTopUp} แห่ง)</span></span>
-      <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;เจ้าหนี้ OP-UC นอก CUP&quot; (บัญชี 2101020199.202) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว ไม่ขึ้นกับเดือนที่เลือกใน 💧 ประเมินสภาพคล่องถึง&#10;⚠️ ห้ามบวกรวมกับสองก้อนซ้ายเป็นคำของบก้อนเดียว — คนละฐานกัน">🧾 รวมเจ้าหนี้ OP-UC นอก CUP: <span style="font-size:16px;color:var(--gold)">${fmtM(sumPayIn)}</span> <span class="tgt-note" style="font-weight:400">(${nPayIn} แห่ง)</span></span></span></h3>
+      <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;เจ้าหนี้ OP-UC นอก CUP&quot; (บัญชี 2101020199.202) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว ไม่ขึ้นกับเดือนที่เลือกใน 💧 ประเมินสภาพคล่องถึง&#10;⚠️ ห้ามบวกรวมกับสองก้อนซ้ายเป็นคำของบก้อนเดียว — คนละฐานกัน">🧾 รวมเจ้าหนี้ OP-UC นอก CUP: <span style="font-size:16px;color:var(--gold)">${fmtM(sumPayIn)}</span> <span class="tgt-note" style="font-weight:400">(${nPayIn} แห่ง)</span></span>${EX_SHOW_TJAR?`<span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;ลูกหนี้ UC-OP นอก CUP&quot; (บัญชี 1102050101.203 + 1102050194.204) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นลูกหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว — นับรวมเข้าคอลัมน์ &quot;เงินสดคงเหลือหลังภาระ MOE&quot; แล้ว (สมมติเก็บได้เต็มจำนวน)&#10;⚠️ ทั้งเขตลูกหนี้ (${fmtM(exTjGapAll().ar)}) มากกว่าเจ้าหนี้ (${fmtM(exTjGapAll().pay)}) อยู่ ${fmtM(exTjGapAll().gap)} → คู่หนี้บางส่วนอยู่นอกชุด 103 แห่งนี้ เกลี่ยกันเองในเขตไม่ได้&#10;⚠️ ห้ามบวกรวมกับก้อนอื่นเป็นคำของบก้อนเดียว — คนละฐานกัน">📥 รวมลูกหนี้ UC-OP นอก CUP: <span style="font-size:16px;color:var(--green)">${fmtM(sumArIn)}</span> <span class="tgt-note" style="font-weight:400">(${nArIn} แห่ง)</span></span>`:''}</span></h3>
     <div class="exctl" style="margin:0 0 8px 0">
       <label title="เลือกชุดบัญชีที่นับเป็น &quot;ค่าใช้จ่ายจำเป็น (MOE)&quot; — เปลี่ยนแค่ตัวเลข MOE/เดือน ทุกสูตรในตารางนี้ยังผูกกันเหมือนเดิม&#10;• MOE.Ver69 (ค่าเริ่มต้น) = นิยามล่าสุด ตรงกับคอลัมน์ &quot;เงินสดพอจ่าย MOE&quot; ในหน้า Watchlist&#10;• MOE.Ver68 = ชุดเดิม (มีค่าจ้างชั่วคราว(บริการ) แต่ไม่มีค่าเช่า)&#10;• Ver69 + จ่ายหนี้การค้า X% = จ่ายเงินสดให้ยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (9 บัญชี) แค่ X% ที่เหลือค้างเป็นเจ้าหนี้การค้า&#10;  → MOE เงินสดลดลง แต่ NI ไม่เปลี่ยน และเจ้าหนี้การค้าโตทุกเดือน (CR/QR/Cash แย่ลง)">💸 นิยาม MOE:
         <select onchange="exSetMoeVer(this.value)">
@@ -2253,6 +2292,14 @@ function exRender(){
         const worst=t.map(x=>({n:x.h.name,rw:x.h.bs.cn/x.r0.moeMo})).sort((a,b)=>a.rw-b.rw).slice(0,4);
         return `<div class="tgt-row">💧 เงินสดพอจ่าย MOE: <b>${t.length}</b> จาก ${rows.length} แห่ง จ่ายได้<b>ไม่ถึง ${left} เดือน</b> (เกณฑ์ขั้นต่ำตามหลัก SU · ขาดรวม ${fmtM(gap)})
           <span class="tgt-note">— น้อยสุด: ${worst.map(w=>w.n+' '+w.rw.toFixed(1)+' เดือน').join(' · ')} · อ่านเป็น "ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่เข้ามาระหว่างทาง" ไม่ใช่จ่าย MOE ไม่ได้ — ถ้ารายรับสะดุด กลุ่มนี้กระทบก่อน</span></div>`;
+      })()}
+      ${(()=>{
+        // ⚠️ คำเตือนส่วนต่างลูกหนี้ > เจ้าหนี้ (เจ้าของงานสั่ง 6 ส.ค. 69) — ยอดสองฝั่งทั้งเขตไม่เท่ากัน
+        // แปลว่าคู่หนี้บางส่วนไม่ได้อยู่ในชุด 103 แห่งนี้ จึงเกลี่ยกันเองในเขตไม่ครบ (เป็นข้อสังเกต ยังไม่ยืนยัน)
+        if(!EX_SHOW_TJAR) return '';
+        const g=exTjGapAll(); if(!(g.gap>0)) return '';
+        return `<div class="tgt-row tgt-note">⚠️ <b>ทั้งเขตลูกหนี้มากกว่าเจ้าหนี้ ${fmtM(g.gap)}</b> (ลูกหนี้ ${fmtM(g.ar)} vs เจ้าหนี้ ${fmtM(g.pay)}) — สองฝั่งบันทึกแยกเล่ม และคู่หนี้บางส่วนน่าจะเป็นหน่วยบริการ<b>นอกชุด 103 แห่งนี้</b> (รพ.รัฐสังกัดกรมอื่น เช่น กรมการแพทย์/กรมสุขภาพจิต · รพ.นอกเขต · เอกชนคู่สัญญา) ส่วนต่างนี้จึงเกลี่ยกันเองภายในเขตไม่ได้ ต้องตามเก็บจากหน่วยต้นทางจริง
+          · ⚠️ เป็นข้อสังเกตจากยอดบัญชี <b>ยังไม่ได้ยืนยันคู่หนี้รายตัวกับตารางเคลียร์ริ่งของ สสจ./เขต</b></div>`;
       })()}
       ${EXST.tj.mode==='forgive'&&EXTJ.total>0?`<div class="tgt-row">💛 เงินที่ยกให้รวม (Option ยกหนี้): <b>${fmtM(EXTJ.total)}</b> <span class="tgt-note">— รพช. ${EXTJ.debtors.size} แห่งได้รับการยกหนี้ (รพศ./รพท. ฝั่งเจ้าหนี้ยกให้ตามสัดส่วน)${EXTJ.uncovered>1?` · เกลี่ยไม่ได้ ${fmtM(EXTJ.uncovered)}`:''}</span></div>`
       :EXST.tj.mode==='smart'&&refundTot>0?`<div class="tgt-row">🎯 เงินคืนเจาะจงรวม (Option ยกหนี้เจาะจง): <b>${fmtM(refundTot)}</b> <span class="tgt-note">— คืนให้ รพช. ${nRefund} แห่งที่ระดับ >3 ณ ${sepLab} หลังจ่าย พอให้ลงถึง ≤3 (ที่ระดับ ≤3 อยู่แล้วไม่ได้รับ)</span></div>`:''}
