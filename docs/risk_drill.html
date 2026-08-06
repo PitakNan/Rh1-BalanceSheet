@@ -704,7 +704,8 @@ function recommendFor(h){
 // ── เงินสดพอจ่าย MOE: เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็น (MOE) ได้กี่เดือน ──────────
 // ใช้ตัวเลขชุดเดียวกับแท็บผู้บริหาร (#exec) เป๊ะ — summary.json ให้มาสองฟิลด์จาก export_risk_link.py:
 //   cn    = เงินสดและรายการเทียบเท่าเงินสด (1003X ตัวเดียวกับ EX.hosp[].bs.cn)
-//   moeMo = MOE ทางการ 59 บัญชี/เดือน (นิยาม MOE_ACC ชุดเดียวกับ export_exec.py)
+//   moeMo = MOE ทางการ/เดือน — ชุด MOE.Ver69 59 บัญชี (นิยาม MOE_ACC ชุดเดียวกับ export_exec.py)
+//           ⚠️ หน้านี้ตรึงไว้ที่ Ver69 (สลับเวอร์ชันได้เฉพาะแท็บ #exec) ตามกติกาเหล็ก 3.6
 // เส้นเทียบ = 3 เดือน คงที่ (ไม่ใช่เพดาน · ค่าจริงเกินได้ เช่น ฮอด 7.8 เดือน)
 // ที่มาของเลข 3 — เจ้าของงานกำหนด 29 ก.ค. 69: ตรงกับเกณฑ์ SU (อัตราความอยู่รอด) ของ Risk Score
 //   ที่ให้ผ่านเมื่ออยู่รอดได้ ≥ 3 เดือน (ดูหัวข้อ 1: s=NWC÷(|NI|/mo) · s<3 = 2 คะแนน)
@@ -900,7 +901,7 @@ function ovRender(){
         <input type="range" min="-${dLim}" max="${dLim}" step="${SV_STEP}" value="${p.debt}"
           oninput="document.getElementById('ovDebtLab-${hc}').textContent=(+this.value>0?'+':'')+fmtM(+this.value)"
           onchange="ovSetLever('${hc}','debt',+this.value)">
-        <span class="surv-base">− = ยืดจ่าย/ขยาย credit term (เงินสด↑ หนี้↑) · + = เร่งจ่าย (เงินสด↓ หนี้↓) · หนี้คงเหลือ ${fmtM(ctx.clbd.total)} จ่ายปกติ ~${fmtM(ctx.clbd.totalPay)}/เดือน · ถ้าเร่งจ่าย: CR ${dir(ctx.ca)} · QR ${dir(ctx.qn)} · Cash ${dir(ctx.cn)} (ยืดจ่าย = กลับทิศ)</span></div>`:''}
+        <span class="surv-base">− = ค้างชำระนานขึ้น/ขยาย credit term (เงินสด↑ หนี้↑) · + = เร่งจ่าย (เงินสด↓ หนี้↓) · หนี้คงเหลือ ${fmtM(ctx.clbd.total)} จ่ายปกติ ~${fmtM(ctx.clbd.totalPay)}/เดือน · ถ้าเร่งจ่าย: CR ${dir(ctx.ca)} · QR ${dir(ctx.qn)} · Cash ${dir(ctx.cn)} (ค้างชำระนานขึ้น = กลับทิศ)</span></div>`:''}
       <div class="tgt-note"><a href="#" onclick="ovResetRow('${hc}');return false">↺ คืนค่าแนะนำของ รพ.นี้</a></div>
     </div></td></tr>`;
     return main+sub;
@@ -1004,7 +1005,7 @@ const LIN_NODES=[
   {id:'eex',c:4,r:2,e:'🐍',t:'export_exec.py',s:'โมเดล MOE + งบดุลย่อ'},
   {id:'sum',c:5,r:0,e:'📄',t:'summary.json',s:'100 KB · 103 รพ.'},
   {id:'hj' ,c:5,r:1,e:'📄',t:'h/10717.json …',s:'103 ไฟล์ · 7 MB'},
-  {id:'exj',c:5,r:2,e:'📄',t:'exec.json',s:'154 KB'},
+  {id:'exj',c:5,r:2,e:'📄',t:'exec.json',s:'180 KB'},
   {id:'wl' ,c:6,r:0,e:'🚨',t:'Watchlist วิกฤต',s:'6–7 คะแนน + เงินสดพอจ่าย MOE'},
   {id:'dr' ,c:6,r:1,e:'🔬',t:'ไล่สาเหตุ L0→L4',s:'เทรนด์ → กลุ่มบัญชี → GL'},
   {id:'ex' ,c:6,r:2,e:'🧭',t:'แท็บผู้บริหาร #exec',s:'NI จำลอง · Solver เงินก้อน'},
@@ -1093,7 +1094,7 @@ function renderLineage(){
         <tr><td>NWC (เงินบำรุงสุทธิ)</td><td>สินทรัพย์หมุนเวียน − หนี้สินหมุนเวียน = "เหลือเท่าไรถ้าจ่ายหนี้ระยะสั้นหมด" ติดลบ = ไม่พอ</td><td>1 คะแนน + ใช้คิด SU</td></tr>
         <tr><td>NI (กำไร/ขาดทุนสุทธิ)</td><td>รายได้รวม − ค่าใช้จ่ายรวม สะสมตั้งแต่ ต.ค. ของปีงบ</td><td>1 คะแนน · ⚠️ ไม่เท่ากับ "เงินสดที่หายไป"</td></tr>
         <tr><td>SU (อัตราความอยู่รอด)</td><td>"ถ้าขาดทุนเท่านี้ต่อเดือน เงินที่มีจะอยู่ได้อีกกี่เดือน" ต่ำกว่า 3 เดือน = เสี่ยง</td><td>ให้ได้ถึง 2 คะแนน (เต็ม 7 จึงมาจากตรงนี้)</td></tr>
-        <tr><td>MOE</td><td>ค่าใช้จ่ายที่ <b>ไม่จ่ายไม่ได้</b> ต่อเดือน — เงินค่าจ้างลูกจ้าง ค่ายา ค่าน้ำค่าไฟ (59 บัญชีตามนิยามกองเศรษฐกิจสุขภาพฯ)</td><td>ใช้วัดว่าเงินสดที่มีจ่ายของจำเป็นได้กี่เดือน</td></tr>
+        <tr><td>MOE</td><td>ค่าใช้จ่ายที่ <b>ไม่จ่ายไม่ได้</b> ต่อเดือน — เงินค่าจ้างลูกจ้าง ค่ายา ค่าน้ำค่าไฟ (59 บัญชีตามนิยามกองเศรษฐกิจสุขภาพฯ ชุด Ver69 — สลับใช้ชุดเดิม Ver68 62 บัญชี หรือหักส่วนที่เลือกค้างชำระเจ้าหนี้การค้าได้ในแท็บผู้บริหาร)</td><td>ใช้วัดว่าเงินสดที่มีจ่ายของจำเป็นได้กี่เดือน</td></tr>
         <tr><td>ค่าเสื่อมราคา</td><td>การทยอยตัดมูลค่าของที่ซื้อมาแล้ว (ตึก/เครื่องมือ) เป็นค่าใช้จ่าย — <b>เป็นตัวเลขทางบัญชี ไม่มีเงินไหลออกจริง</b></td><td>ต้องบวกกลับเวลาคิดเงินสด</td></tr>
         <tr><td>รับบริจาค-สินทรัพย์</td><td>มีคนบริจาค <b>ของ</b> (เครื่องมือ/รถ) ไม่ใช่เงิน — ลงเป็นรายได้เต็มจำนวนแต่ไม่มีเงินเข้าบัญชี</td><td>ต้องหักออกเวลาคิดเงินสด</td></tr>
         <tr><td>รหัส P (Planfin)</td><td>รหัสจัดกลุ่มรายรับ/รายจ่ายของกระทรวง เช่น P17 = เงินเดือน · P24 = ค่าเสื่อม</td><td>ใช้จัดกลุ่มให้อ่านง่ายในแท็บผู้บริหาร</td></tr>
@@ -1143,7 +1144,7 @@ function linCards(){
     plain:'ขั้นนี้คือ "สมอง" ของหน้าเว็บ — เปลี่ยนยอดบัญชีดิบสี่ล้านแถวให้เป็นคะแนน เป็นสาเหตุ และเป็นข้อเสนอว่าต้องใช้เงินเท่าไร',
     li:['<b>export_risk_link.py</b> — คิดคะแนน 7 ข้อรายโรงพยาบาล + หาว่าบัญชีไหนเปลี่ยนแปลงมากจนทำให้คะแนนแย่ลง (ใส่การปัดทศนิยม 2 ตำแหน่งก่อนเทียบเกณฑ์ เหมือนที่ระบบทางการทำ)',
         '<b>export_planfin.py</b> — จับบัญชีเข้ารหัส P ตามผังทางการ เพื่อจัดกลุ่มรายรับ/รายจ่ายให้อ่านรู้เรื่อง',
-        '<b>export_exec.py</b> — สร้างโมเดลของแท็บผู้บริหาร: ค่าใช้จ่ายจำเป็น (MOE) 59 บัญชี · รายการที่ไม่ใช่เงินสด · เจ้าหนี้แยกชนิด · งบดุลย่อสำหรับจำลอง',
+        '<b>export_exec.py</b> — สร้างโมเดลของแท็บผู้บริหาร: ค่าใช้จ่ายจำเป็น (MOE) 2 ชุดให้เลือก (Ver69 59 บัญชี · Ver68 62 บัญชี) · รายการที่ไม่ใช่เงินสด · เจ้าหนี้แยกชนิด · งบดุลย่อสำหรับจำลอง',
         'มีชุดตรวจอัตโนมัติกันคำนวณเพี้ยน: <code>test_exec_model.js</code> ตรวจ 2,595 สถานการณ์ ~3 วินาที รันทุกครั้งก่อนขึ้นเว็บ'],
     trap:'ลำดับสำคัญ: export_risk_link.py เขียนทับไฟล์ราย รพ. ทั้ง 103 ไฟล์ ถ้าไม่รันอีกสองตัวต่อ ข้อมูลจะขาด',
     out:'ได้อะไรออกมา: ไฟล์ JSON ที่เบาพอให้เบราว์เซอร์โหลดได้ทันที'},
@@ -1151,7 +1152,7 @@ function linCards(){
     plain:'หน้าเว็บนี้ไม่มีเซิร์ฟเวอร์และไม่ได้ต่อฐานข้อมูล — มันคือไฟล์ HTML ไฟล์เดียวที่โหลดไฟล์ JSON เหล่านี้ไปคิดในเบราว์เซอร์ของคุณ จึงเปิดได้เร็วและไม่มีข้อมูลรั่ว',
     li:['<b>summary.json (100 KB)</b> — ภาพรวมทั้ง 103 แห่ง: คะแนน · CR/QR/Cash · เงินบำรุงสุทธิ · เงินสด · MOE ต่อเดือน → ใช้ทำ Watchlist',
         '<b>h/&lt;รหัส&gt;.json (103 ไฟล์ รวม 7 MB)</b> — เจาะลึกรายแห่ง: ย้อนหลังรายงวด · บัญชีที่เปลี่ยนแปลงมากสุด → โหลดเฉพาะแห่งที่คุณคลิก',
-        '<b>exec.json (154 KB)</b> — ข้อมูลแท็บผู้บริหารทั้งเขตในไฟล์เดียว: รายรับรายกองทุน · MOE 7 กลุ่ม · เจ้าหนี้แยกชนิด · งบดุลย่อ'],
+        '<b>exec.json (180 KB)</b> — ข้อมูลแท็บผู้บริหารทั้งเขตในไฟล์เดียว: รายรับรายกองทุน · MOE 8 กลุ่ม × 2 เวอร์ชัน (+ก้อนที่ค้างชำระเจ้าหนี้การค้าได้) · เจ้าหนี้แยกชนิด · งบดุลย่อ'],
     trap:'กติกาที่บังคับไว้: ตัวเลข "เงินสดพอจ่าย MOE" ใน summary.json กับ exec.json ต้องเท่ากันเป๊ะ ไม่งั้นผู้บริหารจะเห็นสองค่าสำหรับโรงพยาบาลเดียวกัน — มีชุดตรวจเทียบสองไฟล์รายแห่งทุกครั้ง',
     out:'ได้อะไรออกมา: ข้อมูลพร้อมแสดงผลบนจอ'},
    {id:'wl',h:'⑦ ที่เห็นบนหน้านี้ — 3 ส่วน',who:'risk_drill.html (ไฟล์เดียว · เผยแพร่ผ่าน GitHub Pages)',
@@ -1230,7 +1231,9 @@ function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
 function exDefaultState(){
   // moePct: % ปรับรายกลุ่ม MOE จากค่าเฉลี่ย (default 0% = ตาม run-rate) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
   // adjAll/moePctAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
+  // moeVer: นิยาม MOE ที่ใช้ ('69' ค่าเริ่มต้น = 59 บัญชี · '68' = ชุดเดิม 62 บัญชี · '69p' = Ver69 + จ่ายหนี้การค้า payPct%)
   return {crisis:'67', types:{'รพศ.':true,'รพท.':true,'รพช.':true}, prov:'all', ext:0, tgt:6,
+          moeVer:'69', payPct:EX_PAYPCT_DEF,
           moePct:{}, moePctAll:0, moeOff:{}, moeOvr:{}, xmoe:true, adj:{}, adjAll:0, revOff:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
@@ -1250,7 +1253,28 @@ function exPct(hc,p,seg){
 // แต่บวกกลับอีกชุดหนึ่ง) · เดิมมี EADJ ด้วยแต่ไม่มีอยู่จริงในข้อมูล (ยอด 0 ทุกแห่ง) จึงถอดออก 2026-07-27
 // ⚠️ ห้ามใส่ P25/P251 (ค่าใช้จ่ายระหว่างหน่วยงาน 5209*/5210*) — เป็นรายการเงินสด นับใน exXmoeMo แล้ว
 const EX_NONCASH={P24:1,P241:1};
-// MOE ทางการ: กลุ่มบัญชี 59 ตัวตามนิยามกองเศรษฐกิจสุขภาพ (EX.moeGroups จาก export_exec.py)
+// MOE ทางการ: กลุ่มบัญชีตามนิยามกองเศรษฐกิจสุขภาพ (EX.moeGroups จาก export_exec.py)
+// ── 3 นิยามให้เลือก (CFO กำหนด 6 ส.ค. 69 · ดู RISK_EXEC_MODEL.md 3.14) ──
+//   '69'  = 59 บัญชี  ← ค่าเริ่มต้น ตรงกับ moeMo ใน summary.json (กติกาเหล็ก 3.6)
+//   '68'  = 62 บัญชี  ชุดเดิม 14 ก.ค. 69 (มีค่าจ้างชั่วคราว(บริการ) + ไม่ทำเวชปฏิบัติชุดรหัสเดิม 3 ตัว
+//                     แต่ไม่มีค่าเช่าเบ็ดเตล็ด)
+//   '69p' = Ver69 แต่จ่ายเงินสดให้ 9 บัญชีเจ้าหนี้การค้า (ยา/เวชภัณฑ์ + ครุภัณฑ์ต่ำกว่าเกณฑ์) แค่ X%
+//           ส่วนที่ไม่จ่าย = ยืดเป็นเจ้าหนี้การค้า → MOE เงินสด/เดือนลดลง แต่ NI **ไม่เปลี่ยน**
+//           และหนี้สินหมุนเวียนโตทุกเดือนตามยอดที่ยืด (แบบ A — ยืดหนี้ไม่ใช่ของฟรี)
+// ⚠️ ห้าม hardcode รายชื่อบัญชี/จำนวนบัญชีซ้ำที่นี่ — ยอดทั้งสามชุดมาจาก export_exec.py (h.moe / h.moe68 / h.moeP9)
+function exMoeVer(){ const v=EXST&&EXST.moeVer; return (v==='68'||v==='69'||v==='69p')?v:'69'; }
+function exMoeVerLab(){ const v=exMoeVer(); return v==='68'?'MOE.Ver68':(v==='69'?'MOE.Ver69':'MOE.Ver69 + จ่ายหนี้การค้า '+exPayPct()+'%'); }
+function exMoeVerShort(){ const v=exMoeVer(); return v==='68'?'Ver68':(v==='69'?'Ver69':'Ver69+'+exPayPct()+'%'); }
+// % ที่จ่ายเงินสดให้ 9 บัญชีเจ้าหนี้การค้า (0 = ไม่จ่ายเลย · 100 = จ่ายเต็มเท่า Ver69)
+const EX_PAYPCT_DEF=50;
+function exPayPct(){ const v=+(EXST&&EXST.payPct); return (isFinite(v)&&v>=0&&v<=100)?v:EX_PAYPCT_DEF; }
+// ยอดจ่ายจริงสะสมรายกลุ่ม ตามเวอร์ชันที่เลือก (บาท · ยังไม่หาร mo และยังไม่คิด %ปรับ)
+function exMoeGrpRaw(h,gid){ return ((exMoeVer()==='68' ? (h.moe68&&h.moe68[gid]) : (h.moe&&h.moe[gid]))||0); }
+// ส่วนของกลุ่มนั้นที่เลือก "ไม่จ่ายเงินสด" = ยอด 9 บัญชีเจ้าหนี้การค้า × (1 − %จ่าย) — เฉพาะโหมด 69p
+function exMoeGrpStretch(h,gid){
+  if(exMoeVer()!=='69p') return 0;
+  return ((h.moeP9&&h.moeP9[gid])||0)*(1-exPayPct()/100);
+}
 // % ปรับต่อกลุ่ม (−100% = งดจ่ายทั้งหมด · 0% = ตาม run-rate ค่าเฉลี่ยจริง · +100% = จ่ายเพิ่มเป็นสองเท่า)
 function exMoePct(g){ return EXST.moePct[g]!=null?EXST.moePct[g]:0; }
 // % ปรับ MOE รายแห่ง (override) > ค่ากลุ่ม > 0 — เหมือน exPct ของรายรับ
@@ -1329,18 +1353,31 @@ function exRevMo(h){
       s += v/mo*(1+exPct(h.hcode,p,g)/100); } }
   return s;
 }
-function exMoeMo(h){
+// ── MOE 2 ตัวเลข ที่ต้องไม่สับกัน (แบบ A · CFO 6 ส.ค. 69 · RISK_EXEC_MODEL.md 3.14) ──
+//   exMoeAccMo    = ตามเกณฑ์คงค้าง (accrual) → ใช้หักใน NI เท่านั้น · ไม่ขึ้นกับ %จ่ายหนี้การค้า
+//   exMoeMo       = เงินสดที่จ่ายจริง/เดือน  → ใช้ทุกเส้นทางเงินสด + คอลัมน์ "MOE/เดือน" ในตาราง
+//   exMoeStretchMo= ผลต่างของสองตัวข้างบน = ส่วนที่เลือกยืดเป็นเจ้าหนี้การค้า (ไม่มีเงินออก)
+// ⛔ ห้ามเอา exMoeMo ไปหักใน NI — จะทำให้ "ยืดหนี้" กลายเป็นกำไรที่ไม่มีอยู่จริง
+function exMoeAccMo(h){
   const mo=h.bs.mo; let s=0;
-  for(const g of EX.moeGroups){ if(exMoeOff(g.id)) continue; const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
+  for(const g of EX.moeGroups){ if(exMoeOff(g.id)) continue; const v=exMoeGrpRaw(h,g.id)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
   return Math.max(0,s);
 }
+function exMoeStretchMo(h){
+  const mo=h.bs.mo; let s=0;
+  for(const g of EX.moeGroups){ if(exMoeOff(g.id)) continue; const v=exMoeGrpStretch(h,g.id)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
+  return Math.max(0,s);
+}
+function exMoeMo(h){ return Math.max(0, exMoeAccMo(h)-exMoeStretchMo(h)); }
 // MOE ส่วนที่ "ยืดไม่ได้" ต่อเดือน = กลุ่มที่ธง cash=true (ค่าจ้าง/ค่าตอบแทน + สาธารณูปโภค)
 // เป็นฐานของเงินสำรอง MOE — ไม่มีใครให้เครดิตค่าแรง/ค่าน้ำค่าไฟ ต้องมีเงินสดจ่ายตามรอบเดือน
 // ⚠️ ธง cash มาจาก export_exec.py (MOE_CASH_G) — ห้าม hardcode รายชื่อกลุ่มซ้ำที่นี่ (จะหลุดกันเวลาผังเปลี่ยน)
 // คิด %ปรับ/ปิดกลุ่ม แบบเดียวกับ exMoeMo เพื่อให้เงินสำรองขยับตามสมมติฐานที่ผู้ใช้ตั้งไว้
+// (ธง cash อยู่คนละแกนกับ 9 บัญชีเจ้าหนี้การค้า — กลุ่มยืดไม่ได้ไม่มีบัญชีในชุด 9 ตัวนั้นเลย
+//  เลือกจ่ายหนี้การค้ากี่ % ก็ไม่กระทบเงินสำรอง ซึ่งถูกต้องตามความหมาย: ค่าแรง/ค่าน้ำค่าไฟยืดไม่ได้)
 function exMoeCashMo(h){
   const mo=h.bs.mo; let s=0;
-  for(const g of EX.moeGroups){ if(!g.cash || exMoeOff(g.id)) continue; const v=(h.moe[g.id]||0)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
+  for(const g of EX.moeGroups){ if(!g.cash || exMoeOff(g.id)) continue; const v=exMoeGrpRaw(h,g.id)/mo; if(!v) continue; s+=v*(1+exMoePctFor(h.hcode,g.id)/100); }
   return Math.max(0,s);
 }
 // ค่าใช้จ่ายเงินสดนอกนิยาม MOE = คชจ.รวม − MOE ทางการ − non-cash (เงินเดือน ขรก./ค่าตอบแทนอื่น/ตามจ่าย/ค่าใช้สอยอื่น ฯลฯ)
@@ -1348,10 +1385,14 @@ function exXmoeMo(h){
   const mo=h.bs.mo;
   let exp=0, nc=0;
   for(const p in h.exp){ exp+=h.exp[p]; if(EX_NONCASH[p]) nc+=h.exp[p]; }
-  let moe=0; for(const g in h.moe) moe+=h.moe[g];
+  // ⚠️ ต้องหัก MOE "ของเวอร์ชันที่เลือก" (ยอดดิบ ไม่คิด %ปรับ/ไม่คิดการยืดหนี้) ไม่ใช่ h.moe ตรง ๆ
+  //    ไม่งั้นบัญชีที่อยู่คนละเวอร์ชันจะหายไปจากค่าใช้จ่ายทั้งก้อน แล้ว NI จำลองดีขึ้นเองแบบผิด ๆ
+  //    (สลับเวอร์ชัน = ย้ายบัญชีข้ามถัง MOE ↔ นอกนิยาม เท่านั้น ผลรวมค่าใช้จ่ายต้องเท่าเดิมเสมอ)
+  let moe=0; for(const g of EX.moeGroups) moe+=exMoeGrpRaw(h,g.id);
   return Math.max(0,(exp-moe-nc))/mo;
 }
-function exNiMo(h){ return exRevMo(h)-exMoeMo(h)-(exXmoeOn()?exXmoeMo(h):0)-h.bs.depMo; }
+// NI ใช้ MOE ตามเกณฑ์คงค้าง → เลือกจ่ายหนี้การค้ากี่ % NI ก็ไม่ขยับ (ค่าใช้จ่ายเกิดแล้ว เพียงยังไม่จ่าย)
+function exNiMo(h){ return exRevMo(h)-exMoeAccMo(h)-(exXmoeOn()?exXmoeMo(h):0)-h.bs.depMo; }
 // ── จำลองเส้นทางถึง horizon (ก.ย. + ext เดือน) — anchor คะแนนทางการแบบเดียวกับ Simulator เดิม ──
 // inj = เงินก้อนเดือน 0 · บวก = เงินสนับสนุนที่ได้รับ · ลบ = ใช้เงินเกินแผน (โหมดเพดาน)
 // รับรู้เข้า NI ด้วย (2026-07-27 ตามที่ CFO กำหนด): เงินสนับสนุนจากเขต = "รายได้เงินอุดหนุนจาก
@@ -1369,6 +1410,13 @@ function exSimPath(h, inj, sc){
   // รายจ่ายที่จ่ายไม่ได้ → ค้างเป็นเจ้าหนี้ (หนี้สินหมุนเวียนโต) ไม่ใช่ปล่อยเงินสดติดลบ
   const moeMoV=exMoeMo(h);
   let owedAdd=0;                                    // เจ้าหนี้ที่เพิ่มจากการจ่ายไม่ได้ (แสดงในแผงเจาะเกณฑ์)
+  // ── ตัวเลือก "MOE.Ver69 + จ่ายหนี้การค้า X%" (แบบ A ที่ CFO เลือก 6 ส.ค. 69) ──
+  // ส่วนที่เลือกไม่จ่าย = ตั้งใจยืดเครดิตผู้ขาย (คนละเรื่องกับ owedAdd ที่เป็น "จ่ายไม่ได้เพราะเงินไม่มี")
+  //   • ไม่มีเงินสดออก  → บวกกลับเข้ากระแสเงินสดรายเดือน (เหมือน depMo แต่เป็นหนี้ที่ยังไม่จ่าย)
+  //   • ค่าใช้จ่ายยังอยู่ครบใน NI (exMoeAccMo) → NI/คะแนน ST-SU ไม่ดีขึ้นจากการยืดหนี้
+  //   • เจ้าหนี้การค้าโตทุกเดือน → ตัวส่วนของ CR/QR/Cash ratio โตตาม = ต้นทุนของการยืดหนี้
+  const stretchMo=exMoeStretchMo(h);
+  let apStretch=0;                                  // ยอดเจ้าหนี้การค้าที่สะสมจากการยืด (ตลอดช่วงจำลอง)
   // ── เงินสำรอง MOE: กันตาม "รอบจ่ายจริง" แยกตามชนิดเจ้าหนี้ (CFO อนุมัติ 29 ก.ค. 69 · 3.13) ──
   //   = MOE ส่วนที่ยืดไม่ได้ (ค่าจ้าง/ค่าตอบแทน + สาธารณูปโภค) × MOE_MIN_MO เดือน
   //   + คชจ.บุคลากร/สาธารณูปโภค "ค้างจ่าย" ที่ครบกำหนดแล้ว (bs.apAccr) — ต้องจ่ายด้วยเงินสด
@@ -1437,17 +1485,20 @@ function exSimPath(h, inj, sc){
     //   +depMo  ค่าเสื่อม/ตัดจำหน่าย/หนี้สูญ — หักใน NI แต่ไม่มีเงินออก จึงบวกกลับ
     //   −donMo  รับบริจาค "สินทรัพย์" — บวกใน NI แต่ไม่มีเงินเข้า จึงหักออก (CFO 29 ก.ค. 69 · 3.10)
     //           NI/คะแนน ST-SU ยังนับรายการนี้ตามบัญชี ที่ตัดออกคือ "เงินสด" อย่างเดียว
-    const c=niM+depMo-donMo;
+    //   +stretchMo ส่วนของ MOE ที่เลือกยืดเป็นเจ้าหนี้การค้า — หักใน NI แต่ไม่มีเงินออกเดือนนี้
+    const c=niM+depMo-donMo+stretchMo;
     // ขาดดุลรายเดือนใช้เงินสำรองได้ (เป็นการดำเนินงานปกติที่เงินสำรองมีไว้เพื่อสิ่งนี้)
     // แต่ยังห้ามเงินสดติดลบ — ส่วนที่จ่ายไม่ได้ค้างเป็นเจ้าหนี้
     if(c>=0){ st.cca+=c; st.cqn+=c; st.ccn+=c; } else drain(-c,true);
+    if(stretchMo>0){ st.ccl+=stretchMo; apStretch+=stretchMo; }   // หนี้ที่ยืดไว้กองขึ้นเป็นเจ้าหนี้การค้า
     const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
     r=anc(sc.risk);
     if(st.mo===12 && sepRisk==null){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     endRisk=r;
   }
-  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:moeMoV,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
+  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:moeMoV,moeAccMo:exMoeAccMo(h),
+          stretchMo,apStretch,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
           owedAdd,resNeed0,resCash:resCashV,resAccr:resAccrV,cashAvail0,cnEnd:st.ccn,clEnd:st.ccl};
 }
 // ── Solver: เงินก้อนขั้นต่ำ (เดือน 0) ให้ ระดับ ณ ก.ย.≤เป้า และปลาย horizon≤เป้า และเงินสดไม่หมด ──
@@ -1560,12 +1611,12 @@ function exBrkHtml(x, sepLab){
   // และเจ้าหนี้ที่เพิ่มขึ้นเมื่อจ่ายเงินสดไม่ได้ — ตามหลักเกณฑ์คงค้างที่ CFO กำหนด
   const rX=(mode==='ceiling')?rDown:rL;
   const resRow=`<tr class="brk-res">
-    <td class="l">💧 <b>เงินสดสำรอง MOE</b> <span class="tgt-note">กันตามรอบจ่ายจริง = ส่วนที่ยืดไม่ได้ (ค่าจ้าง/ค่าตอบแทน+สาธารณูปโภค) ${fmtM(r0.resCash)}/ด. × ${MOE_MIN_MO} ด. + คชจ.ค้างจ่ายที่ครบกำหนด ${fmtM(r0.resAccr)} · เจ้าหนี้การค้า ${fmtM(bs.apTrade||0)} ไม่ต้องกัน (ผู้ขายให้เครดิต และถูกนับเป็นตัวส่วนของ CR/QR แล้ว) — ไม่ใช่เกณฑ์คะแนน</span></td>
+    <td class="l">💧 <b>เงินสดสำรอง MOE</b> <span class="tgt-note">กันตามรอบจ่ายจริง = ค่าใช้จ่ายที่ต้องชำระตามกำหนด ไม่มีเครดิตเทอม (ค่าจ้าง/ค่าตอบแทน+สาธารณูปโภค+ค่าเช่า) ${fmtM(r0.resCash)}/ด. × ${MOE_MIN_MO} ด. + คชจ.ค้างจ่ายที่ครบกำหนด ${fmtM(r0.resAccr)} · เจ้าหนี้การค้า ${fmtM(bs.apTrade||0)} ไม่ต้องกัน (ผู้ขายให้เครดิตเทอม ค้างชำระได้ และถูกนับเป็นตัวส่วนของ CR/QR แล้ว) — ไม่ใช่เกณฑ์คะแนน</span></td>
     <td>ต้องมี ≥</td>
     <td>${fmtM(r0.resNeed0)}<span class="brk-d">มีเงินสด ${fmtM(bs.cn)}${bs.cn<r0.resNeed0?' · <span class="brk-no">ขาด '+fmtM(r0.resNeed0-bs.cn)+'</span>':' · <span class="brk-ok">พอ</span>'}</span></td>
     <td>${fmtM(r0.cnEnd)}<span class="brk-d">เงินสดปลายงวด${r0.owedAdd>0?' · ค้างจ่าย '+fmtM(r0.owedAdd):''}</span></td>
     <td>${rX?`${fmtM(rX.cnEnd)}<span class="brk-d">${rX.owedAdd>0?'<span class="brk-no">เจ้าหนี้เพิ่ม '+fmtM(rX.owedAdd)+'</span>':'ไม่มีค้างจ่าย'}</span>`:'<span class="tgt-note">–</span>'}</td>
-    <td class="l"><span class="tgt-note">จ่ายไม่ได้ → ค้างเป็นเจ้าหนี้</span></td></tr>`;
+    <td class="l"><span class="tgt-note">จ่ายไม่ได้ → ค้างเป็นเจ้าหนี้${r0.apStretch>0?` · <b>ค้างชำระเจ้าหนี้การค้าตามที่เลือก ${fmtM(r0.apStretch)}</b> (เลือกค้างเอง ไม่ใช่จ่ายไม่ได้ — ดันหนี้สินหมุนเวียนขึ้นเท่านี้ ณ ${sepLab})`:''}</span></td></tr>`;
   const rawN=bN.li+bN.st+bN.su, raw0=b0.li+b0.st+b0.su, rawX=bX?bX.li+bX.st+bX.su:null;
   const risk5=(mode==='ceiling')?(rDown?rDown.sepRisk:null):(rL?rL.sepRisk:null);
   // เกณฑ์ที่พลิกจาก "ผ่าน→ไม่ผ่าน" ตอนใช้เงินเกินแผน — ตอบว่า Score ตัวไหนเปลี่ยนจากปัจจัยนี้
@@ -1619,7 +1670,7 @@ function exBrkHtml(x, sepLab){
     const rr=(mode==='ceiling')?rDown:rL;
     if(!rr||!(rr.owedAdd>0)) return '';
     const tight=bs.cn<r0.resNeed0;
-    return `<div class="note" style="margin-top:4px">💧 <b>กลไกเมื่อเงินไม่พอ (เกณฑ์คงค้าง):</b> เงินสด ${fmtM(bs.cn)} ต้องกันไว้จ่ายส่วนที่<b>ยืดไม่ได้</b> — ค่าจ้าง/ค่าตอบแทน+สาธารณูปโภค ${fmtM(r0.resCash)}/ด. × ${MOE_MIN_MO} ด. + คชจ.ค้างจ่ายที่ครบกำหนดแล้ว ${fmtM(r0.resAccr)} = <b>${fmtM(r0.resNeed0)}</b> (ค่ายา/เวชภัณฑ์ไม่ต้องกัน เพราะซื้อด้วยเครดิตการค้า) จึงใช้จ่ายอย่างอื่นได้${tight?'<b class="brk-no">0 บาท</b> (เงินสดยังน้อยกว่าเงินสำรองที่ต้องกัน '+fmtM(r0.resNeed0-bs.cn)+')':'<b>'+fmtM(r0.cashAvail0)+'</b>'}
+    return `<div class="note" style="margin-top:4px">💧 <b>กลไกเมื่อเงินไม่พอ (เกณฑ์คงค้าง):</b> เงินสด ${fmtM(bs.cn)} ต้องกันไว้จ่ายส่วนที่<b>ต้องชำระตามกำหนด</b> (ไม่มีเครดิตเทอม) — ค่าจ้าง/ค่าตอบแทน+สาธารณูปโภค+ค่าเช่า ${fmtM(r0.resCash)}/ด. × ${MOE_MIN_MO} ด. + คชจ.ค้างจ่ายที่ครบกำหนดแล้ว ${fmtM(r0.resAccr)} = <b>${fmtM(r0.resNeed0)}</b> (ค่ายา/เวชภัณฑ์ไม่ต้องกัน เพราะซื้อด้วยเครดิตการค้า) จึงใช้จ่ายอย่างอื่นได้${tight?'<b class="brk-no">0 บาท</b> (เงินสดยังน้อยกว่าเงินสำรองที่ต้องกัน '+fmtM(r0.resNeed0-bs.cn)+')':'<b>'+fmtM(r0.cashAvail0)+'</b>'}
       → ส่วนที่จ่ายไม่ได้ <b class="brk-no">${fmtM(rr.owedAdd)}</b> ค้างเป็น<b>เจ้าหนี้</b> (หนี้สินหมุนเวียน ${fmtM(bs.cl)} → ${fmtM(rr.clEnd)}) ไม่ใช่ปล่อยให้เงินสดติดลบ — ยอดคงเหลือติดลบเป็นไปไม่ได้ทางบัญชี</div>`;
   })();
   // ── ปัจจัยเสี่ยง "เงินรับโอนจากหน่วยงานในสังกัดหยุด" (ดู RISK_EXEC_MODEL.md หัวข้อ 3.7) ──
@@ -1782,6 +1833,9 @@ function exBumpMoeAll(d){ exSetMoeAll((EXST.moePctAll||0)+d); }
 function exSetMoeOvr(hc,g,v){ if(!EXST.moeOvr[hc]) EXST.moeOvr[hc]={}; EXST.moeOvr[hc][g]=Math.max(-100,Math.min(100,Math.round((+v||0)/5)*5)); exSave(); exRender(); }
 function exBumpMoeOvr(hc,g,d){ exSetMoeOvr(hc,g,exMoePctFor(hc,g)+d); }
 function exSetXmoe(on){ EXST.xmoe=on; exSave(); exRender(); }
+// สลับนิยาม MOE — เปลี่ยนแค่ "ตัวเลข MOE/เดือน" ทุกสูตรที่ผูกอยู่เดิมทำงานต่อเหมือนเดิมทั้งหมด
+function exSetMoeVer(v){ EXST.moeVer=(v==='68'||v==='69'||v==='69p')?v:'69'; exSave(); exRender(); }
+function exSetPayPct(v){ EXST.payPct=Math.max(0,Math.min(100,Math.round(+v||0))); exSave(); exRender(); }
 function exSetRevOff(k,off){ EXST.revOff[k]=off; exSave(); exRender(); }
 function exSetMoeOff(g,off){ EXST.moeOff[g]=off; exSave(); exRender(); }
 // สไลด์กลุ่ม: บังคับทับ override รายแห่งของ key นั้นทุก รพ. (ตามกติกา "ปรับทั้งกลุ่ม ค่าต้องเปลี่ยนตาม")
@@ -1826,7 +1880,7 @@ function exRender(){
   const exTblPos=exTblEl?{t:exTblEl.scrollTop,l:exTblEl.scrollLeft}:null;
   EXTJ=exTjCalc();
   if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
-    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe});
+    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct()});
     if(_refundCache.sig===sig && _refundCache.refund) EXTJ.refund=_refundCache.refund;
     else { exTjSolveRefunds(); _refundCache={sig, refund:EXTJ.refund}; }
   }
@@ -1836,18 +1890,24 @@ function exRender(){
   const tgtCountEl=document.getElementById('exTgtCount'); if(tgtCountEl) tgtCountEl.textContent=rows.length;
   // ── MOE panel (นิยามทางการกองเศรษฐกิจสุขภาพ) ──
   const moeAgg={};
-  rows.forEach(h=>{ for(const g in h.moe) moeAgg[g]=(moeAgg[g]||0)+h.moe[g]; });
-  const moeTot=rows.reduce((s,h)=>s+exMoeMo(h),0);
+  rows.forEach(h=>{ for(const g of EX.moeGroups) moeAgg[g.id]=(moeAgg[g.id]||0)+exMoeGrpRaw(h,g.id); });
+  const moeTot=rows.reduce((s,h)=>s+exMoeMo(h),0);            // เงินสดจ่ายจริง/เดือน (หลังหักส่วนที่ยืด)
+  const moeAccTot=rows.reduce((s,h)=>s+exMoeAccMo(h),0);      // ตามเกณฑ์คงค้าง (ตัวที่หักใน NI)
+  const stretchTot=rows.reduce((s,h)=>s+exMoeStretchMo(h),0); // ส่วนที่ยืดเป็นเจ้าหนี้การค้า/เดือน
   const xmoeTot=rows.reduce((s,h)=>s+exXmoeMo(h),0);
   const depTot=rows.reduce((s,h)=>s+h.bs.depMo,0);
-  const nAccs=EX.moeGroups.reduce((s,g)=>s+g.accs.length,0);
+  // รายการบัญชีของเวอร์ชันที่เลือก (Ver69/Ver69+ ใช้ accs · Ver68 ใช้ accs68) — ห้าม hardcode จำนวน
+  const exMoeAccsOf=g=>((exMoeVer()==='68'?g.accs68:g.accs)||[]);
+  const nAccs=EX.moeGroups.reduce((s,g)=>s+exMoeAccsOf(g).length,0);
   const moeAllv=EXST.moePctAll!=null?EXST.moePctAll:0;
   const nMoeAdj=EX.moeGroups.filter(g=>exMoePct(g.id)!==0).length;
   const nMoeOff=EX.moeGroups.filter(g=>exMoeOff(g.id)).length;
   const nMoeOvr=Object.values(EXST.moeOvr||{}).reduce((s,o)=>s+Object.keys(o||{}).length,0);
   document.getElementById('exMoeBox').innerHTML=`
-    <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน ตามนิยามกองเศรษฐกิจสุขภาพ (${rows.length} แห่งที่เลือก)</h3>
+    <h3 style="margin:0 0 6px">💸 MOE — ค่าใช้จ่ายจำเป็นต่อเดือน ตามนิยามกองเศรษฐกิจสุขภาพ (${rows.length} แห่งที่เลือก) <span class="exchip">${exMoeVerLab()} · ${nAccs} บัญชี</span></h3>
     <div class="tgt-row" style="border-top:none;padding-top:0">รวม MOE จำลอง: <b>${fmtM(moeTot)}/เดือน</b>${nMoeAdj?` <span class="tgt-note">· ปรับแล้ว ${nMoeAdj}/${EX.moeGroups.length} กลุ่ม</span>`:''}${nMoeOvr?` <span class="tgt-note">· ราย รพ. ${nMoeOvr} จุด</span>`:''}${nMoeOff?` <span class="tgt-note">· ปิดไว้ ${nMoeOff} กลุ่ม (ไม่นับรวม)</span>`:''}</div>
+    ${stretchTot>0?`<div class="tgt-row tgt-note">🧾 เลือกจ่ายหนี้การค้า <b>${exPayPct()}%</b> → ตามเกณฑ์คงค้าง ${fmtM(moeAccTot)}/ด. − ส่วนที่ค้างเป็นเจ้าหนี้การค้า <b>${fmtM(stretchTot)}/ด.</b> = เงินสดจ่ายจริง <b>${fmtM(moeTot)}/ด.</b>
+      · ส่วนที่ค้างชำระ<b>ยังเป็นค่าใช้จ่ายใน NI เต็มจำนวน</b> (NI ไม่ดีขึ้น) และไปกองเป็นเจ้าหนี้การค้าเพิ่มเดือนละ ${fmtM(stretchTot)} ซึ่งกด CR/QR/Cash ratio ลงเรื่อย ๆ</div>`:''}
     <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับ MOE ทุกกลุ่มพร้อมกัน: <b id="exMoeAllLab">${(moeAllv>0?'+':'')+moeAllv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด — เทียบค่าเฉลี่ยรายจ่ายจริง)</span></label>
       <div class="exctl" style="gap:6px;flex-wrap:wrap">
         <button type="button" class="ovbulkbtn" onclick="exBumpMoeAll(-10)">−10</button>
@@ -1870,9 +1930,13 @@ function exRender(){
           <tr><th title="ติ๊ก = นับหมวดนี้เข้า MOE · เอาออก = ตัดไม่นับหมวดนี้">ใช้</th><th title="กลุ่มค่าใช้จ่ายจำเป็นตามนิยามกองเศรษฐกิจสุขภาพ (รวมหลายบัญชี GL)">หมวดรายจ่าย</th><th title="ยอดจ่ายจริงสะสม ÷ จำนวนเดือนที่ผ่านมา">เฉลี่ย/เดือน</th><th title="ช่วงที่เหลือจะจ่ายกี่ % เทียบค่าเฉลี่ย: −100% งดจ่าย · 0% ตามจริง · +100% จ่ายสองเท่า">% จากค่าเฉลี่ย</th><th title="เฉลี่ย/เดือน × (1 + %ปรับ) — ตัวที่นำไปหักใน NI จำลอง">ใช้จริง/เดือน</th></tr>
           ${EX.moeGroups.map(g=>{
             const av=(moeAgg[g.id]||0)/mo, pc=exMoePct(g.id), off=exMoeOff(g.id);
-            return `<tr style="${off?'opacity:.5':''}">
+            // กลุ่มที่ไม่มีบัญชีในเวอร์ชันที่เลือก (เช่น "ค่าเช่า" ไม่มีใน Ver68) — ยอด 0 โดยนิยาม ไม่ใช่ข้อมูลหาย
+            const inVer=exMoeAccsOf(g).length>0;
+            const nP9=(g.p9||[]).length;
+            const strG=rows.reduce((s,h)=>s+exMoeGrpStretch(h,g.id),0)/mo*(1+pc/100);
+            return `<tr style="${off||!inVer?'opacity:.5':''}">
               <td><input type="checkbox" ${off?'':'checked'} title="ปิด = ไม่นับหมวดนี้เข้า MOE เลย" onchange="exSetMoeOff('${g.id}',!this.checked)"></td>
-              <td><b>${g.name}</b>${off?' <span class="tgt-note">(ปิดไว้ — ไม่ใช้)</span>':''}</td>
+              <td><b>${g.name}</b>${off?' <span class="tgt-note">(ปิดไว้ — ไม่ใช้)</span>':''}${!inVer?` <span class="tgt-note">(ไม่อยู่ใน ${exMoeVerShort()})</span>`:''}${(nP9&&exMoeVer()==='69p')?` <span class="tgt-note">· ค้างชำระได้ ${nP9} บัญชี −${fmtM(strG)}/ด.</span>`:''}</td>
               <td>${fmtM(av)}</td>
               <td>${off?'<span class="tgt-note">—</span>':`<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:300px">
                 <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpMoePct('${g.id}',-5)">−5</button>
@@ -1886,10 +1950,12 @@ function exRender(){
             </tr>`;}).join('')}
         </table>
       </div>
-      <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--mut)">📖 ดูรายการบัญชีทั้ง ${nAccs} ตัว (ตรวจสอบที่มาได้รายบัญชี)</summary>
-        <div style="margin-top:6px">${EX.moeGroups.map(g=>`<div class="tgt-row" style="align-items:flex-start"><b style="min-width:170px">${g.name}</b><span class="tgt-note">${g.accs.map(a=>`${a.a} ${a.n}`).join(' · ')}</span></div>`).join('')}</div>
+      <details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--mut)">📖 ดูรายการบัญชีทั้ง ${nAccs} ตัวของ ${exMoeVerShort()} (ตรวจสอบที่มาได้รายบัญชี)</summary>
+        <div style="margin-top:6px">${EX.moeGroups.filter(g=>exMoeAccsOf(g).length).map(g=>`<div class="tgt-row" style="align-items:flex-start"><b style="min-width:170px">${g.name}</b><span class="tgt-note">${exMoeAccsOf(g).map(a=>`${a.a} ${a.n}${(exMoeVer()==='69p'&&(g.p9||[]).some(p=>p.a===a.a))?' 🧾':''}`).join(' · ')}</span></div>`).join('')}</div>
+        ${exMoeVer()==='69p'?`<div class="note" style="margin-top:4px">🧾 = บัญชีที่อยู่ในกลุ่ม "จ่ายหนี้การค้าตามสัดส่วน" (${EX.moeVers?EX.moeVers.nP9:9} บัญชี) — จ่ายเงินสด ${exPayPct()}% ที่เหลือค้างเป็นเจ้าหนี้การค้า</div>`:''}
       </details>
-      <div class="note" style="margin-top:4px"><b>ที่มา:</b> รายการบัญชี MOE ${nAccs} บัญชีตามนิยามกองเศรษฐกิจสุขภาพ (CFO กำหนด 14 ก.ค. 69) — <b>ไม่รวม</b>เงินเดือนข้าราชการ (จ่ายจากงบประมาณ ไม่ใช่เงินบำรุง) และค่ารักษาตามจ่าย</div>
+      <div class="note" style="margin-top:4px"><b>ที่มา:</b> รายการบัญชี MOE ${nAccs} บัญชีของ <b>${exMoeVerLab()}</b> ตามนิยามกองเศรษฐกิจสุขภาพ — <b>ไม่รวม</b>เงินเดือนข้าราชการ (จ่ายจากงบประมาณ ไม่ใช่เงินบำรุง) และค่ารักษาตามจ่าย
+        · Ver68 = ชุดเดิม ${EX.moeVers?EX.moeVers.n68:62} บัญชี (14 ก.ค. 69) · Ver69 = ${EX.moeVers?EX.moeVers.n69:59} บัญชี (6 ส.ค. 69) — สลับได้ที่ตัวเลือก 💸 นิยาม MOE เหนือตารางผลจำลอง</div>
     </details>`;
   // ── Revenue panel ──
   const revAgg={};
@@ -2016,7 +2082,9 @@ function exRender(){
     prov:'จังหวัดที่ตั้งของโรงพยาบาล',
     name:'ชื่อ + ประเภท (รพศ./รพท./รพช.) และระดับบริการ · คลิก "เปิดหน้าเต็ม" ดูรายละเอียดราย รพ.',
     risk0:'ระดับวิกฤตการเงิน (Risk Score ทางการ) งวดล่าสุด — 0 ดีสุด ถึง 7 วิกฤตสุด',
-    moe:'ค่าใช้จ่ายจำเป็นต่อเดือน (นิยามกองเศรษฐกิจสุขภาพ) = Σ(ยอดจ่ายจริงสะสม ÷ เดือน) × (1 + %ปรับรายหมวด)',
+    moe:'ค่าใช้จ่ายจำเป็นต่อเดือน — เงินสดที่ต้องจ่ายจริง (นิยาม '+exMoeVerLab()+' · '+nAccs+' บัญชี)\n= Σ(ยอดจ่ายจริงสะสม ÷ เดือน) × (1 + %ปรับรายหมวด)'
+      +(exMoeVer()==='69p'?'\n− ส่วนที่เลือกไม่จ่ายเงินสด: ยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ '+(EX.moeVers?EX.moeVers.nP9:9)+' บัญชี × ('+(100-exPayPct())+'%)\n⚠️ ส่วนที่ค้างชำระยังเป็นค่าใช้จ่ายใน NI เต็มจำนวน (NI ไม่ดีขึ้น) และไปกองเป็นเจ้าหนี้การค้าเพิ่มทุกเดือน → CR/QR/Cash ratio แย่ลงตามช่วงที่จำลอง':'')
+      +'\nเปลี่ยนนิยามได้ที่ตัวเลือก 💸 นิยาม MOE เหนือตาราง',
     ni:'กำไร/ขาดทุนสุทธิจำลอง/เดือน = รายรับกองทุน×(1+%) − MOE − ค่าใช้จ่ายนอกนิยาม(run-rate) − รายการไม่ใช่เงินสด',
     cashbal:cashTitle+'\n\nบรรทัดล่าง "พอจ่าย MOE X เดือน" = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็น (MOE) ได้กี่เดือน\n= เงินสด ÷ MOE/เดือน · ไม่ใช่เพดาน ค่าจริงเกินได้\n⚠️ เตือนเมื่อน้อยกว่า 3 เดือน (เกณฑ์ขั้นต่ำตามหลักอัตราความอยู่รอด SU ของ Risk Score)\n= ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่จะเข้ามาระหว่างทาง',
     tjpay:'เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (บัญชี 2101020199.202) — ยอดที่ รพ.นี้บันทึกว่าค้างจ่ายให้ รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพช. ค้าง รพศ./รพท.)\nครอบคลุมผู้ป่วยนอก UC ที่ไปรับบริการนอก CUP ทุกกรณี — ทั้ง OP Refer (ส่งต่อ) และ OP Anywhere (30 บาทรักษาทุกที่) ไม่ใช่เฉพาะกรณีส่งต่อ\n🔴 แดง = เงินสด+เทียบเท่าไม่พอจ่ายเจ้าหนี้ก้อนนี้ พร้อมบอกส่วนที่ขาด\nเป็นหนี้สินหมุนเวียน ยิ่งมากยิ่งกดสภาพคล่อง (CR/QR) · เป็นฐานของ Option ตามจ่าย/ยกหนี้ด้านบน',
@@ -2031,7 +2099,7 @@ function exRender(){
   };
   // แถวหัวตาราง — สร้างก่อนแถวข้อมูล เพื่อนับจำนวนคอลัมน์จริงไปใช้เป็น colspan ของแถวย่อย
   // (เดิม hardcode ไว้ ทำให้ลืมแก้ทุกครั้งที่เพิ่ม/ซ่อนคอลัมน์ — ดู RISK_EXEC_MODEL.md 7.7)
-  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้<br>OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดคงเหลือ<br>หลังภาระ MOE<br>ถึง '+exMoeTargetLab(),'moeleft')}${exSortTh('ส่วนขาด<br>สภาพคล่อง','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
+  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน<br><span style="font-size:10px;font-weight:600;opacity:.75">'+exMoeVerShort()+'</span>','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้<br>OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดคงเหลือ<br>หลังภาระ MOE<br>ถึง '+exMoeTargetLab(),'moeleft')}${exSortTh('ส่วนขาด<br>สภาพคล่อง','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
   const EX_NCOL=(exHeadRow.match(/<th\b/g)||[]).length;
   const rowsHtml=items.map(x=>{
     const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc], brkOpen=EXBRK[hc]!=null;
@@ -2095,9 +2163,9 @@ function exRender(){
           <button type="button" class="ovbulkbtn" style="padding:1px 6px;font-size:10.5px" onclick="exBumpOvr('${hc}','${k}',5)">+5</button>
           <input type="number" class="exnum" style="width:56px" step="5" min="-100" max="200" value="${pc}" onchange="exSetOvr('${hc}','${k}',+this.value)">
         </div></div>`;}).join('')}
-      <div class="tgt-note" style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">💸 MOE รายแห่ง</div>
-      ${EX.moeGroups.filter(g=>(h.moe[g.id]||0)>0).map(g=>{
-        const gid=g.id, pc=exMoePctFor(hc,gid), av=(h.moe[gid]||0)/h.bs.mo, ov=EXST.moeOvr[hc]&&EXST.moeOvr[hc][gid]!=null, off=exMoeOff(gid);
+      <div class="tgt-note" style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)">💸 MOE รายแห่ง <b>(${exMoeVerLab()})</b>${r0.stretchMo>0?` · เงินสดจ่ายจริง ${fmtM(r0.moeMo)}/ด. = ตามเกณฑ์คงค้าง ${fmtM(r0.moeAccMo)} − ค้างเป็นเจ้าหนี้การค้า ${fmtM(r0.stretchMo)}`:''}</div>
+      ${EX.moeGroups.filter(g=>exMoeGrpRaw(h,g.id)>0).map(g=>{
+        const gid=g.id, pc=exMoePctFor(hc,gid), av=exMoeGrpRaw(h,gid)/h.bs.mo, ov=EXST.moeOvr[hc]&&EXST.moeOvr[hc][gid]!=null, off=exMoeOff(gid);
         if(off) return `<div class="fld"><label>${g.name} <span class="tgt-note">ปิดไว้ทั้งเขต — ไม่นับรวม (เปิดกลับได้ในตาราง MOE ด้านบน)</span></label></div>`;
         return `<div class="fld"><label>${g.name} เฉลี่ย ${fmtM(av)}/ด. → <b>${fmtM(Math.max(0,av*(1+pc/100)))}/ด. (${pc>0?'+':''}${pc}%)</b>${ov?' <span class="tgt-note">(ปรับเอง)</span>':''}</label>
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:380px">
@@ -2121,6 +2189,15 @@ function exRender(){
       <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;ส่วนขาดสภาพคล่อง&quot; ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov}) ประเมินถึง ${exMoeTargetLab()} = ${exMoeMonths()} เดือน&#10;⛔ ไม่ใช่คำของบ — เป็นสถานการณ์สมมติกรณีรายรับไม่เป็นไปตามแผน ใช้จัดลำดับความเปราะ&#10;เปลี่ยนเดือนได้ที่ 💧 ประเมินสภาพคล่องถึง ใต้หัวข้อนี้">💧 รวมเงินเติมตามสภาพคล่อง ถึง ${exMoeTargetLab()}: <span style="font-size:16px;color:var(--red)">${fmtM(sumTopUp)}</span> <span class="tgt-note" style="font-weight:400">(${nTopUp} แห่ง)</span></span>
       <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;เจ้าหนี้ OP-UC นอก CUP&quot; (บัญชี 2101020199.202) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว ไม่ขึ้นกับเดือนที่เลือกใน 💧 ประเมินสภาพคล่องถึง&#10;⚠️ ห้ามบวกรวมกับสองก้อนซ้ายเป็นคำของบก้อนเดียว — คนละฐานกัน">🧾 รวมเจ้าหนี้ OP-UC นอก CUP: <span style="font-size:16px;color:var(--gold)">${fmtM(sumPayIn)}</span> <span class="tgt-note" style="font-weight:400">(${nPayIn} แห่ง)</span></span></span></h3>
     <div class="exctl" style="margin:0 0 8px 0">
+      <label title="เลือกชุดบัญชีที่นับเป็น &quot;ค่าใช้จ่ายจำเป็น (MOE)&quot; — เปลี่ยนแค่ตัวเลข MOE/เดือน ทุกสูตรในตารางนี้ยังผูกกันเหมือนเดิม&#10;• MOE.Ver69 (ค่าเริ่มต้น) = นิยามล่าสุด ตรงกับคอลัมน์ &quot;เงินสดพอจ่าย MOE&quot; ในหน้า Watchlist&#10;• MOE.Ver68 = ชุดเดิม (มีค่าจ้างชั่วคราว(บริการ) แต่ไม่มีค่าเช่า)&#10;• Ver69 + จ่ายหนี้การค้า X% = จ่ายเงินสดให้ยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (9 บัญชี) แค่ X% ที่เหลือค้างเป็นเจ้าหนี้การค้า&#10;  → MOE เงินสดลดลง แต่ NI ไม่เปลี่ยน และเจ้าหนี้การค้าโตทุกเดือน (CR/QR/Cash แย่ลง)">💸 นิยาม MOE:
+        <select onchange="exSetMoeVer(this.value)">
+          <option value="69" ${exMoeVer()==='69'?'selected':''}>MOE.Ver69 (${EX.moeVers?EX.moeVers.n69:59} บัญชี — ค่าเริ่มต้น)</option>
+          <option value="68" ${exMoeVer()==='68'?'selected':''}>MOE.Ver68 (${EX.moeVers?EX.moeVers.n68:62} บัญชี — ชุดเดิม)</option>
+          <option value="69p" ${exMoeVer()==='69p'?'selected':''}>MOE.Ver69 + จ่ายหนี้การค้าบางส่วน</option>
+        </select></label>
+      ${exMoeVer()==='69p'?`<label title="จ่ายเงินสดกี่ % ของยอดยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (${EX.moeVers?EX.moeVers.nP9:9} บัญชี) · 100% = เท่า Ver69 · 0% = ไม่จ่ายเลย">🧾 จ่ายหนี้การค้า:
+        <input type="number" class="exnum" style="width:64px" step="5" min="0" max="100" value="${exPayPct()}" onchange="exSetPayPct(this.value)"> %</label>
+      <span class="tgt-note">ค้างชำระไว้ ${fmtM(stretchTot)}/ด. → เจ้าหนี้การค้าโตเดือนละเท่านี้ · NI ไม่เปลี่ยน</span>`:''}
       <label>🔎 กรองจังหวัด:
         <select onchange="exSet('prov',this.value)">
           <option value="all" ${EXST.prov==='all'?'selected':''}>ทุกจังหวัด</option>
@@ -2201,7 +2278,12 @@ function exBuildTSV(items, horLab){
     {h:'ระดับปัจจุบัน', v:x=>x.h.risk!=null?x.h.risk:''},
     {h:'ที่มาคะแนน', v:x=>srcT(x.h.src)},
     {h:'รายรับจำลอง/เดือน(ลบ.)', v:x=>M(x.r0.revMo)},
-    {h:'MOE กองเศรษฐฯ/เดือน(ลบ.)', v:x=>M(x.r0.moeMo), t:()=>sum(x=>x.r0.moeMo)},
+    {h:'นิยาม MOE', v:()=>exMoeVerLab()},
+    {h:'MOE กองเศรษฐฯ/เดือน(ลบ. · เงินสดจ่ายจริง)', v:x=>M(x.r0.moeMo), t:()=>sum(x=>x.r0.moeMo)},
+    ...(exMoeVer()==='69p'?[
+      {h:'MOE ตามเกณฑ์คงค้าง/เดือน(ลบ. · ตัวที่หักใน NI)', v:x=>M(x.r0.moeAccMo), t:()=>sum(x=>x.r0.moeAccMo)},
+      {h:'ส่วนที่ค้างเป็นเจ้าหนี้การค้า/เดือน(ลบ.)', v:x=>M(x.r0.stretchMo), t:()=>sum(x=>x.r0.stretchMo)},
+      {h:'เจ้าหนี้การค้าที่เพิ่มจากการค้างชำระถึง ก.ย.(ลบ.)', v:x=>M(x.r0.apStretch), t:()=>sum(x=>x.r0.apStretch)}]:[]),
     {h:'คชจ.นอกนิยาม/เดือน(ลบ.)', v:x=>M(x.r0.xmoeMo)},
     {h:'NIจำลอง/เดือน(ลบ.)', v:x=>M(x.r0.niM)},
     {h:'เงินสด+เทียบเท่า(ลบ.)', v:x=>M(x.h.bs.cn), t:()=>sum(x=>x.h.bs.cn)},
@@ -2702,7 +2784,7 @@ function renderSurvival(h, s){
       <div class="fld"><label>เร่งชำระหนี้สินหมุนเวียนสุทธิ/เดือน (เกินกว่าที่ก่อหนี้ใหม่): <b id="svDebtLab"></b> ${tip('**คืออะไร**: จ่ายชำระหนี้มากกว่าที่ก่อใหม่ต่อเดือน\n**สูตร**: จ่ายเท่ากับก่อใหม่ถือว่าอยู่ใน NI แล้ว ไม่นับซ้ำ นับเฉพาะส่วนสุทธิ — ทำให้เงินสด↓และ CL↓เท่ากัน (NWC คงที่)\n**ข้อมูลจาก**: ตั้งต้นจากค่าเฉลี่ยจ่ายชำระ/ก่อหนี้ใหม่จริงในตาราง "หนี้สินหมุนเวียนรายหมวดย่อย"')}
         <button type="button" class="planfin-btn" onclick="openDebtPlan()">✎ แผนชำระหนี้รายหมวด</button></label>
         <input type="range" id="svDebt" min="-${SURV.debtLim}" max="${SURV.debtLim}" step="50000" value="0">
-        <span class="surv-base">+ = เร่งจ่าย (เงินสด↓ หนี้↓) · − = ยืดจ่าย (เงินสด↑ หนี้↑) · หนี้คงเหลือ <b>${fmtM(SURV.clbd.total)}</b> · ปกติจ่าย ~<b>${fmtM(SURV.clbd.totalPay)}</b>/ก่อใหม่ ~<b>${fmtM(SURV.clbd.totalInc)}</b> ต่อเดือน · <a href="#" onclick="svReset('debt');return false">ล้างเป็น 0</a></span></div>` : '';
+        <span class="surv-base">+ = เร่งจ่าย (เงินสด↓ หนี้↓) · − = ค้างชำระนานขึ้น (เงินสด↑ หนี้↑) · หนี้คงเหลือ <b>${fmtM(SURV.clbd.total)}</b> · ปกติจ่าย ~<b>${fmtM(SURV.clbd.totalPay)}</b>/ก่อใหม่ ~<b>${fmtM(SURV.clbd.totalInc)}</b> ต่อเดือน · <a href="#" onclick="svReset('debt');return false">ล้างเป็น 0</a></span></div>` : '';
   const acpCtrl = (SURV.recv&&SURV.totalAR>0) ? `
       <div class="fld"><label>เร่งเก็บลูกหนี้ค้างรับ (เงินสดเข้าตามเดือนที่ตั้งเป้า): <b id="svAcpLab"></b> ${tip('**คืออะไร**: ตั้งเป้าจำนวนเงินที่จะเก็บลูกหนี้ได้เร็วขึ้น + เดือนที่คาดว่าจะได้รับเป็นเงินสด\n**สูตร**: เงินสดเข้าเป็นก้อนเดียว ณ เดือนที่ตั้งเป้า (ไม่ใช่ทันที) — CA/QN/NWC รวมไม่เปลี่ยน (ลูกหนี้ในนั้นอยู่แล้ว) เปลี่ยนเฉพาะเงินสด/Cash Ratio\n**ข้อมูลจาก**: ลูกหนี้สิทธิ UC/CSMBS/SSS (2610X/2620X/2630X) + ACP ที่คำนวณไว้')}
         <button type="button" class="planfin-btn" onclick="openAcpPlan()">✎ ตั้งเป้าจำนวนเงิน+เดือน รายกองทุน</button></label>
@@ -3206,7 +3288,7 @@ function debtRecalc(){
   const s=debtSums(), el=document.getElementById('dpNet'), netB=s.net*1e6;
   const col=s.net>0?'var(--red)':s.net<0?'var(--green)':'var(--mut)';
   const eff=s.net>0?`เงินสด↓ ${fmtM(netB)}/เดือน · หนี้สินหมุนเวียน↓ ${fmtM(netB)}/เดือน · ${debtDirNote(true)}`
-    :s.net<0?`ยืดจ่าย: เงินสด↑ ${fmtM(-netB)}/เดือน · หนี้↑ ${fmtM(-netB)}/เดือน · ${debtDirNote(false)}`
+    :s.net<0?`ค้างชำระนานขึ้น: เงินสด↑ ${fmtM(-netB)}/เดือน · หนี้↑ ${fmtM(-netB)}/เดือน · ${debtDirNote(false)}`
     :`จ่ายเท่ากับที่ก่อหนี้ใหม่ — เงินสด/หนี้คงที่ (อยู่ใน NI แล้ว ไม่นับซ้ำ)`;
   el.innerHTML=`จ่ายชำระรวม <b>${s.pay.toFixed(2)} ล.</b> · ก่อหนี้ใหม่รวม <b>${s.inc.toFixed(2)} ล.</b> → <b style="color:${col}">เร่งชำระสุทธิ ${s.net>0?'+':''}${s.net.toFixed(2)} ล./เดือน</b><br><span class="note">${eff}</span>`;
 }
