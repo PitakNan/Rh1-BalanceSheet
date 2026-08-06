@@ -20,18 +20,20 @@ global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0)
 const mkA=()=>new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exSolve,exSolveDown,
   exXferAdd,exXferDel,exXferClear,exXferAuto,exXferCap,exXferWarnCap,exXferList,exXferIn,exXferOut,exXferNet,
   exXfToggle,exXfSubmit,HARD:EX_XF_HARD,WARN:EX_XF_WARN,
+  exTopUpGross,exArIn,exArRaw,exArCut,exSetArPct,exSetArOvr,exArClear,exArPct,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},
-  setEXSORT:v=>{EXSORT=v},setEXXF:v=>{EXXF=v},getEXST:()=>EXST};`)();
+  setEXSORT:v=>{EXSORT=v},setEXXF:v=>{EXXF=v},setEXAR:v=>{EXAR=v},getEXST:()=>EXST};`)();
+const EXSTof=A=>A.getEXST();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=mmo=>({mmo,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
-  tj:{mode:'off',scope:'crisis'},inj:{},open:{},xfer:[]});
+  tj:{mode:'off',scope:'crisis'},inj:{},open:{},xfer:[],arPct:100,arOvr:{},wide:false});
 const fmtM=v=>{if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()};
 let fail=[];
 const chk=(ok,msg)=>{ console.log(`  ${ok?'✅':'❌'} ${msg}`); if(!ok) fail.push(msg); };
 const boot=(mmo=3)=>{ els={}; STORE={}; const A=mkA(); A.setEX(j);
   A.setEXTJ({debtors:new Set(),shares:{},refund:{},total:0,uncovered:0});
-  A.setEXST(ST(mmo)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1}); A.setEXXF({}); return A; };
+  A.setEXST(ST(mmo)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1}); A.setEXXF({}); A.setEXAR({}); return A; };
 const left=(A,h)=>A.exMoeLeft({h,r0:A.exSimPath(h,0)});
 const totShort=A=>j.hosp.reduce((s,h)=>s+A.exTopUp({h,r0:A.exSimPath(h,0)}),0);
 const totNeed=A=>j.hosp.reduce((s,h)=>s+(A.exSolve(h)||0),0);
@@ -197,6 +199,94 @@ console.log('━━ 9) ข้อความในเซลล์สั้นล
   chk(/ปกติ: เงินสด(ไม่)?ติดลบ/.test(cell), 'บรรทัดล่างใช้ป้ายสั้น "ปกติ:" แต่ยังบอกผลชัด');
   chk(cell.length<160, `ความยาวข้อความในเซลล์ ${cell.length} ตัวอักษร (สั้นลงจริง)`);
   console.log(`     ตัวอย่าง: ${cell.slice(0,150)}`);
+}
+console.log();
+
+console.log('━━ 10) ลูกหนี้ปรับลดได้ (เจ้าหนี้เคลียร์ 0 ได้ แต่ลูกหนี้อาจเก็บไม่ได้) ━━');
+{
+  const A=boot();
+  const totAr=()=>j.hosp.reduce((s,h)=>s+A.exArIn(h),0);
+  const totShort=()=>j.hosp.reduce((s,h)=>s+A.exTopUp({h,r0:A.exSimPath(h,0)}),0);
+  const ar0=totAr(), sh0=totShort();
+  chk(Math.abs(ar0-499.33e6)<1e6, `ค่าเริ่มต้น 100% = ลูกหนี้เต็มจำนวน ${fmtM(ar0)}`);
+  A.exSetArPct(60);
+  chk(Math.abs(totAr()-ar0*0.6)<1e3, `ปรับ % รวมทั้งเขตเป็น 60% → ลูกหนี้ ${fmtM(totAr())}`);
+  chk(totShort()>sh0, `เก็บได้น้อยลง → ส่วนขาดสภาพคล่องเพิ่มตามจริง (${fmtM(sh0)} → ${fmtM(totShort())})`);
+  A.exSetArPct(100);
+  chk(Math.abs(totAr()-ar0)<1e3, 'ปรับกลับ 100% แล้วได้ค่าเดิม');
+  // กำหนดเองรายแห่ง ชนะ % รวม
+  const big=j.hosp.filter(h=>A.exArRaw(h)>5e6)[0];
+  A.exSetArOvr(big.hcode, 0);
+  chk(A.exArIn(big)===0 && Math.abs(A.exArCut(big)-A.exArRaw(big))<1,
+    `กำหนดเอง ${big.name}=0 (เต็ม ${fmtM(A.exArRaw(big))}) → เก็บได้ 0 · ตัดออก ${fmtM(A.exArCut(big))}`);
+  A.exSetArPct(50);
+  chk(A.exArIn(big)===0, 'ค่ากำหนดเองชนะ % รวม (ปรับ % แล้วแห่งที่กำหนดเองไม่ขยับ)');
+  A.exSetArPct(100);
+  A.exSetArOvr(big.hcode, 999999);                     // กรอกเกินยอดจริง
+  chk(Math.abs(A.exArIn(big)-A.exArRaw(big))<1, `กรอกเกินยอดในบัญชี ถูกจำกัดที่ ${fmtM(A.exArIn(big))} (เก็บได้เกินที่มีจริงไม่ได้)`);
+  A.exSetArOvr(big.hcode, '');                          // ล้างค่ากำหนดเอง
+  chk(!(EXSTof(A).arOvr||{})[big.hcode], 'ล้างค่ากำหนดเองรายแห่งได้ (คืนค่าเต็ม)');
+  A.exSetArOvr(big.hcode, 1); A.exArClear();
+  chk(Math.abs(totAr()-ar0)<1e3 && Object.keys(EXSTof(A).arOvr||{}).length===0, 'ปุ่มคืนค่าเต็มทั้งหมดล้างทั้ง % และรายแห่ง');
+  // เซฟถาวร
+  A.exSetArOvr(big.hcode, 1);
+  const saved=Object.values(STORE).map(v=>{try{return JSON.parse(v)}catch(e){return null}}).filter(Boolean);
+  chk(saved.some(o=>o.arOvr&&Object.keys(o.arOvr).length>0), 'ค่าที่กำหนดเองถูกเซฟถาวร (รีเฟรชยังอยู่)');
+  // UI
+  A.exRender();
+  const html=els.exResBox.innerHTML;
+  chk(/📥 ลูกหนี้ที่เก็บได้:/.test(html), 'มีช่องปรับ % ลูกหนี้รวมทั้งเขตเหนือตาราง');
+  chk(/exArEdit/.test(html), 'คอลัมน์ลูกหนี้มีปุ่ม ✎ แก้รายแห่ง');
+  chk(/ตัดออก/.test(html), 'เซลล์ที่ถูกปรับลดแสดงยอดที่ตัดออก');
+}
+console.log();
+
+console.log('━━ 11) ส่วนขาดสภาพคล่องไม่หายไปเมื่อได้รับโยก (แสดงยอดตั้งต้น + รับแล้ว) ━━');
+{
+  const A=boot();
+  const r=j.hosp.find(h=>A.exTopUp({h,r0:A.exSimPath(h,0)})>3e6);
+  const g0=A.exTopUpGross({h:r,r0:A.exSimPath(r,0)});
+  const gv=j.hosp.find(h=>left(A,h)>50e6);
+  A.exXferAdd(gv.hcode, r.hcode, g0);
+  chk(Math.abs(A.exTopUpGross({h:r,r0:A.exSimPath(r,0)})-g0)<1,
+    `${r.name}: ยอดตั้งต้น ${fmtM(g0)} คงเดิมหลังรับโยกเต็มจำนวน (ไม่หายไป)`);
+  chk(A.exTopUp({h:r,r0:A.exSimPath(r,0)})<1, 'ส่วนที่ "ยังขาด" เหลือ 0 จริง (แยกกันคนละตัว)');
+  chk(Math.abs(A.exXferIn(r)-g0)<1, `รับแล้วรวม ${fmtM(A.exXferIn(r))}`);
+  A.exRender();
+  const html=els.exResBox.innerHTML;
+  chk(/รับแล้ว/.test(html), 'เซลล์บอก "รับแล้ว X จาก N แห่ง"');
+  chk(/✅ ครบแล้ว/.test(html), 'เซลล์บอก "ครบแล้ว" เมื่อเติมเต็ม');
+  // ชิปสรุปต้องยังนับยอดตั้งต้น ไม่หายไปเมื่อจัดสรรกันเองแล้ว
+  const chip=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:]+: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
+  const wantSum=j.hosp.reduce((s,h)=>s+A.exTopUpGross({h,r0:A.exSimPath(h,0)}),0);
+  const wantN=j.hosp.filter(h=>A.exTopUpGross({h,r0:A.exSimPath(h,0)})>0).length;
+  chk(!!chip&&chip[1]===fmtM(wantSum)&&+chip[2]===wantN,
+    `ชิปด้านบนนับยอดตั้งต้น ${chip?chip[1]+' / '+chip[2]+' แห่ง':'ไม่พบ'} (ควร ${fmtM(wantSum)} / ${wantN}) — ไม่หายเมื่อโยกกันเองแล้ว`);
+  // จัดสรรครบทุกแห่งแล้วชิปก็ยังต้องไม่เป็น 0
+  A.exXferClear(); A.exXferAuto(); A.exRender();
+  const chip2=els.exResBox.innerHTML.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:]+: <span[^>]*>([^<]+)<\/span>/);
+  chk(!!chip2&&chip2[1]!=='0'&&chip2[1]!=='—', `จัดสรรครบทุกแห่งแล้วชิปยังแสดง ${chip2?chip2[1]:'—'} (ไม่กลายเป็น 0)`);
+}
+console.log();
+
+console.log('━━ 12) โหมดกว้าง + ป้ายผู้สนับสนุนเรียงลงล่าง ━━');
+{
+  const A=boot();
+  A.exRender();
+  const n0=((els.exResBox.innerHTML.match(/<tr>[\s\S]*?<\/tr>/)||[''])[0].match(/<th\b/g)||[]).length;
+  const st=A.getEXST(); st.wide=true; A.setEXST(st); A.exRender();
+  const html=els.exResBox.innerHTML;
+  const n1=((html.match(/<tr>[\s\S]*?<\/tr>/)||[''])[0].match(/<th\b/g)||[]).length;
+  chk(n1===n0-1, `โหมดกว้างซ่อนคอลัมน์จังหวัด (${n0} → ${n1} ช่อง)`);
+  chk(/ex-sticky ex-wide/.test(html), 'ตารางได้คลาส ex-wide');
+  chk(/class="wide-name"/.test(html), 'คอลัมน์ชื่อ รพ. ใช้คลาสแคบ (wide-name)');
+  chk(/min-width:860px/.test(html), 'min-width ตารางลดลงในโหมดกว้าง');
+  const src=fs.readFileSync(SRC,'utf8');
+  const css=(src.match(/<style>([\s\S]*?)<\/style>/)||[])[1]||'';
+  chk(/\.ex-wide td:nth-child\(1\)\{position:sticky;left:0/.test(css), 'โหมดกว้างย้าย sticky มาคอลัมน์ที่ 1 (ชื่อ รพ.) ไม่ตรึงผิดคอลัมน์');
+  chk(/\.ex-wide td:nth-child\(2\)\{position:static/.test(css), 'คอลัมน์ที่ 2 คลาย sticky ในโหมดกว้าง');
+  chk(/\.xfin\{display:flex/.test(css), 'ป้ายผู้สนับสนุนเป็น block เรียงลงล่าง ไม่ต่อไปทางขวา');
+  chk(/\.xfin\{[^}]*max-width:190px/.test(css), 'ป้ายมีความกว้างจำกัด (ไม่ยืดตารางออกด้านขวา)');
 }
 console.log();
 

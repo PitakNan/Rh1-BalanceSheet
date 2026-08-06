@@ -338,8 +338,18 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
 /* 🔄 โยกเงินช่วยกัน: ปุ่มในเซลล์ + ป้ายบอกที่มาของเงินที่รับโยกมา */
 .xfbtn{font-family:inherit;font-size:10.5px;font-weight:600;padding:1px 6px;border:1px solid var(--blue);border-radius:6px;background:var(--card);color:var(--blue);cursor:pointer;white-space:nowrap;margin-top:2px}
 .xfbtn.on{background:var(--blue);color:#fff}
-.xfin{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;color:var(--green);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 3px 1px 6px;margin:1px 3px 1px 0;white-space:nowrap}
-.xfin b{cursor:pointer;color:var(--red);padding:0 2px}
+/* ป้ายผู้สนับสนุน: เรียง "ลงล่าง" ทีละบรรทัด ไม่ต่อไปทางขวา (ไม่งั้นตารางยืดจนบังคอลัมน์อื่น) */
+.xfin{display:flex;align-items:center;justify-content:space-between;gap:3px;font-size:10px;font-weight:600;color:var(--green);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 3px 1px 6px;margin:2px 0 0 0;max-width:190px}
+.xfin b{cursor:pointer;color:var(--red);padding:0 2px;flex-shrink:0}
+.arbtn{font-family:inherit;font-size:10px;padding:0 4px;border:1px solid var(--line);border-radius:5px;background:var(--card);color:var(--mut);cursor:pointer;margin-left:3px}
+.arbtn:hover{border-color:var(--blue);color:var(--blue)}
+/* โหมดกว้าง: คอลัมน์ชื่อ รพ. แคบลง ตัดคำ + ซ่อนคอลัมน์จังหวัดไปเลย */
+table.wltbl.ex-sticky td.wide-name{max-width:120px;white-space:normal;line-height:1.25}
+/* โหมดกว้างซ่อนคอลัมน์จังหวัด → ชื่อ รพ. กลายเป็นคอลัมน์ที่ 1 ต้องย้าย sticky มาที่ 1 ไม่งั้นตรึงผิดคอลัมน์ */
+table.wltbl.ex-sticky.ex-wide td:nth-child(2){position:static;background:transparent;box-shadow:none}
+table.wltbl.ex-sticky.ex-wide th:nth-child(2){left:auto;z-index:3;box-shadow:0 1px 0 var(--line)}
+table.wltbl.ex-sticky.ex-wide td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--card);box-shadow:1px 0 0 var(--line)}
+table.wltbl.ex-sticky.ex-wide th:nth-child(1){left:0;z-index:5;background:var(--th-bg);box-shadow:1px 0 0 var(--line),0 1px 0 var(--line)}
 /* บรรทัดย่อยในเซลล์ตาราง (เช่น "พอจ่าย MOE X เดือน" ใต้ยอดเงินสด) */
 .cellsub{display:block;font-size:10.5px;font-weight:400;color:var(--mut);white-space:nowrap}
 .cellsub.warn{color:var(--red)}
@@ -1187,6 +1197,7 @@ function linCards(){
 let EX=null, EXST=null, EXOPEN={}, EXTJ=null, EXROWS=null, EX_TSV='';
 let EXBRK={};   // hcode -> ระดับเป้าที่กางแผงเจาะเกณฑ์ 7 คะแนนอยู่ (undefined = ปิด) — ไม่เซฟลง localStorage เพราะเป็นมุมมองชั่วคราว
 let EXXF={};    // hcode -> กางแผงโยกเงินอยู่ (มุมมองชั่วคราว ไม่เซฟ · ตัวแผนโยกจริงอยู่ใน EXST.xfer ซึ่งเซฟถาวร)
+let EXAR={};    // hcode -> กำลังแก้ตัวเลขลูกหนี้ในเซลล์อยู่ (ชั่วคราว · ค่าที่กำหนดเองเก็บใน EXST.arOvr ซึ่งเซฟถาวร)
 let _refundCache={sig:null, refund:null};   // cache ผล solver "ยกหนี้เจาะจง" (คำนวณใหม่เฉพาะตอน state กระทบ sim เปลี่ยน)
 let EXSORT={col:null,dir:-1};
 const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
@@ -1222,7 +1233,18 @@ function exMoeMonths(){ const v=+EXST.mmo; return (v>=1&&v<=EX_MMO_MAX)?v:exMoeM
 function exMoeTargetLab(){ return tLab(addMo(EX.hosp[0].bs.t, exMoeMonths())); }
 function exHorMonths(h){ return exMoeMonths(); }
 function exPayIn(h){ return (h.tj&&h.tj.payIn)||0; }
-function exArIn(h){ return (h.tj&&h.tj.arIn)||0; }
+// ── ลูกหนี้ตามจ่าย: ปรับลดได้ (เจ้าของงานสั่ง 6 ส.ค. 69) ─────────────────────────────
+// เหตุผล: ฝั่ง "เจ้าหนี้" เคลียร์เป็น 0 ได้แน่นอนทั้งเขต เพราะเป็นหนี้กันเองในเครือข่าย สป.สธ.
+// แต่ฝั่ง "ลูกหนี้" เกินมา 189 ลบ. ซึ่งบางส่วนน่าจะเป็นกรมอื่น/นอกเขต = อาจเรียกเก็บไม่ได้
+// และยังไม่รู้ว่าที่ไหนเก็บไม่ได้ → ให้ปรับ % รวมทั้งเขต และ/หรือ แก้เป็นรายแห่งด้วยมือ
+function exArRaw(h){ return (h.tj&&h.tj.arIn)||0; }
+function exArPct(){ const v=+EXST.arPct; return (v>=0&&v<=100)?v:100; }   // % ที่คาดว่าเก็บได้ (ค่าเริ่มต้น 100)
+function exArIn(h){
+  const o=EXST.arOvr&&EXST.arOvr[h.hcode];            // กำหนดเองรายแห่ง (บาท) ชนะ % รวม
+  if(o!=null) return Math.max(0, Math.min(+o||0, exArRaw(h)));
+  return exArRaw(h)*exArPct()/100;
+}
+function exArCut(h){ return exArRaw(h)-exArIn(h); }   // ส่วนที่ตัดออก (คาดว่าเก็บไม่ได้)
 // ── ส่วนต่างลูกหนี้−เจ้าหนี้ "ทั้งเขต" (ไม่ผูกตัวกรองจังหวัด) — ใช้ในคำเตือนว่าคู่หนี้อยู่นอกชุด 103 แห่ง ──
 // คำนวณสดทุกครั้ง ห้าม hardcode เพราะยอดเปลี่ยนทุกงวด (กับดักเดิมของผัง lineage — ดู 7.5)
 function exTjGapAll(){
@@ -1246,12 +1268,20 @@ function exXferNet(h){ return exXferIn(h)-exXferOut(h); }
 function exMoeLeft(x){ return (x.h.bs.cn-exPayIn(x.h)+exArIn(x.h)+exXferNet(x.h)) - (x.r0.moeMo||0)*exHorMonths(x.h); }
 // เงินที่ต้องเติมขั้นต่ำให้ "อยู่รอด" ถึงเดือนเป้า — คนละตัวกับเงินสนับสนุน Solver (ซึ่งเล็งระดับวิกฤต)
 function exTopUp(x){ const v=exMoeLeft(x); return v<0?-v:0; }
+// ── ส่วนขาด "ตั้งต้น" ก่อนได้รับเงินโยกช่วย (เจ้าของงานสั่ง 6 ส.ค. 69) ──────────────
+// เดิมพอโยกเงินเข้าไปแล้วตัวเลขส่วนขาดลดจนหายไป ทำให้ไม่รู้ว่า รพ. นี้เคย "ต้องการเติมเงิน" เท่าไหร่
+// จึงแยกเป็น 2 ตัว: Gross = ความต้องการตั้งต้น (ไม่หักเงินที่รับโยกมา) · exTopUp = ที่ยังขาดอยู่จริง
+// ชิปสรุปข้างหัวตารางใช้ Gross เพื่อให้ยอด "รวมเงินเติมตามสภาพคล่อง" ไม่หายไปเมื่อจัดสรรกันเองแล้ว
+function exTopUpGross(x){
+  const v=exMoeLeft(x)-exXferIn(x.h);   // ถอดเฉพาะเงินที่ "รับโยกมา" ออก (เงินที่โยกออกไปยังนับเป็นภาระจริง)
+  return v<0?-v:0;
+}
 const EX_SORT_GETTERS={
   prov:x=>x.h.prov||'', name:x=>x.h.name||'',
   risk0:x=>x.h.risk??-1, moe:x=>x.r0.moeMo||0, ni:x=>x.r0.niM||0,
   cash:x=>x.r0.cashOut==null?Infinity:x.r0.cashOut, cashbal:x=>x.h.bs.cn||0,
   tjpay:x=>exPayIn(x.h), tjar:x=>exArIn(x.h),
-  moeleft:x=>exMoeLeft(x), topup:x=>exTopUp(x),
+  moeleft:x=>exMoeLeft(x), topup:x=>exTopUpGross(x),
   sep0:x=>x.r0.sepRisk??-1, give:x=>x.give||0, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
 };
 function exSetSort(col){
@@ -1278,12 +1308,16 @@ function exDefaultState(){
           moePct:{}, moePctAll:0, moeOff:{}, moeOvr:{}, xmoe:true, adj:{}, adjAll:0, revOff:{}, ovr:{}, tj:{mode:'off',scope:'crisis'}, inj:{}, open:{rev:false,moe:false},
           // xfer: แผนโยกเงินช่วยกันระหว่าง รพ. [{f:hcodeผู้ให้, t:hcodeผู้รับ, a:จำนวนบาท}] — เจ้าของงานสั่ง 6 ส.ค. 69
           // เก็บถาวรใน localStorage (เป็นแผนจัดสรรจริง ไม่ใช่มุมมองชั่วคราวแบบ hub)
-          xfer:[]};
+          xfer:[],
+          // arPct/arOvr: ลูกหนี้ตามจ่ายที่คาดว่า "เก็บได้จริง" — % รวมทั้งเขต + กำหนดเองรายแห่ง (บาท)
+          arPct:100, arOvr:{},
+          // wide: โหมดกว้าง — ซ่อนคอลัมน์จังหวัด + ย่อคอลัมน์ชื่อ รพ. เพื่อให้เห็นคอลัมน์ขวาครบในหน้าเดียว
+          wide:false};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exLoad(){
   EXST=exDefaultState();
-  try{ const s=JSON.parse(localStorage.getItem(exStoreKey())||'null'); if(s) EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},xfer:Array.isArray(s.xfer)?s.xfer:[]}; }catch(e){}
+  try{ const s=JSON.parse(localStorage.getItem(exStoreKey())||'null'); if(s) EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},xfer:Array.isArray(s.xfer)?s.xfer:[],arOvr:{...(s.arOvr||{})}}; }catch(e){}
 }
 // % ปรับรายรับ (จำนวนเต็ม −100..+200): override ราย รพ. > ค่ากลุ่ม > 0
 function exPct(hc,p,seg){
@@ -1596,6 +1630,18 @@ function exSolveDown(h, L, ch){
 // EXBRK[hcode] = ระดับเป้าที่กำลังดูอยู่ในแผง (undefined = แผงปิด) — เป็นการดูรายแห่ง ไม่กระทบเป้าทั้งเขต (EXST.tgt)
 function exBrkToggle(hc){ if(EXBRK[hc]!=null) delete EXBRK[hc]; else EXBRK[hc]=EXST.tgt; exRender(); }
 function exXfToggle(hc){ if(EXXF[hc]) delete EXXF[hc]; else EXXF[hc]=1; exRender(); }
+// ── ลูกหนี้: ปรับ % รวมทั้งเขต / กำหนดเองรายแห่ง / ล้างค่าที่กำหนดเอง ──
+function exSetArPct(v){ const n=Math.max(0,Math.min(100,Math.round(+v||0))); EXST.arPct=n; exSave(); exRender(); }
+function exArEdit(hc){ if(EXAR[hc]) delete EXAR[hc]; else EXAR[hc]=1; exRender(); }
+function exSetArOvr(hc,v){
+  EXST.arOvr=EXST.arOvr||{};
+  const s=String(v==null?'':v).trim();
+  if(s===''){ delete EXST.arOvr[hc]; }
+  else { const h=EX.hosp.find(p=>p.hcode===hc); EXST.arOvr[hc]=Math.max(0,Math.min(Math.round((+s||0)*1e6), exArRaw(h))); }
+  delete EXAR[hc]; exSave(); exRender();
+}
+function exArClear(){ EXST.arOvr={}; EXST.arPct=100; exSave(); exRender(); }
+function exSetWide(v){ EXST.wide=!!v; exSave(); exRender(); }
 // ── แผงโยกเงินช่วยรายแห่ง (กางจากปุ่ม 🔄 โยกช่วย ในคอลัมน์เงินสดคงเหลือหลังภาระ MOE) ──
 function exXfHtml(x, sepLab){
   const h=x.h, hc=h.hcode;
@@ -2238,8 +2284,12 @@ function exRender(){
   // ยอดรวมสองก้อนนี้ผูกกับตัวกรองจังหวัด (items มาจาก exRows) และ dropdown 💧 ประเมินสภาพคล่องถึง
   // ⚠️ คนละความหมายกับ "เงินสนับสนุนรวม" (Solver): sumTopUp เป็นสถานการณ์สมมติว่ารายรับไม่เข้า
   //    ส่วน sumPayIn เป็นหนี้จริงที่อยู่ในงบทดลองแล้ว — ห้ามบวกรวมกันเป็นคำของบก้อนเดียว
-  const sumTopUp=items.reduce((s,x)=>s+exTopUp(x),0);
-  const nTopUp=items.filter(x=>exTopUp(x)>0).length;
+  // ⚠️ ชิป "รวมเงินเติมตามสภาพคล่อง" ใช้ Gross (ความต้องการตั้งต้น) ไม่ใช่ยอดที่เหลือ
+  //    เพื่อไม่ให้ตัวเลขหายไปเมื่อจัดสรรโยกกันเองแล้ว (เจ้าของงานสั่ง 6 ส.ค. 69)
+  const sumTopUp=items.reduce((s,x)=>s+exTopUpGross(x),0);
+  const nTopUp=items.filter(x=>exTopUpGross(x)>0).length;
+  const sumGot=items.reduce((s,x)=>s+exXferIn(x.h),0);
+  const sumRest=items.reduce((s,x)=>s+exTopUp(x),0);
   const sumPayIn=items.reduce((s,x)=>s+exPayIn(x.h),0);
   const nPayIn=items.filter(x=>exPayIn(x.h)>0).length;
   const sumArIn=items.reduce((s,x)=>s+exArIn(x.h),0);
@@ -2276,13 +2326,14 @@ function exRender(){
   };
   // แถวหัวตาราง — สร้างก่อนแถวข้อมูล เพื่อนับจำนวนคอลัมน์จริงไปใช้เป็น colspan ของแถวย่อย
   // (เดิม hardcode ไว้ ทำให้ลืมแก้ทุกครั้งที่เพิ่ม/ซ่อนคอลัมน์ — ดู RISK_EXEC_MODEL.md 7.7)
-  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน<br><span style="font-size:10px;font-weight:600;opacity:.75">'+exMoeVerShort()+'</span>','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้<br>OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดคงเหลือ<br>หลังภาระ MOE<br>ถึง '+exMoeTargetLab(),'moeleft')}${exSortTh('ส่วนขาด<br>สภาพคล่อง','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${EX_SHOW_GIVE?exSortTh('เงินที่<br>ยกให้','give'):''}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
+  const WIDE=!!EXST.wide;
+  const exHeadRow=`<tr>${WIDE?'':exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน<br><span style="font-size:10px;font-weight:600;opacity:.75">'+exMoeVerShort()+'</span>','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้<br>OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดคงเหลือ<br>หลังภาระ MOE<br>ถึง '+exMoeTargetLab(),'moeleft')}${exSortTh('ส่วนขาด<br>สภาพคล่อง','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${EX_SHOW_GIVE?exSortTh('เงินที่<br>ยกให้','give'):''}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
   const EX_NCOL=(exHeadRow.match(/<th\b/g)||[]).length;
   const rowsHtml=items.map(x=>{
     const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc], brkOpen=EXBRK[hc]!=null;
     const main=`<tr>
-      <td>${h.prov||''}</td>
-      <td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.cls?' '+h.cls:''}</span> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a></td>
+      ${WIDE?'':`<td>${h.prov||''}</td>`}
+      <td${WIDE?' class="wide-name"':''}><b>${h.name}</b>${WIDE?`<span class="cellsub">${h.prov||''}</span>`:` <span class="tgt-note">${h.type}${h.cls?' '+h.cls:''}</span> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a>`}</td>
       <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span></td>
       <td>${fmtM(r0.moeMo)}</td>
       <td style="color:${r0.niM<0?'var(--red)':'var(--green)'}">${sgnM(r0.niM)}</td>
@@ -2302,7 +2353,18 @@ function exRender(){
         return `<td${gap>0?' style="color:var(--red);font-weight:700"':''}>${fmtM(pay)}${
           gap>0?`<span class="cellsub warn">เงินสดไม่พอจ่าย ขาด ${fmtM(gap)} ⚠️</span>`:''}</td>`;
       })()}
-      ${EX_SHOW_TJAR?`<td>${(h.tj&&h.tj.arIn>0)?fmtM(h.tj.arIn):'<span class="tgt-note">–</span>'}</td>`:''}
+      ${EX_SHOW_TJAR?(()=>{
+        // ลูกหนี้ปรับลดได้ — กด ✎ แก้เป็นรายแห่ง (เผื่อเรียกเก็บจากกรมอื่น/นอกเขตไม่ได้)
+        const raw=exArRaw(h), eff=exArIn(h), cut=exArCut(h), ovr=EXST.arOvr&&EXST.arOvr[hc]!=null;
+        if(!(raw>0)) return '<td><span class="tgt-note">–</span></td>';
+        if(EXAR[hc]) return `<td><input type="number" class="exnum" style="width:78px" step="0.1" min="0" max="${(raw/1e6).toFixed(2)}"
+          value="${(eff/1e6).toFixed(2)}" placeholder="${(raw/1e6).toFixed(2)}" autofocus
+          onchange="exSetArOvr('${hc}',this.value)" onkeydown="if(event.key==='Enter')exSetArOvr('${hc}',this.value)">
+          <span class="cellsub">ลบ. · เต็ม ${fmtM(raw)}<br><a class="ovlink" onclick="exSetArOvr('${hc}','')">คืนค่าเต็ม</a></span></td>`;
+        return `<td${cut>0?' style="color:var(--gold)"':''}>${fmtM(eff)}
+          <button type="button" class="arbtn" onclick="exArEdit('${hc}')" title="ปรับลดยอดที่คาดว่าเก็บได้จริงของ รพ. นี้ (เผื่อเรียกเก็บจากกรมอื่น/นอกเขตไม่ได้)">✎</button>${
+          cut>0?`<span class="cellsub warn">ตัดออก ${fmtM(cut)}${ovr?' (กำหนดเอง)':' ('+exArPct()+'%)'}</span>`:''}</td>`;
+      })():''}
       ${(()=>{
         // เซลล์นี้มี 2 บรรทัดที่มาจาก "คนละสมมติฐาน" — ต้องติดป้ายกำกับให้ชัด ไม่งั้นอ่านแล้วดูขัดกันเอง
         //   ตัวเลขใหญ่  = กรณีรายรับไม่เป็นไปตามแผน  → (เงินสด + ลูกหนี้ตามจ่าย − เจ้าหนี้ตามจ่าย) − MOE/เดือน × เดือนที่ประเมิน
@@ -2322,11 +2384,17 @@ function exRender(){
           left<0?'ขาด '+fmtM(-left):fmtM(left)}<span class="cellsub">สมมติไม่มีรายรับ · MOE ${mm}ด. ${fmtM((r0.moeMo||0)*mm)}${arIn>0?' · +ลูกหนี้ '+fmtM(arIn):''}${xOut>0?' · −โยกออก '+fmtM(xOut):''}</span>${sub}${btn}</td>`;
       })()}
       ${(()=>{
-        // ส่วนขาดสภาพคล่อง + ป้ายบอก "เงินที่รับโยกมาจากใคร" ตามที่เจ้าของงานขอ (+รพ.??? xxx)
-        const t=exTopUp(x), ins=exXferList().filter(z=>z.t===hc);
+        // ส่วนขาดสภาพคล่อง — แสดง "ความต้องการตั้งต้น" (Gross) เป็นตัวเลขหลัก ไม่ให้หายไปเมื่อได้รับโยก
+        // แล้วบอกใต้ตัวเลขว่า รับมาแล้วรวมเท่าไหร่ จากใครบ้าง และยังขาดอีกเท่าไหร่ (เจ้าของงานสั่ง 6 ส.ค. 69)
+        // ป้ายผู้สนับสนุนเรียง "ลงล่าง" ไม่ต่อไปทางขวา เพราะทำให้ตารางยืดจนบังคอลัมน์อื่น
+        const gross=exTopUpGross(x), rest=exTopUp(x), got=exXferIn(h);
+        const ins=exXferList().filter(z=>z.t===hc);
         const badges=ins.map(z=>{ const g=EX.hosp.find(p=>p.hcode===z.f);
           return `<span class="xfin" title="รับโยกจาก ${g?g.name:z.f}${g&&g.prov!==h.prov?' (ข้ามจังหวัด '+g.prov+')':''} — กด ✕ เพื่อยกเลิก">+${g?g.name:z.f} ${fmtM(z.a)}<b onclick="exXferDel('${z.f}','${hc}')">✕</b></span>`; }).join('');
-        return `<td>${t>0?`<b style="color:var(--red)">${fmtM(t)}</b>`:'<span class="tgt-note">–</span>'}${badges?`<span class="cellsub">${badges}</span>`:''}</td>`;
+        if(!(gross>0)) return '<td><span class="tgt-note">–</span></td>';
+        return `<td><b style="color:${rest>0?'var(--red)':'var(--green)'}">${fmtM(gross)}</b>${
+          got>0?`<span class="cellsub" style="color:var(--green)">รับแล้ว ${fmtM(got)} จาก ${ins.length} แห่ง</span>`:''}${
+          got>0?(rest>0?`<span class="cellsub warn">ยังขาด ${fmtM(rest)}</span>`:`<span class="cellsub" style="color:var(--green)">✅ ครบแล้ว</span>`):''}${badges}</td>`;
       })()}
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
       ${EX_SHOW_GIVE?`<td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>`:''}
@@ -2388,6 +2456,12 @@ function exRender(){
       ${exMoeVer()==='69p'?`<label title="จ่ายเงินสดกี่ % ของยอดยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (${EX.moeVers?EX.moeVers.nP9:9} บัญชี) · 100% = เท่า Ver69 · 0% = ไม่จ่ายเลย">🧾 จ่ายหนี้การค้า:
         <input type="number" class="exnum" style="width:64px" step="5" min="0" max="100" value="${exPayPct()}" onchange="exSetPayPct(this.value)"> %</label>
       <span class="tgt-note" title="ยืดหนี้ = ไม่จ่ายเงินสดออก แต่ไปกองเป็นเจ้าหนี้การค้าเท่ากันเป๊ะ&#10;• เงินสด (CA) เพิ่ม X · เจ้าหนี้ (CL) เพิ่ม X เท่ากัน&#10;• NWC = CA − CL จึงเท่าเดิมทุกบาท&#10;• NI เท่าเดิม (เกณฑ์คงค้าง — ค่าใช้จ่ายเกิดแล้ว เพียงยังไม่จ่าย)&#10;• CR/QR/Cash ratio ขยับเล็กน้อยเท่านั้น&#10;รพ. ที่ต้องเติมเงินติดเกณฑ์ NWC ติดลบ + NI ติดลบ ซึ่งการยืดหนี้แตะไม่ได้ทั้งคู่ → เงินสนับสนุนจึงเท่าเดิม">ค้างชำระไว้ ${fmtM(stretchTot)}/ด. → เจ้าหนี้การค้าโตเดือนละเท่านี้ · NI ไม่เปลี่ยน · <b>💰 เงินสนับสนุนมักไม่ขยับตาม %</b> (ยืดหนี้ไม่ใช่เงินใหม่ — CA กับ CL โตเท่ากัน NWC/NI จึงเท่าเดิม) ℹ️</span>`:''}
+      ${EX_SHOW_TJAR?`<label title="ลูกหนี้ตามจ่ายที่คาดว่า &quot;เก็บได้จริง&quot; กี่ % ของยอดในบัญชี&#10;ฝั่งเจ้าหนี้เคลียร์เป็น 0 ได้แน่นอนเพราะเป็นหนี้กันเองในเครือข่าย สป.สธ.&#10;แต่ฝั่งลูกหนี้เกินมา ${fmtM(exTjGapAll().gap)} ซึ่งบางส่วนน่าจะเป็นกรมอื่น/นอกเขต = อาจเรียกเก็บไม่ได้&#10;ปรับ % รวมทั้งเขตที่นี่ หรือกด ✎ ในคอลัมน์ลูกหนี้เพื่อแก้เป็นรายแห่ง">📥 ลูกหนี้ที่เก็บได้:
+        <input type="number" class="exnum" style="width:58px" step="5" min="0" max="100" value="${exArPct()}" onchange="exSetArPct(this.value)"> %</label>
+      ${(()=>{ const nOvr=Object.keys(EXST.arOvr||{}).length, cutAll=EX.hosp.reduce((s,p)=>s+exArCut(p),0);
+        return cutAll>0?`<span class="tgt-note">ตัดออกรวม ${fmtM(cutAll)}${nOvr?` · กำหนดเอง ${nOvr} แห่ง`:''} <a class="ovlink" onclick="exArClear()">คืนค่าเต็มทั้งหมด</a></span>`:''; })()}`:''}
+      <label title="ซ่อนคอลัมน์จังหวัด + ย่อคอลัมน์ชื่อ รพ. (ตรึงซ้าย) เพื่อให้เห็นคอลัมน์ทางขวาครบในหน้าเดียว&#10;ไม่กระทบตัวเลขใด ๆ เป็นการปรับมุมมองอย่างเดียว">
+        <input type="checkbox" ${EXST.wide?'checked':''} onchange="exSetWide(this.checked)"> ↔️ โหมดกว้าง</label>
       <label>🔎 กรองจังหวัด:
         <select onchange="exSet('prov',this.value)">
           <option value="all" ${EXST.prov==='all'?'selected':''}>ทุกจังหวัด</option>
@@ -2406,7 +2480,7 @@ function exRender(){
       <div class="note" style="margin-top:4px;line-height:1.7">${colInfoRows.map(([c,l])=>`<div><b>${l}:</b> ${(EX_COLDEF_MAP[c]||'').replace(/\n/g,'<br>&nbsp;&nbsp;')}</div>`).join('')}</div>
     </details>
     <div class="acctbl-wrap" id="exTblWrap" style="max-height:78vh;overflow:auto">
-      <table class="wltbl ex-sticky" style="min-width:1000px">
+      <table class="wltbl ex-sticky${WIDE?' ex-wide':''}" style="min-width:${WIDE?860:1000}px">
         ${exHeadRow}
         ${rowsHtml}
       </table>
