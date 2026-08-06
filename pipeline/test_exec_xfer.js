@@ -290,9 +290,19 @@ console.log('━━ 12) โหมดกว้าง + ป้ายผู้ส�
   const A=boot();
   A.exRender();
   const n0=((els.exResBox.innerHTML.match(/<tr>[\s\S]*?<\/tr>/)||[''])[0].match(/<th\b/g)||[]).length;
-  chk(/ยุบรายชื่อ รพ\./.test(els.exResBox.innerHTML), 'มีปุ่ม "◀ ยุบรายชื่อ รพ." เด่นชัดติดกับตาราง (ไม่ใช่ checkbox ที่หาไม่เจอ)');
+  chk(/ย่อคอลัมน์ชื่อในตาราง/.test(els.exResBox.innerHTML), 'มีปุ่มย่อคอลัมน์ซ้ายของตาราง เด่นชัดติดกับตาราง');
+  chk(/ปุ่ม ◀ ที่ขอบจอด้านซ้าย/.test(els.exResBox.innerHTML), 'บอกชัดว่าคนละปุ่มกับ ◀ ที่ขอบจอ (ยุบแถบรายชื่อทั้งแผง) — กันสับสน');
   const st=A.getEXST(); st.wide=true; A.setEXST(st); A.exRender();
-  chk(/กางรายชื่อ รพ\. กลับ/.test(els.exResBox.innerHTML), 'ยุบแล้วปุ่มเปลี่ยนเป็น "▶ กางรายชื่อ รพ. กลับ"');
+  chk(/ขยายคอลัมน์ชื่อกลับ/.test(els.exResBox.innerHTML), 'ย่อแล้วปุ่มเปลี่ยนเป็น "▶ ขยายคอลัมน์ชื่อกลับ"');
+  // ── แถบรายชื่อ รพ. ทั้งแผงด้านซ้ายของจอ (คนละอันกับคอลัมน์ในตาราง) ──
+  const src2=fs.readFileSync(SRC,'utf8'), css2=(src2.match(/<style>([\s\S]*?)<\/style>/)||[])[1]||'';
+  chk(/\.main\.lcol \.left\{width:0/.test(css2), 'ยุบแถบรายชื่อ รพ. ทั้งแผงแล้วกว้าง 0 (คืนพื้นที่ 340px ให้ตาราง)');
+  chk(/\.lcolbtn\{position:absolute/.test(css2), 'ปุ่มยุบลอยติดขอบซ้าย เห็นตลอด');
+  chk(/transition:width/.test(css2), 'ยุบแบบสไลด์ (ตามที่เจ้าของงานเสนอ)');
+  chk(/@media\(max-width:900px\)\{\.lcolbtn\{display:none\}/.test(css2), 'มือถือซ่อนปุ่มนี้ ใช้ drawer เดิม ไม่ชนกัน');
+  chk(/id="lcolBtn"/.test(src2)&&/function toggleLeftCol/.test(src2), 'มีปุ่ม + ฟังก์ชัน toggle ในหน้า');
+  chk(/localStorage.setItem\(LCOL_KEY/.test(src2), 'จำสถานะยุบไว้ (รีเฟรชยังยุบอยู่)');
+  chk(/classList.toggle\('open'/.test(src2), 'drawer มือถือเดิมยังอยู่ครบ ไม่ถูกทับ');
   const html=els.exResBox.innerHTML;
   const n1=((html.match(/<tr>[\s\S]*?<\/tr>/)||[''])[0].match(/<th\b/g)||[]).length;
   chk(n1===n0-1, `โหมดกว้างซ่อนคอลัมน์จังหวัด (${n0} → ${n1} ช่อง)`);

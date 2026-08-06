@@ -51,7 +51,16 @@ header .sub{font-size:11.5px;color:#cbd5e1}
 .drawer-close{display:none}
 .main{display:flex;flex:1;overflow:hidden}
 /* LEFT: hospital list */
-.left{width:340px;min-width:260px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--card);flex-shrink:0}
+.left{width:340px;min-width:260px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--card);flex-shrink:0;transition:width .18s ease,min-width .18s ease}
+/* ── ยุบแถบรายชื่อ รพ. ด้านซ้าย (เจ้าของงานสั่ง 6 ส.ค. 69 — เอาพื้นที่ไปให้ตารางกว้างขึ้น) ── */
+.main.lcol .left{width:0;min-width:0;overflow:hidden;border-right:none}
+.lcolbtn{position:absolute;top:50%;transform:translateY(-50%);left:0;z-index:6;width:18px;height:74px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;font-weight:800;
+  border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0;background:var(--card);color:var(--blue);
+  box-shadow:2px 0 6px rgba(0,0,0,.10);padding:0;font-family:inherit}
+.lcolbtn:hover{background:var(--blue);color:#fff}
+.main{position:relative}
+@media(max-width:900px){.lcolbtn{display:none}.main.lcol .left{width:86vw;min-width:0}}
 .lfilt{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
 .lfilt select,.lfilt input{font-family:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);width:100%}
 .lfilt .row{display:flex;gap:6px}
@@ -557,6 +566,10 @@ table.wltbl.ex-sticky.ex-wide th:nth-child(1){left:0;z-index:5;background:var(--
     <div class="llist" id="llist"></div>
   </div>
 
+  <!-- ปุ่มยุบ/กางแถบรายชื่อ รพ. — ติดขอบแถบซ้าย เห็นตลอด (เดสก์ท็อป) -->
+  <button type="button" class="lcolbtn" id="lcolBtn" onclick="toggleLeftCol()"
+    title="ยุบ/กางแถบรายชื่อโรงพยาบาลด้านซ้าย เพื่อเพิ่มพื้นที่ให้ตารางด้านขวา">◀</button>
+
   <!-- RIGHT -->
   <div class="right" id="right">
     <div class="hint-empty">กำลังโหลด...</div>
@@ -565,6 +578,21 @@ table.wltbl.ex-sticky.ex-wide th:nth-child(1){left:0;z-index:5;background:var(--
 <div class="backdrop" id="backdrop" onclick="closeDrawer()"></div>
 
 <script>
+// ── เดสก์ท็อป: ยุบ/กางแถบรายชื่อ รพ. ด้านซ้าย (เจ้าของงานสั่ง 6 ส.ค. 69) ──────────
+// เอาพื้นที่ 340px ไปให้ตารางด้านขวา · จำสถานะไว้ใน localStorage (แยกคีย์ ไม่ปนกับ state ของแท็บ #exec)
+const LCOL_KEY='rd_leftcol';
+function applyLeftCol(on){
+  const m=document.querySelector('.main'), b=document.getElementById('lcolBtn');
+  if(m) m.classList.toggle('lcol', !!on);
+  if(b){ b.textContent = on?'▶':'◀';
+    b.title = (on?'กางแถบรายชื่อโรงพยาบาลกลับมา':'ยุบแถบรายชื่อโรงพยาบาลด้านซ้าย เพื่อเพิ่มพื้นที่ให้ตารางด้านขวา'); }
+}
+function toggleLeftCol(){
+  const on=!document.querySelector('.main').classList.contains('lcol');
+  applyLeftCol(on);
+  try{ localStorage.setItem(LCOL_KEY, on?'1':'0'); }catch(e){}
+}
+try{ if(localStorage.getItem(LCOL_KEY)==='1') document.addEventListener('DOMContentLoaded',()=>applyLeftCol(true)); }catch(e){}
 // ── มือถือ/แท็บเล็ต: drawer สำหรับรายชื่อ รพ. ────────────────
 function toggleDrawer(){
   const open=!document.querySelector('.left').classList.contains('open');
@@ -2498,9 +2526,9 @@ function exRender(){
     </details>
     <div style="display:flex;align-items:center;gap:8px;margin:0 0 5px">
       <button type="button" class="tgt-apply" style="margin:0" onclick="exSetWide(${WIDE?'false':'true'})"
-        title="ยุบคอลัมน์ชื่อ รพ. ที่ตรึงอยู่ซ้ายมือ (และซ่อนคอลัมน์จังหวัด) เพื่อให้เห็นคอลัมน์ทางขวาครบในหน้าเดียว&#10;ไม่กระทบตัวเลขใด ๆ — เป็นการปรับมุมมองอย่างเดียว">${
-        WIDE?'▶ กางรายชื่อ รพ. กลับ':'◀ ยุบรายชื่อ รพ. (เพิ่มพื้นที่)'}</button>
-      <span class="tgt-note">${WIDE?'กำลังยุบอยู่ — ซ่อนคอลัมน์จังหวัด + ย่อชื่อ รพ.':'ปัดตารางไปทางขวาแล้วคอลัมน์ชื่อ รพ. จะตรึงอยู่ซ้ายมือ กดปุ่มนี้เพื่อยุบให้แคบลง'}</span>
+        title="ย่อคอลัมน์ &quot;จังหวัด + ชื่อ รพ.&quot; ที่ตรึงอยู่ซ้ายมือของตารางนี้ ให้แคบลง&#10;คนละปุ่มกับ ◀ ที่ขอบจอซ้าย ซึ่งใช้ยุบแถบรายชื่อโรงพยาบาลทั้งแผง&#10;ไม่กระทบตัวเลขใด ๆ — เป็นการปรับมุมมองอย่างเดียว">${
+        WIDE?'▶ ขยายคอลัมน์ชื่อกลับ':'◀ ย่อคอลัมน์ชื่อในตาราง'}</button>
+      <span class="tgt-note">${WIDE?'กำลังย่ออยู่ — ซ่อนคอลัมน์จังหวัด + ย่อชื่อ รพ.':'ย่อคอลัมน์ซ้ายของ<b>ตารางนี้</b> · ถ้าจะยุบ<b>แถบรายชื่อ รพ. ทั้งแผง</b> กดปุ่ม ◀ ที่ขอบจอด้านซ้าย'}</span>
     </div>
     <div class="acctbl-wrap" id="exTblWrap" style="max-height:78vh;overflow:auto">
       <table class="wltbl ex-sticky${WIDE?' ex-wide':''}" style="min-width:${WIDE?860:1000}px">
