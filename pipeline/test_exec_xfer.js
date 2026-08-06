@@ -19,7 +19,7 @@ global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const mkA=()=>new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exSolve,exSolveDown,
   exXferAdd,exXferDel,exXferClear,exXferAuto,exXferCap,exXferWarnCap,exXferList,exXferIn,exXferOut,exXferNet,
-  exXfToggle,exXfSubmit,HARD:EX_XF_HARD,WARN:EX_XF_WARN,
+  exXfToggle,exXfSubmit,exXfOpen,exXfClose,HARD:EX_XF_HARD,WARN:EX_XF_WARN,
   exTopUpGross,exArIn,exArRaw,exArCut,exSetArPct,exSetArOvr,exArClear,exArPct,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},
   setEXSORT:v=>{EXSORT=v},setEXXF:v=>{EXXF=v},setEXAR:v=>{EXAR=v},getEXST:()=>EXST};`)();
@@ -170,14 +170,22 @@ console.log('━━ 8) หน้าจอ — ปุ่ม/ป้ายต้น
   chk(/🔄 โยกช่วย/.test(html), 'มีปุ่ม "🔄 โยกช่วย" ในคอลัมน์เงินสดคงเหลือหลังภาระ MOE');
   chk(/⚡ จัดสรรอัตโนมัติ/.test(html), 'มีปุ่ม "⚡ จัดสรรอัตโนมัติ" ที่บรรทัดสรุป');
   chk(/แผนโยกเงินช่วยกัน/.test(html), 'มีบรรทัดสรุปแผนโยกเงิน');
-  // กางแผงโยกแล้วต้องมี dropdown + ช่องวงเงิน + ปุ่มโอน
+  // แผงโยกเป็น "ป็อปอัป" แล้ว (เจ้าของงานสั่ง 6 ส.ค. 69 — แบบกางในแถวใหญ่เกินจนหน้าต่างเพี้ยน)
   const g=j.hosp.find(h=>A.exXferCap(h)>1e6);
-  A.setEXXF({[g.hcode]:1}); A.exRender(); html=els.exResBox.innerHTML;
-  chk(new RegExp('xfT_'+g.hcode).test(html), 'แผงโยกมี dropdown เลือก รพ. ปลายทาง');
-  chk(new RegExp('xfA_'+g.hcode).test(html), 'แผงโยกมีช่องกรอกวงเงิน');
-  chk(/exXfSubmit/.test(html)&&/เติมเต็มส่วนขาด/.test(html), 'มีปุ่มโอนเงิน + ปุ่มเติมเต็มส่วนขาด');
-  chk(/ให้ได้อีก/.test(html), 'แผงบอกว่าให้ได้อีกเท่าไหร่');
-  chk(/ข้ามจังหวัด/.test(html), 'ปลายทางข้ามจังหวัดมีป้ายกำกับ (เจ้าของงานอนุญาตแต่ต้องเห็น)');
+  A.exXfToggle(g.hcode);
+  const ov=els.exXfOverlay, mo=(ov&&ov.innerHTML)||'';
+  chk(/nip-overlay|nip-modal/.test((ov&&ov.className||'')+mo), 'เปิดเป็นป็อปอัป (ใช้ pattern .nip-overlay/.nip-modal เดิมของหน้า)');
+  chk(ov&&ov.style&&ov.style.display==='flex', 'ป็อปอัปถูกสั่งแสดง (display:flex)');
+  chk(!/xfT_/.test(els.exResBox.innerHTML), 'ไม่กางแถวย่อยในตารางอีกแล้ว (ตารางไม่เพี้ยน)');
+  chk(new RegExp('xfT_'+g.hcode).test(mo), 'ป็อปอัปมี dropdown เลือก รพ. ปลายทาง');
+  chk(new RegExp('xfA_'+g.hcode).test(mo), 'ป็อปอัปมีช่องกรอกวงเงิน');
+  chk(/exXfSubmit/.test(mo)&&/เติมเต็มส่วนขาด/.test(mo), 'มีปุ่มโอนเงิน + ปุ่มเติมเต็มส่วนขาด');
+  chk(/ให้ได้อีก/.test(mo), 'ป็อปอัปบอกว่าให้ได้อีกเท่าไหร่');
+  chk(/ข้ามจังหวัด/.test(mo), 'ปลายทางข้ามจังหวัดมีป้ายกำกับ (เจ้าของงานอนุญาตแต่ต้องเห็น)');
+  chk(/exXfClose/.test(mo), 'มีปุ่มปิดป็อปอัป');
+  A.exXfClose();
+  chk(ov.style.display==='none', 'ปิดป็อปอัปแล้วซ่อนจริง');
+  html=els.exResBox.innerHTML;
   // ป้ายต้นทางฝั่งผู้รับ
   A.setEXXF({}); const r=j.hosp.find(h=>left(A,h)<0);
   A.exXferAdd(g.hcode, r.hcode, 2e6); html=els.exResBox.innerHTML;
@@ -257,15 +265,23 @@ console.log('━━ 11) ส่วนขาดสภาพคล่องไม�
   chk(/รับแล้ว/.test(html), 'เซลล์บอก "รับแล้ว X จาก N แห่ง"');
   chk(/✅ ครบแล้ว/.test(html), 'เซลล์บอก "ครบแล้ว" เมื่อเติมเต็ม');
   // ชิปสรุปต้องยังนับยอดตั้งต้น ไม่หายไปเมื่อจัดสรรกันเองแล้ว
-  const chip=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:]+: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
-  const wantSum=j.hosp.reduce((s,h)=>s+A.exTopUpGross({h,r0:A.exSimPath(h,0)}),0);
-  const wantN=j.hosp.filter(h=>A.exTopUpGross({h,r0:A.exSimPath(h,0)})>0).length;
-  chk(!!chip&&chip[1]===fmtM(wantSum)&&+chip[2]===wantN,
-    `ชิปด้านบนนับยอดตั้งต้น ${chip?chip[1]+' / '+chip[2]+' แห่ง':'ไม่พบ'} (ควร ${fmtM(wantSum)} / ${wantN}) — ไม่หายเมื่อโยกกันเองแล้ว`);
-  // จัดสรรครบทุกแห่งแล้วชิปก็ยังต้องไม่เป็น 0
-  A.exXferClear(); A.exXferAuto(); A.exRender();
+  // ⚠️ ชิป = "ยอดที่จัดสรรด้วยการโยกเงินจริงแล้ว" เท่านั้น (เจ้าของงานสั่ง 6 ส.ค. 69)
+  const chip=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:]+: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง([^)]*)\)/);
+  const wantMoved=j.hosp.reduce((s,h)=>s+A.exXferIn(h),0);
+  const wantNGot=j.hosp.filter(h=>A.exXferIn(h)>0).length;
+  const wantGross=j.hosp.reduce((s,h)=>s+A.exTopUpGross({h,r0:A.exSimPath(h,0)}),0);
+  chk(!!chip&&chip[1]===fmtM(wantMoved)&&+chip[2]===wantNGot,
+    `ชิป = ยอดที่โยกจริง ${chip?chip[1]+' / '+chip[2]+' แห่ง':'ไม่พบ'} (ควร ${fmtM(wantMoved)} / ${wantNGot}) — ทุกบาทมีต้นทาง`);
+  chk(!!chip&&chip[3].includes(fmtM(wantGross)), `ชิปยังบอกความต้องการตั้งต้นในวงเล็บ "จากที่ต้องการ ${fmtM(wantGross)}"`);
+  // ยังไม่โยกเลย ชิปต้องเป็น 0 (ไม่ใช่ยอดลอย)
+  A.exXferClear(); A.exRender();
+  const chip0=els.exResBox.innerHTML.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:]+: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง/);
+  chk(!!chip0&&chip0[1]===fmtM(0)&&+chip0[2]===0, `ยังไม่ได้โยกเลย ชิป = ${chip0?chip0[1]:'—'} (ต้องเป็น 0 ไม่ใช่ยอดลอย)`);
+  // จัดสรรอัตโนมัติแล้วชิปต้องเท่ายอดที่โยกจริงพอดี
+  A.exXferAuto(); A.exRender();
+  const moved2=A.exXferList().reduce((s,z)=>s+z.a,0);
   const chip2=els.exResBox.innerHTML.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:]+: <span[^>]*>([^<]+)<\/span>/);
-  chk(!!chip2&&chip2[1]!=='0'&&chip2[1]!=='—', `จัดสรรครบทุกแห่งแล้วชิปยังแสดง ${chip2?chip2[1]:'—'} (ไม่กลายเป็น 0)`);
+  chk(!!chip2&&chip2[1]===fmtM(moved2), `จัดสรรอัตโนมัติแล้วชิป ${chip2?chip2[1]:'—'} = ยอดที่โยกจริง ${fmtM(moved2)} พอดี`);
 }
 console.log();
 
@@ -274,7 +290,9 @@ console.log('━━ 12) โหมดกว้าง + ป้ายผู้ส�
   const A=boot();
   A.exRender();
   const n0=((els.exResBox.innerHTML.match(/<tr>[\s\S]*?<\/tr>/)||[''])[0].match(/<th\b/g)||[]).length;
+  chk(/ยุบรายชื่อ รพ\./.test(els.exResBox.innerHTML), 'มีปุ่ม "◀ ยุบรายชื่อ รพ." เด่นชัดติดกับตาราง (ไม่ใช่ checkbox ที่หาไม่เจอ)');
   const st=A.getEXST(); st.wide=true; A.setEXST(st); A.exRender();
+  chk(/กางรายชื่อ รพ\. กลับ/.test(els.exResBox.innerHTML), 'ยุบแล้วปุ่มเปลี่ยนเป็น "▶ กางรายชื่อ รพ. กลับ"');
   const html=els.exResBox.innerHTML;
   const n1=((html.match(/<tr>[\s\S]*?<\/tr>/)||[''])[0].match(/<th\b/g)||[]).length;
   chk(n1===n0-1, `โหมดกว้างซ่อนคอลัมน์จังหวัด (${n0} → ${n1} ช่อง)`);

@@ -124,9 +124,14 @@ for(const mmo of [1,3,6,13]){
   const sumTop=j.hosp.reduce((s,h)=>{const r0=A.exSimPath(h,0);return s+A.exTopUp({h,r0});},0);
   chk(iTop>=0&&Math.abs(parseFloat(tt[iTop])-sumTop/1e6)<0.02, `ยอดรวมส่วนขาดสภาพคล่องใน TSV ตรง (${tt[iTop]} vs ${(sumTop/1e6).toFixed(2)})`);
   // ── ยอดรวม 2 ก้อนใหม่ข้างหัวข้อ (5 ส.ค. 69) ต้องตรงกับผลรวมคอลัมน์ในตาราง ──
-  const chipTop=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง ([^:<]+): <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
-  chk(!!chipTop&&chipTop[1].trim()===A.exMoeTargetLab()&&chipTop[2]===fmtM(sumTop)&&+chipTop[3]===nTop,
-      `ยอด "รวมเงินเติมตามสภาพคล่อง" ข้างหัวข้อตรงกับคอลัมน์ (${chipTop?chipTop[2]+' / '+chipTop[3]+' แห่ง':'ไม่พบ'} vs ${fmtM(sumTop)} / ${nTop} แห่ง)`);
+  // ⚠️ 6 ส.ค. 69: ชิปนี้เปลี่ยนความหมายเป็น "ยอดที่จัดสรรด้วยการโยกเงินจริงแล้ว" เท่านั้น
+  //    (เจ้าของงานสั่ง — ทุกบาทต้องมีต้นทางระบุชื่อ รพ. ผู้ให้) · ยังไม่โยก = 0
+  //    ส่วนความต้องการตั้งต้นย้ายไปอยู่ในวงเล็บ "จากที่ต้องการ X"
+  const chipTop=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง ([^:<]+): <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง([^)]*)\)/);
+  chk(!!chipTop&&chipTop[1].trim()===A.exMoeTargetLab()&&chipTop[2]===fmtM(0)&&+chipTop[3]===0,
+      `ชิป "รวมเงินเติมตามสภาพคล่อง" = ยอดที่โยกจริง ซึ่งยังไม่ได้โยก จึงเป็น 0 (ได้ ${chipTop?chipTop[2]+' / '+chipTop[3]+' แห่ง':'ไม่พบ'})`);
+  chk(!!chipTop&&chipTop[4].includes(fmtM(sumTop)),
+      `ชิปบอกความต้องการตั้งต้นในวงเล็บด้วย "จากที่ต้องการ ${fmtM(sumTop)}" (ได้ "${chipTop?chipTop[4].trim():'—'}")`);
   const sumPay=j.hosp.reduce((s,h)=>s+A.exPayIn(h),0), nPay=j.hosp.filter(h=>A.exPayIn(h)>0).length;
   const chipPay=html.match(/รวมเจ้าหนี้ OP-UC นอก CUP: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
   chk(!!chipPay&&chipPay[1]===fmtM(sumPay)&&+chipPay[2]===nPay,
@@ -157,11 +162,14 @@ console.log('━━ ยอดรวมข้างหัวข้อ × ตั�
     const wTop=inPv.reduce((s,h)=>s+A.exTopUp({h,r0:A.exSimPath(h,0)}),0);
     const wNTop=inPv.filter(h=>A.exTopUp({h,r0:A.exSimPath(h,0)})>0).length;
     const wPay=inPv.reduce((s,h)=>s+A.exPayIn(h),0), wNPay=inPv.filter(h=>A.exPayIn(h)>0).length;
-    const cT=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:<]+: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
+    // จังหวัดที่ไม่มีส่วนขาดเลย ชิปจะไม่มีวงเล็บ "จากที่ต้องการ" (ถูกต้อง) — เทียบเป็น 0
+    const cTm=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:<]+: <span[^>]*>[^<]+<\/span> <span[^>]*>\(\d+ แห่ง([^)]*)\)/);
+    const cTv=cTm?(cTm[1].match(/จากที่ต้องการ (.+)$/)||[,fmtM(0)])[1].trim():null;
+    const cT=cTv!=null?[null,cTv]:null;
     const cP=html.match(/รวมเจ้าหนี้ OP-UC นอก CUP: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง\)/);
-    const ok=cT&&cP&&cT[1]===fmtM(wTop)&&+cT[2]===wNTop&&cP[1]===fmtM(wPay)&&+cP[2]===wNPay;
+    const ok=cT&&cP&&cT[1].trim()===fmtM(wTop)&&cP[1]===fmtM(wPay)&&+cP[2]===wNPay;
     if(!ok) badPv++;
-    console.log(`  ${ok?'✅':'❌'} ${pv} (${inPv.length} แห่ง) → เติมสภาพคล่อง ${cT?cT[1]:'—'} [ควร ${fmtM(wTop)}] · เจ้าหนี้ ${cP?cP[1]:'—'} [ควร ${fmtM(wPay)}]`);
+    console.log(`  ${ok?'✅':'❌'} ${pv} (${inPv.length} แห่ง) → ความต้องการตั้งต้น ${cT?cT[1].trim():'—'} [ควร ${fmtM(wTop)}] · เจ้าหนี้ ${cP?cP[1]:'—'} [ควร ${fmtM(wPay)}]`);
   }
   chk(badPv===0, `ยอดรวมทั้งสองก้อนขยับตามจังหวัดที่กรองทุกจังหวัด (ผิด ${badPv}/${provs.length})`);
   A.setEXST(ST(0,3));
