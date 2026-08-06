@@ -19,7 +19,7 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const A=new Function(code+`;return {exRender,exSimPath,exSolveFor,exNiMo,exMoeMo,exMoeAccMo,exMoeStretchMo,
-  exMoeGrpRaw,exMoeCashMo,exXmoeMo,exMoeVer,exPayPct,exMoeVerLab,exMoeLeft,exTopUp,SHOW_TJAR:EX_SHOW_TJAR,
+  exMoeGrpRaw,exMoeCashMo,exXmoeMo,exMoeVer,exPayPct,exMoeVerLab,exMoeLeft,exTopUp,SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v},setEXBRK:v=>{EXBRK=v},setEXOPEN:v=>{EXOPEN=v},setEXSORT:v=>{EXSORT=v}};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const S=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/summary.json','utf8'));
@@ -141,7 +141,7 @@ for(const [ver,pct,lab] of [['69',100,'MOE.Ver69'],['68',100,'MOE.Ver68'],['69p'
   const nTh=((rows[0]||'').match(/<th\b/g)||[]).length;
   const main=rows.filter(r=>r.includes('class="ovtgl"'));
   const badTd=main.filter(r=>(r.match(/<td\b/g)||[]).length!==nTh).length;
-  chk(!err && nTh===14+(A.SHOW_TJAR?1:0) && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
+  chk(!err && nTh===14+(A.SHOW_TJAR?1:0)-(A.SHOW_GIVE?0:1) && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
       && html.includes(`value="${ver}" selected`) && moeBox.includes(lab),
       `โหมด ${lab}: เรนเดอร์ครบ ${main.length} แถว × ${nTh} คอลัมน์ · dropdown ค้างค่าถูก · ไม่มี undefined/NaN`,
       err||(badTd?`td ไม่ครบ ${badTd} แถว`:''));

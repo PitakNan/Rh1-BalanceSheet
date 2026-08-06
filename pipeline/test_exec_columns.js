@@ -15,7 +15,7 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
-  SHOW_TJAR:EX_SHOW_TJAR,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
+  SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=(ext,mmo)=>({mmo,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext,tgt:6,
@@ -47,7 +47,8 @@ for(const f of ['index.html','explorer.html']){
 }
 console.log();
 console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (${A.SHOW_TJAR?'เปิดคอลัมน์ลูกหนี้':'ซ่อนคอลัมน์ลูกหนี้'})\n`);
-const TJOFF=A.SHOW_TJAR?1:0;   // คอลัมน์ลูกหนี้แทรกอยู่ต่อจากเจ้าหนี้ (ถัดจาก index 6) เมื่อเปิด — ดัชนีคอลัมน์หลังจากนี้ต้องขยับตาม
+const TJOFF=(A.SHOW_TJAR?1:0);
+const NCOL=14+(A.SHOW_TJAR?1:0)-(A.SHOW_GIVE?0:1);   // ฐาน 14 + ลูกหนี้(ถ้าเปิด) − เงินที่ยกให้(ถ้าปิด)   // คอลัมน์ลูกหนี้แทรกอยู่ต่อจากเจ้าหนี้ (ถัดจาก index 6) เมื่อเปิด — ดัชนีคอลัมน์หลังจากนี้ต้องขยับตาม
 
 for(const mmo of [1,3,6,13]){
   const ext=0;
@@ -62,7 +63,8 @@ for(const mmo of [1,3,6,13]){
   // หัวคอลัมน์ตัดบรรทัดด้วย <br> — เทียบแบบตัดช่องว่างทิ้งทั้งหมด จะได้ไม่พังเวลาย้ายตำแหน่งตัดบรรทัด
   const norm=s=>s.replace(/<br\s*\/?>/g,' ').replace(/\s+/g,'');
   const headTxt=norm(head), inHead=s=>headTxt.includes(norm(s));
-  chk(nTh===14+TJOFF, `หัวตาราง ${14+TJOFF} ช่อง (ได้ ${nTh})`);
+  chk(nTh===NCOL, `หัวตาราง ${NCOL} ช่อง (ได้ ${nTh})`);
+  chk(headTxt.includes('เงินที่ยกให้'.replace(/\s/g,''))===A.SHOW_GIVE, A.SHOW_GIVE?'มีคอลัมน์เงินที่ยกให้':'ไม่มีคอลัมน์เงินที่ยกให้ (ปิดไว้ — ตรวจแล้วไม่ถูกคิดซ้ำ)');
   chk(inHead('ลูกหนี้')===A.SHOW_TJAR, A.SHOW_TJAR?'มีคอลัมน์ลูกหนี้ในหัวตาราง':'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
   chk(inHead('เงินสดคงเหลือหลังภาระ MOE ถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนประเมิน "${A.exMoeTargetLab()}"`);
   chk(inHead('ส่วนขาดสภาพคล่อง'), 'มีคอลัมน์ส่วนขาดสภาพคล่อง');

@@ -1192,6 +1192,12 @@ let EXSORT={col:null,dir:-1};
 const EX_SEGL={op:'OP',ip:'IP',pp:'P&P',oth:'อื่น/รวม'};
 // เปิดคอลัมน์ "ลูกหนี้ UC-OP นอก CUP" กลับมา (เจ้าของงานสั่ง 6 ส.ค. 69 — เดิมซ่อนไว้ตั้งแต่ 5 ส.ค. 69)
 const EX_SHOW_TJAR=true;
+// ปิดคอลัมน์ "เงินที่ยกให้" (เจ้าของงานสั่ง 6 ส.ค. 69 หลังตรวจแล้วว่า "ไม่ถูกคิดซ้ำ")
+// ✅ ผลตรวจ: exTjGive() ไม่เคยถูกเรียกใน exSimPath/exSolveFor/exSolveDown/exMoeLeft เลย — เป็นคอลัมน์
+//    แสดงผลล้วน ๆ · ผลของ Option ตามจ่ายถูกใส่เข้าแบบจำลองโดยตรงจาก EXTJ.debtors/shares ครั้งเดียว
+//    (ยืนยันด้วยข้อมูลจริง: ยกหนี้ D → ΔCL = −D และ ΔNI = +D พอดี ไม่ใช่ −2D/+2D)
+// จึงปิดแค่การแสดงผล ไม่ต้องแก้สูตรใด ๆ · เปิดกลับเป็น true ได้ทันที โค้ดยังอยู่ครบ
+const EX_SHOW_GIVE=false;
 // รพช. บางแห่งทำหน้าที่เหมือน Hub รับส่งต่อ (มีลูกหนี้ตามจ่ายก้อนใหญ่จริงจากบัญชี แม้ประเภทงานขึ้นทะเบียนเป็น รพช.)
 // เจ้าของงานสั่ง 6 ส.ค. 69 ให้นับ 4 แห่งนี้เป็น "ผู้รับภาระ" ได้เหมือน รพศ./รพท. ในตาราง Option พิเศษ
 // เพิ่ม/ลดเพิ่มเติมได้ชั่วคราวจากปุ่มในตาราง (exTjHubAdd/exTjHubDel) — EXTJHUB เป็น let ธรรมดา ไม่เซฟ localStorage
@@ -2270,7 +2276,7 @@ function exRender(){
   };
   // แถวหัวตาราง — สร้างก่อนแถวข้อมูล เพื่อนับจำนวนคอลัมน์จริงไปใช้เป็น colspan ของแถวย่อย
   // (เดิม hardcode ไว้ ทำให้ลืมแก้ทุกครั้งที่เพิ่ม/ซ่อนคอลัมน์ — ดู RISK_EXEC_MODEL.md 7.7)
-  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน<br><span style="font-size:10px;font-weight:600;opacity:.75">'+exMoeVerShort()+'</span>','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้<br>OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดคงเหลือ<br>หลังภาระ MOE<br>ถึง '+exMoeTargetLab(),'moeleft')}${exSortTh('ส่วนขาด<br>สภาพคล่อง','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${exSortTh('เงินที่<br>ยกให้','give')}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
+  const exHeadRow=`<tr>${exSortTh('จังหวัด','prov')}${exSortTh('โรงพยาบาล','name')}${exSortTh('ระดับ<br>ตอนนี้','risk0')}${exSortTh('MOE<br>/เดือน<br><span style="font-size:10px;font-weight:600;opacity:.75">'+exMoeVerShort()+'</span>','moe')}${exSortTh('NI จำลอง<br>/เดือน','ni')}${exSortTh('เงินสด+<br>เทียบเท่า','cashbal')}${exSortTh('เจ้าหนี้<br>OP-UC<br>นอก CUP','tjpay')}${EX_SHOW_TJAR?exSortTh('ลูกหนี้ UC-OP<br>นอก CUP','tjar'):''}${exSortTh('เงินสดคงเหลือ<br>หลังภาระ MOE<br>ถึง '+exMoeTargetLab(),'moeleft')}${exSortTh('ส่วนขาด<br>สภาพคล่อง','topup')}${exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0')}${EX_SHOW_GIVE?exSortTh('เงินที่<br>ยกให้','give'):''}${exSortTh('เงินสนับสนุน<br>ที่ต้องใช้','need')}${exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1')}<th></th></tr>`;
   const EX_NCOL=(exHeadRow.match(/<th\b/g)||[]).length;
   const rowsHtml=items.map(x=>{
     const {h,need,inj,r0,r1,give,role}=x, hc=h.hcode, open=!!EXOPEN[hc], brkOpen=EXBRK[hc]!=null;
@@ -2323,7 +2329,7 @@ function exRender(){
         return `<td>${t>0?`<b style="color:var(--red)">${fmtM(t)}</b>`:'<span class="tgt-note">–</span>'}${badges?`<span class="cellsub">${badges}</span>`:''}</td>`;
       })()}
       <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
-      <td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>
+      ${EX_SHOW_GIVE?`<td>${give>0?`<span style="color:${role==='got'?'var(--green)':'var(--red)'};font-weight:700">${role==='got'?'+':'−'}${fmtM(give)}</span> <span class="tgt-note">${role==='got'?'ได้รับ':'ยกให้'}</span>`:'<span class="tgt-note">–</span>'}</td>`:''}
       <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<span class="tgt-note">–</span>')}</td>
       <td><span class="badge brkbadge${brkOpen?' on':''}" style="background:${riskColor(r1.sepRisk)}" title="คลิกดูเกณฑ์ทั้ง 7 คะแนน ก่อน/หลังช่วย ณ ${sepLab} — เลือกดูระดับเป้าอื่นได้" onclick="exBrkToggle('${hc}')">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
@@ -2365,7 +2371,7 @@ function exRender(){
   EX_TSV=exBuildTSV(items, horLab);
   const colInfoRows=[['risk0','ระดับตอนนี้'],['moe','MOE/เดือน'],['ni','NI จำลอง/เดือน'],['cashbal','เงินสด+เทียบเท่า'],['tjpay','เจ้าหนี้ OP-UC นอก CUP'],
     ...(EX_SHOW_TJAR?[['tjar','ลูกหนี้ UC-OP นอก CUP']]:[]),
-    ['moeleft','เงินสดคงเหลือหลังภาระ MOE ถึง '+exMoeTargetLab()],['topup','ส่วนขาดสภาพคล่อง'],['sep0','ระดับ '+sepLab+' ก่อนช่วย'],['give','เงินที่ยกให้'],['need','เงินสนับสนุนที่ต้องใช้'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
+    ['moeleft','เงินสดคงเหลือหลังภาระ MOE ถึง '+exMoeTargetLab()],['topup','ส่วนขาดสภาพคล่อง'],['sep0','ระดับ '+sepLab+' ก่อนช่วย'],...(EX_SHOW_GIVE?[['give','เงินที่ยกให้']]:[]),['need','เงินสนับสนุนที่ต้องใช้'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span>
       <span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end">
@@ -2509,8 +2515,13 @@ function exBuildTSV(items, horLab){
     {h:'ส่วนขาดสภาพคล่อง ถึง '+exMoeTargetLab()+'(ลบ. · กรณีรายรับไม่เป็นไปตามแผน · ไม่ใช่คำของบ)', v:x=>{const t=exTopUp(x); return t>0?M(t):'';}, t:()=>sum(x=>exTopUp(x))},
     {h:'เงินสดหมดเดือนที่(แบบจำลอง นับรายรับด้วย)', v:x=>x.r0.cashOut!=null?x.r0.cashOut:'-'},
     {h:'ระดับก่อนช่วย', v:x=>x.r0.sepRisk!=null?x.r0.sepRisk:'-'},
-    {h:'เงินที่ยกให้(ลบ. · +ได้รับ/−ยกให้)', v:x=>x.give>0?((x.role==='give'?'-':'')+(x.give/1e6).toFixed(2)):'',
-     t:()=>sum(x=>x.role==='got'?x.give:0)},
+    ...(EX_SHOW_GIVE?[{h:'เงินที่ยกให้(ลบ. · +ได้รับ/−ยกให้)', v:x=>x.give>0?((x.role==='give'?'-':'')+(x.give/1e6).toFixed(2)):'',
+     t:()=>sum(x=>x.role==='got'?x.give:0)}]:[]),
+    // 🔄 แผนโยกเงินช่วยกันระหว่าง รพ. — ต้นทางของ "ส่วนขาดสภาพคล่อง" ที่ถูกเติมแล้ว
+    {h:'รับโยกจาก รพ.อื่น(ลบ.)', v:x=>{const v=exXferIn(x.h); return v>0?M(v):'';}, t:()=>sum(x=>exXferIn(x.h))},
+    {h:'รับโยกจาก(ชื่อ รพ.)', v:x=>exXferList().filter(z=>z.t===x.h.hcode)
+       .map(z=>{const g=EX.hosp.find(p=>p.hcode===z.f);return (g?g.name:z.f)+' '+(z.a/1e6).toFixed(2);}).join(' + ')},
+    {h:'โยกออกให้ รพ.อื่น(ลบ.)', v:x=>{const v=exXferOut(x.h); return v>0?M(v):'';}, t:()=>sum(x=>exXferOut(x.h))},
     {h:'เงินสนับสนุนให้พ้นวิกฤต(ลบ.)', v:x=>x.need==null?'ไม่พอ':M(x.inj), t:()=>sum(x=>x.inj)},
     {h:'ระดับหลังช่วย ณ '+horLab, v:x=>x.r1.sepRisk!=null?x.r1.sepRisk:'-'},
   ];
