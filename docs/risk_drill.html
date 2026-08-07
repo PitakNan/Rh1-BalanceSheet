@@ -2157,7 +2157,12 @@ function exRenderProvTj(items){
   const provs=Object.keys(P).sort((a,b)=>a.localeCompare(b,'th'));
   const T={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0};
   provs.forEach(pv=>{ const p=P[pv]; for(const k in T) T[k]+=p[k]; });
-  const netCls=v=>v<0?' style="color:var(--red);font-weight:700"':(v>0?' style="color:var(--green);font-weight:700"':'');
+  // 🪤 ห้ามคืนค่าเป็น ` style="…"` แล้วไปแปะต่อท้าย <td style="text-align:right"> —
+  //    จะได้ <td> ที่มี attribute style สองอัน ซึ่ง HTML spec ให้ใช้อันแรกและ **ทิ้งอันที่สอง**
+  //    ผลคือสีเขียว/แดงไม่ขึ้นเลยแบบเงียบ ๆ (เจ้าของงานทักว่าไม่เห็นสี 7 ส.ค. 69 — บั๊กจริง)
+  //    จึงคืนเป็น "ตัว declaration ล้วน" แล้วต่อเข้า style เดียวกันเสมอ
+  const netCss=v=>v<0?'color:var(--red);font-weight:700;background:rgba(220,38,38,.10)'
+                 :(v>0?'color:var(--green);font-weight:700;background:rgba(22,163,74,.10)':'');
   const cutTot=T.arRaw-T.ar;
   // ── ป้ายบอกว่ากำลังใช้ค่าจากตัวควบคุม "📥 ลูกหนี้ที่เก็บได้: __%" ของตารางหลักอยู่ ──
   // ตัวเลขเชื่อมกันอยู่แล้วผ่าน exArIn() → exArPct()/arOvr (exSetArPct เรียก exRender → exRenderProvTj)
@@ -2177,7 +2182,7 @@ function exRenderProvTj(items){
     <td style="text-align:right">${p.n}</td>
     <td style="text-align:right">${p.pay>0?fmtM(p.pay):'<span class="tgt-note">–</span>'}${p.nPay&&p.nPay<p.n?`<span class="cellsub">${p.nPay}/${p.n} แห่ง</span>`:''}</td>
     <td style="text-align:right">${p.ar>0?fmtM(p.ar):'<span class="tgt-note">–</span>'}${arSub(p)}</td>
-    <td style="text-align:right"${netCls(net)}>${net>=0?'+':'−'}${fmtM(Math.abs(net))}</td></tr>`; };
+    <td style="text-align:right;${netCss(net)}">${net>=0?'+':'−'}${fmtM(Math.abs(net))}</td></tr>`; };
   box.innerHTML=`
     <details ${EXST.open&&EXST.open.provtj?'open':''} ontoggle="exKeepOpen('provtj',this.open)">
       <summary style="cursor:pointer;font-size:13.5px;font-weight:700;padding:6px 0">🗺️ สรุปรายจังหวัด: หนี้ที่ต้องจ่าย ↔ ลูกหนี้ที่คาดว่าจะเก็บได้ (${provs.length} จังหวัด · ${T.n} แห่ง) <span class="tgt-note" style="font-weight:600">— เจ้าหนี้รวม ${fmtM(T.pay)} · ลูกหนี้คาดเก็บได้ ${fmtM(T.ar)}${arTag?` <b style="color:var(--gold)">@ ${arTag}</b>`:''} · กดเพื่อกาง</span></summary>

@@ -144,5 +144,35 @@ const dp=trp.filter(r=>r.length===5 && !r[0].includes('รวมทั้งเ�
 chk(dp.length===1 && dp[0][0]===pv, `กรอง "${pv}" แล้วเหลือ 1 จังหวัด (ได้ ${dp.length}: ${dp.map(r=>r[0]).join(',')})`);
 chk(dp.length===1 && dp[0][1]===String(want[pv].n), `จำนวน รพ. = ${want[pv].n}`);
 
+// ══ 6) 🎨 คอลัมน์สุทธิ: บวก=เขียว ลบ=แดง และต้อง "ขึ้นจริง" บนเบราว์เซอร์ ══
+// 🪤 บั๊กที่เจอ 7 ส.ค. 69: เขียน <td style="text-align:right"${netCls}> โดย netCls คืน ` style="…"`
+//    → ได้ <td> ที่มี attribute style สองอัน · HTML spec ให้ใช้อันแรก **ทิ้งอันที่สอง** สีเลยหายเงียบ ๆ
+//    ชุดตรวจนี้จึงต้องดู "แท็กดิบ" ไม่ใช่แค่ว่ามีคำว่า var(--green) อยู่ในหน้า
+console.log('\n━━ ⑥ สีคอลัมน์สุทธิ (บวก=เขียว · ลบ=แดง) ━━');
+const netCells=h=>[...h.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>{
+    const tds=[...m[1].matchAll(/(<td[^>]*>)([\s\S]*?)<\/td>/g)];
+    if(tds.length!==5) return null;
+    return {prov:tds[0][2].replace(/<[^>]+>/g,'').trim(), tag:tds[4][1], val:tds[4][2].replace(/<[^>]+>/g,'').trim()};
+  }).filter(Boolean);
+// ห้ามมี attribute ซ้ำในแท็กเดียว (ตัวบั๊กจริง) — ตรวจทุกแท็กในกล่องนี้ ทุกโหมด
+const DUP=/<[a-zA-Z]+\b[^>]*?\sstyle\s*=\s*"[^"]*"[^>]*?\sstyle\s*=/;
+let dup=0;
+for(const st of [{},{arPct:62},{arPct:0},{tj:{mode:'forgive',scope:'all'}},{prov:provs[0]}]) if(DUP.test(render(st))) dup++;
+chk(dup===0, `ไม่มีแท็กที่มี attribute style ซ้ำสองอัน (สีจะถูกทิ้งเงียบ ๆ) — พบ ${dup}/5 โหมด`);
+// สีต้องตรงเครื่องหมายทุกแถว ทุกค่า %
+for(const pc of [100,62,0]){
+  const cells=netCells(render({arPct:pc}));
+  const wrong=cells.filter(c=>{
+    const neg=c.val.startsWith('−'), green=/var\(--green\)/.test(c.tag), red=/var\(--red\)/.test(c.tag);
+    return neg ? !(red&&!green) : !(green&&!red);
+  });
+  const nNeg=cells.filter(c=>c.val.startsWith('−')).length;
+  chk(wrong.length===0 && cells.length>0,
+    `arPct=${pc}: สีตรงเครื่องหมายครบ ${cells.length} แถว (ลบ ${nNeg} แถว = แดง · ที่เหลือเขียว)${wrong.length?' ผิด: '+wrong.map(c=>c.prov+'='+c.val).join(', '):''}`);
+}
+// แถวรวมทั้งเขตต้องมีสีด้วย (เคยโดน style ของ <tr> ทับ)
+const totCell=netCells(render({})).find(c=>c.prov.includes('รวมทั้งเขต'));
+chk(!!totCell && /var\(--green\)|var\(--red\)/.test(totCell.tag), `แถวรวมทั้งเขตมีสีด้วย (${totCell&&totCell.val})`);
+
 console.log(`\n${fail.length?'❌ ไม่ผ่าน '+fail.length+' ข้อ:\n  - '+fail.join('\n  - '):'✅ ผ่านทั้งหมด'}`);
 process.exit(fail.length?1:0);
