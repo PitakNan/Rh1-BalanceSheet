@@ -15,11 +15,12 @@ global.window={addEventListener(){},matchMedia:()=>({matches:false,addEventListe
 let STORE={};
 global.localStorage={getItem:k=>STORE[k]||null,setItem:(k,v)=>{STORE[k]=v},removeItem:k=>{delete STORE[k]}};
 global.location={hash:''}; global.navigator={clipboard:null};
+global.confirm=()=>true;   // ⚡ จัดสรรอัตโนมัติถามยืนยันก่อนล้างแผนเดิม (7 ส.ค. 69)
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const mkA=()=>new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exSolve,exSolveDown,
   exXferAdd,exXferDel,exXferClear,exXferAuto,exXferCap,exXferWarnCap,exXferList,exXferIn,exXferOut,exXferNet,
-  exXfToggle,exXfSubmit,exXfOpen,exXfClose,HARD:EX_XF_HARD,WARN:EX_XF_WARN,
+  exXfToggle,exXfSubmit,exXfOpen,exXfClose,HARD:EX_XF_HARD,WARN:EX_XF_WARN,getShort:()=>EXXF_SHORT,
   exTopUpGross,exArIn,exArRaw,exArCut,exSetArPct,exSetArOvr,exArClear,exArPct,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},
   setEXSORT:v=>{EXSORT=v},setEXXF:v=>{EXXF=v},setEXAR:v=>{EXAR=v},getEXST:()=>EXST};`)();
@@ -117,8 +118,14 @@ console.log('━━ 5) ⚡ จัดสรรอัตโนมัติ (3 เ�
   A.exXferAuto();
   const L=A.exXferList(), moved=L.reduce((s,x)=>s+x.a,0);
   chk(L.length>0, `สร้างรายการโยก ${L.length} รายการ รวม ${fmtM(moved)}`);
-  chk(totShort(A)<1e6, `ส่วนขาดสภาพคล่องเหลือ ~0 (${fmtM(totShort(A))}) — จาก ${fmtM(short0)}`);
-  chk(Math.abs(moved-short0)<1e6, `ยอดที่โยก ≈ ส่วนขาดเดิมพอดี ไม่โยกเกิน (${fmtM(moved)} vs ${fmtM(short0)})`);
+  // ⚠️ แก้ 7 ส.ค. 69 ตามกติกาใหม่ 5 ข้อ — สองข้อนี้เคยยึดพฤติกรรมเดิม (ข้ามจังหวัดได้ + เติมพอดี)
+  //   ① ไม่ข้ามจังหวัดแล้ว → จังหวัดที่ผู้ให้ไม่พอ (ลำพูน) จะเหลือส่วนขาดค้างไว้โดยตั้งใจ
+  //   ③ เติมเกินความต้องการอีก 100K/แห่ง → ยอดที่โยกจะไม่เท่าส่วนขาดเดิมเป๊ะ
+  //   รายละเอียดกติกาอยู่ใน test_exec_xfer_auto.js (ชุดตรวจเฉพาะของ auto)
+  const shortLeft=totShort(A), nShort=A.getShort?A.getShort().length:0;
+  chk(shortLeft<short0, `ส่วนขาดลดลงจริง ${fmtM(short0)} → ${fmtM(shortLeft)} (ที่เหลือคือจังหวัดที่ผู้ให้ไม่พอ ${nShort} แห่ง — กติกา ④ ให้หยุด ไม่ข้ามจังหวัด)`);
+  chk(moved<=short0+5e6 && moved>short0*0.5,
+    `ยอดที่โยกสมเหตุสมผลกับส่วนขาดเดิม (${fmtM(moved)} vs ${fmtM(short0)}) — ต่างได้เพราะเติมเกิน 100K/แห่ง และเว้นจังหวัดที่เงินไม่พอ`);
   chk(totNeed(A)<need0, `เงินสนับสนุนที่ต้องขอนอกเขตลดลง (${fmtM(need0)} → ${fmtM(totNeed(A))})`);
   // ผู้ให้ทุกแห่งต้องไม่เกินระดับ 5
   const givers=[...new Set(L.map(x=>x.f))].map(hc=>j.hosp.find(h=>h.hcode===hc));

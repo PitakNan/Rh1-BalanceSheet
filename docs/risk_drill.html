@@ -2188,31 +2188,47 @@ function exXferAdd(f,t,a){
 }
 function exXferDel(f,t){ EXST.xfer=exXferList().filter(x=>!(x.f===f&&x.t===t)); exSave(); exRender(); }
 function exXferClear(){ EXST.xfer=[]; exSave(); exRender(); }
-// จัดสรรอัตโนมัติ: เติมให้ รพ. ที่ขาด โดยดึงจากผู้ให้ "ในจังหวัดเดียวกันก่อน" แล้วค่อยข้ามจังหวัด
-// (เจ้าของงานอนุญาตข้ามจังหวัดเสรี แต่เจตนาตั้งต้นคือช่วยกันในจังหวัด จึงเรียงลำดับแบบนี้)
-// เป็นเพียง "ข้อเสนอ" — กดแล้วแก้/ยกเลิกรายรายการต่อได้
+// ══ ⚡ จัดสรรอัตโนมัติ — กติกา 5 ข้อที่เจ้าของงานกำหนด 7 ส.ค. 69 ═══════════════════════
+// ① โยก "ในจังหวัดเดียวกันเท่านั้น" — ไม่ข้ามจังหวัดให้เอง (ของเดิมข้ามให้อัตโนมัติ)
+// ② เพดาน 10 ลบ. ต่อ "หนึ่งรายการ" (ผู้ให้ 1 → ผู้รับ 1) · ไม่พอให้ผู้ให้ลำดับถัดไปจ่ายต่อ
+//    เรียงผู้ให้ตามสภาพคล่องดีสุดก่อน · ผู้ให้แห่งเดียวช่วยได้หลาย รพ. แต่ละคู่ไม่เกิน 10 ลบ.
+// ③ เติมเกินความต้องการอีก 100K (กันขาดจากการปัดเศษ/ค่าคลาดเคลื่อนเล็กน้อย)
+// ④ ในจังหวัดเงินไม่พอ → เติมเท่าที่ได้แล้วหยุด **ไม่ข้ามจังหวัด** ทีมจะปรับเอง
+//    (แสดงรายการที่ยังขาดให้ชัดใต้ปุ่ม ไม่ปล่อยเงียบ)
+// ⑤ กดซ้ำ = ล้างแผนเดิมทั้งหมดแล้วคำนวณใหม่ตามเงื่อนไขปัจจุบัน (idempotent)
+//    ⚠️ รายการที่ทีมแก้เองจะหายด้วย — จึงถามยืนยันก่อนถ้ามีแผนเดิมอยู่
+// ลำดับผู้รับ: ระดับวิกฤตสูงสุดก่อน (7→0) แล้วค่อยดูยอดขาดมากสุด
+const EX_XF_MAX_PER=10e6;    // ② เพดานต่อรายการ
+const EX_XF_EXTRA=100e3;     // ③ เติมเกินอีกเท่านี้
+let EXXF_SHORT=[];           // ผลรอบล่าสุด: รายการที่จังหวัดเติมให้ไม่ครบ (มุมมองชั่วคราว ไม่เซฟ)
 function exXferAuto(){
-  const rows=EX.hosp;
+  const prev=exXferList();
+  if(prev.length && !confirm(`⚡ จัดสรรอัตโนมัติจะ**ล้างแผนโยกเดิมทั้งหมด ${prev.length} รายการ** (รวมที่แก้เอง) แล้วคำนวณใหม่ตามเงื่อนไขปัจจุบัน\n\nต้องการดำเนินการต่อหรือไม่?`)) return;
+  EXST.xfer=[];   // ⑤ ล้างก่อน แล้วค่อยคำนวณ need/cap จากสถานะที่สะอาด
+  EXXF_SHORT=[];
   const need=[], cap={};
-  rows.forEach(h=>{ const L=exMoeLeft({h,r0:exSimPath(h,0)});
+  EX.hosp.forEach(h=>{ const L=exMoeLeft({h,r0:exSimPath(h,0)});
     if(L<0) need.push({h, want:-L});
     else { const c=exXferCap(h); if(c>0) cap[h.hcode]=c; } });
-  need.sort((a,b)=>b.want-a.want);
-  const givers=rows.filter(h=>cap[h.hcode]>0);
+  // ลำดับผู้รับ: ระดับวิกฤตสูงสุดก่อน → ยอดขาดมากสุด
+  need.sort((a,b)=>((b.h.risk||0)-(a.h.risk||0)) || (b.want-a.want));
+  const plan=[];
   for(const n of need){
-    let want=n.want;
-    const order=[...givers].filter(g=>cap[g.hcode]>0 && g.hcode!==n.h.hcode)
-      .sort((a,b)=>(a.prov===n.h.prov?0:1)-(b.prov===n.h.prov?0:1) || cap[b.hcode]-cap[a.hcode]);
+    let want=n.want+EX_XF_EXTRA;                       // ③
+    const order=EX.hosp.filter(g=>g.prov===n.h.prov    // ① ในจังหวัดเดียวกันเท่านั้น
+        && g.hcode!==n.h.hcode && cap[g.hcode]>0)
+      .sort((a,b)=>cap[b.hcode]-cap[a.hcode]);         // ② สภาพคล่องดีสุดก่อน
     for(const g of order){
       if(want<=0) break;
-      const give=Math.min(want, cap[g.hcode]);
+      const give=Math.min(want, cap[g.hcode], EX_XF_MAX_PER);   // ② เพดานต่อรายการ
       if(give<=0) continue;
-      const L=exXferList(), i=L.findIndex(x=>x.f===g.hcode&&x.t===n.h.hcode);
-      if(i>=0) L[i].a=(+L[i].a||0)+give; else L.push({f:g.hcode,t:n.h.hcode,a:give});
-      EXST.xfer=L; cap[g.hcode]-=give; want-=give;
+      plan.push({f:g.hcode, t:n.h.hcode, a:Math.round(give)});
+      cap[g.hcode]-=give; want-=give;
     }
+    // ④ จังหวัดเติมไม่ครบ → บันทึกไว้แสดง ไม่ข้ามจังหวัดให้เอง
+    if(want>1) EXXF_SHORT.push({hcode:n.h.hcode, name:n.h.name, prov:n.h.prov, risk:n.h.risk, left:want});
   }
-  exSave(); exRender();
+  EXST.xfer=plan; exSave(); exRender();
 }
 function exSetInj(hc,valM){
   if(valM===''||valM==null||isNaN(+valM)) delete EXST.inj[hc];
@@ -2780,11 +2796,22 @@ function exRender(){
         const capAll=items.filter(z=>exMoeLeft(z)>0).reduce((s,z)=>s+exXferCap(z.h),0);
         const stillShort=items.reduce((s,z)=>s+exTopUp(z),0);
         const moved=XL.reduce((s,z)=>s+(+z.a||0),0);
-        const btns=`<button type="button" class="tgt-apply" style="margin-left:8px" onclick="exXferAuto()" title="เติมให้ รพ. ที่ขาด โดยดึงจากแห่งที่มีเงินเหลือ — ในจังหวัดเดียวกันก่อน แล้วค่อยข้ามจังหวัด&#10;เป็นข้อเสนอ แก้หรือยกเลิกรายรายการต่อได้">⚡ จัดสรรอัตโนมัติ</button>${
+        const btns=`<button type="button" class="tgt-apply" style="margin-left:8px" onclick="exXferAuto()" title="กติกาจัดสรร (เจ้าของงานกำหนด 7 ส.ค. 69):&#10;① โยกเฉพาะภายในจังหวัดเดียวกัน — ไม่ข้ามจังหวัดให้เอง&#10;② เพดาน ${EX_XF_MAX_PER/1e6} ลบ. ต่อหนึ่งรายการ (ผู้ให้ 1 → ผู้รับ 1) ไม่พอให้ผู้ให้ลำดับถัดไปจ่ายต่อ เรียงตามสภาพคล่องดีสุดก่อน&#10;③ เติมเกินความต้องการอีก ${EX_XF_EXTRA/1e3}K&#10;④ จังหวัดเงินไม่พอ = เติมเท่าที่ได้แล้วหยุด แสดงส่วนที่ยังขาดให้ทีมปรับเอง&#10;⑤ กดซ้ำ = ล้างแผนเดิมทั้งหมดแล้วคำนวณใหม่ตามเงื่อนไขปัจจุบัน&#10;&#10;ลำดับผู้รับ: ระดับวิกฤตสูงสุดก่อน แล้วค่อยยอดขาดมากสุด&#10;ผู้ให้ไม่ตกเกินระดับ ${EX_XF_HARD} เสมอ">⚡ จัดสรรอัตโนมัติ</button>${
           moved>0?`<button type="button" class="tgt-apply" style="margin-left:6px;border-color:var(--red);color:var(--red)" onclick="exXferClear()">ล้างแผนโยกทั้งหมด</button>`:''}`;
         return `<div class="tgt-row" style="font-weight:600">🔄 แผนโยกเงินช่วยกัน: ${
           moved>0?`โยกแล้ว <b style="color:var(--green)">${fmtM(moved)}</b> <span class="tgt-note" style="font-weight:400">(${XL.length} รายการ)</span>`:'<span class="tgt-note" style="font-weight:400">ยังไม่ได้โยก</span>'}
           · กำลังช่วยที่เหลือ <b>${fmtM(capAll)}</b> <span class="tgt-note" style="font-weight:400">(เงินสดเหลือที่ยังยกให้ได้โดยผู้ให้ไม่ตกเกินระดับ ${EX_XF_HARD})</span>${btns}</div>
+        ${(()=>{
+          // ④ รายการที่จังหวัดเติมให้ไม่ครบ — ต้องเห็นชัด ไม่ปล่อยให้เงียบหายไป
+          // จัดกลุ่มรายจังหวัด เพราะการแก้จริงคือ "ต้องหาเงินข้ามจังหวัดมาลงจังหวัดนี้"
+          if(!EXXF_SHORT.length) return '';
+          const byP={}; EXXF_SHORT.forEach(s=>{ (byP[s.prov]=byP[s.prov]||[]).push(s); });
+          const tot=EXXF_SHORT.reduce((s,x)=>s+x.left,0);
+          return `<div class="tgt-row tgt-note" style="color:var(--gold)">⚠️ <b>จัดสรรในจังหวัดไม่ครบ ${EXXF_SHORT.length} แห่ง · ยังขาดรวม ${fmtM(tot)}</b> — ตามกติกาข้อ ④ ระบบหยุดไว้ ไม่ข้ามจังหวัดให้เอง ทีมต้องโยกเองจากจังหวัดอื่น<br>${
+            Object.keys(byP).sort((a,b)=>a.localeCompare(b,'th')).map(pv=>
+              `<b>${pv}</b> ขาด ${fmtM(byP[pv].reduce((s,x)=>s+x.left,0))} — ${byP[pv].sort((a,b)=>b.left-a.left).map(x=>`${x.name}${x.risk!=null?' (ระดับ '+x.risk+')':''} ${fmtM(x.left)}`).join(' · ')}`
+            ).join('<br>')}</div>`;
+        })()}
         <div class="tgt-row tgt-note">${stillShort>0
           ? (capAll>=stillShort
               ? `✅ ส่วนขาดที่เหลือ <b>${fmtM(stillShort)}</b> ยัง<b>หาต้นทางในเขตได้ครบ</b> — กด "จัดสรรอัตโนมัติ" เพื่อระบุว่าเงินมาจาก รพ. ใดบ้าง`
