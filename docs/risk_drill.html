@@ -1490,11 +1490,16 @@ function exTjCalc(){
   debtors.forEach(h=>{ byProv[h.prov]=(byProv[h.prov]||0)+h.tj.payIn; });
   const shares={}; let uncovered=0;
   for(const prov in byProv){
-    const creds=EX.hosp.filter(h=>exIsCred(h) && h.prov===prov && h.tj.arIn>0);
-    const w=creds.reduce((s,h)=>s+h.tj.arIn,0);
+    // ⚠️ ใช้ exArIn (ลูกหนี้ "หลังปรับ %") ไม่ใช่ h.tj.arIn ดิบ — แก้ 7 ส.ค. 69
+    // เดิมใช้ยอดดิบ ทำให้แผง Option เกลี่ยภาระเสมือนเชียงใหม่มีลูกหนี้ 200.7M
+    // ขณะที่ทุกที่อื่นในหน้าบอกว่าเก็บได้จริง 104.8M = ตัวเลขคนละชุดในหน้าเดียวกัน
+    // (เจ้าของงานทัก "ไม่ใช่แค่เปลี่ยนที่เดียวนะ") · วัดผลแล้วระดับ ณ ก.ย. ไม่เปลี่ยนสักแห่ง (0/103)
+    // แต่ยอด "เกลี่ยไม่ได้" เพิ่มขึ้นจริง ซึ่งซื่อตรงกว่า: หนี้ที่ไม่มีลูกหนี้เก็บได้จริงมารองรับ
+    const creds=EX.hosp.filter(h=>exIsCred(h) && h.prov===prov && exArIn(h)>0);
+    const w=creds.reduce((s,h)=>s+exArIn(h),0);
     if(!w){ uncovered+=byProv[prov]; continue; }
     let left=byProv[prov];
-    creds.forEach(h=>{ const s=Math.min(h.tj.arIn, byProv[prov]*h.tj.arIn/w); shares[h.hcode]=(shares[h.hcode]||0)+s; left-=s; });
+    creds.forEach(h=>{ const s=Math.min(exArIn(h), byProv[prov]*exArIn(h)/w); shares[h.hcode]=(shares[h.hcode]||0)+s; left-=s; });
     if(left>1) uncovered+=left;
   }
   return {debtors:new Set(debtors.map(h=>h.hcode)), shares, byProv,
@@ -2307,7 +2312,7 @@ function exRender(){
   if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
     // ⚠️ hub ต้องอยู่ใน sig ด้วย (เพิ่ม 6 ส.ค. 69) — hub เปลี่ยน → shares เปลี่ยน → sepRisk ของ
     //    รพช. hub (ซึ่งเป็นลูกหนี้ด้วย) เปลี่ยน → เงินคืนที่ต้องใช้เปลี่ยน · ถ้าไม่ใส่จะได้ผลเก่าค้าง
-    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct(),hub:[...EXTJHUB].sort().join(','),xfer:exXferList()});
+    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct(),hub:[...EXTJHUB].sort().join(','),xfer:exXferList(),arPct:exArPct(),arOvr:EXST.arOvr});
     if(_refundCache.sig===sig && _refundCache.refund) EXTJ.refund=_refundCache.refund;
     else { exTjSolveRefunds(); _refundCache={sig, refund:EXTJ.refund}; }
   }
@@ -2465,7 +2470,7 @@ function exRender(){
         </select>
       </div>
     </div>
-    ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า · <b>🎯 ยกหนี้เจาะจง</b>: สมมติ รพช. จ่ายจริงก่อน แล้ว<b>เขตคืนเงินเฉพาะเท่าที่จำเป็น</b>ให้ระดับ ณ ${sepLab} ≤3 — รพช. ที่ยังไหว (≤3 หลังจ่าย) ไม่ได้รับ, ที่ >3 คืนขั้นต่ำพอลงถึง 3 (ไม่เกินยอดที่จ่าย) · เจ้าหนี้ได้รับชำระครบ — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่งผู้รับภาระ (รพศ./รพท.+รพช. hub) ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+h.tj.arIn,0))}</div>`
+    ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า · <b>🎯 ยกหนี้เจาะจง</b>: สมมติ รพช. จ่ายจริงก่อน แล้ว<b>เขตคืนเงินเฉพาะเท่าที่จำเป็น</b>ให้ระดับ ณ ${sepLab} ≤3 — รพช. ที่ยังไหว (≤3 หลังจ่าย) ไม่ได้รับ, ที่ >3 คืนขั้นต่ำพอลงถึง 3 (ไม่เกินยอดที่จ่าย) · เจ้าหนี้ได้รับชำระครบ — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่งผู้รับภาระ (รพศ./รพท.+รพช. hub) ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+exArIn(h),0))} <span class="tgt-note">(หลังปรับ ${exArPct()}% · ยอดดิบ ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+exArRaw(h),0))})</span></div>`
     :`<div class="tgt-row" style="margin-top:8px">${EXST.tj.mode==='smart'
       ?`🎯 คืนเงินเจาะจงรวม: <b>${fmtM(refundTot)}</b> ให้ รพช. ${nRefund} แห่ง <span class="tgt-note">(เฉพาะที่ระดับ >3 ณ ${sepLab} หลังจ่าย · ที่ระดับ ≤3 ไม่ได้รับ · ยอดจ่ายเต็มก่อนคืน ${fmtM(EXTJ.total)} จาก ${EXTJ.debtors.size} แห่ง)</span>`
       :`ยอดหนี้ที่เคลียร์: <b>${fmtM(EXTJ.total)}</b> จาก รพช. ${EXTJ.debtors.size} แห่ง <span class="tgt-note">(${Object.entries(EXTJ.byProv).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')})</span>${EXTJ.uncovered>1?` <span class="tgt-warn">⚠️ ${fmtM(EXTJ.uncovered)} เกลี่ยไม่ได้ (ลูกหนี้ฝั่งรับในจังหวัดไม่พอ/ไม่มี)</span>`:''}`}</div>
@@ -2474,7 +2479,7 @@ function exRender(){
       <table class="wltbl" style="min-width:640px">
         <tr><th title="โรงพยาบาลเจ้าหนี้ (รพศ./รพท. + รพช. ที่ตั้งเป็น hub ชั่วคราว) ที่รับภาระหนี้ค่ารักษาตามจ่ายจาก รพช. ที่ส่งต่อคนไข้เข้ามารักษา">ผู้รับภาระ (เจ้าหนี้เดิม)</th><th title="เกลี่ยหนี้เฉพาะระหว่าง รพช. ↔ รพศ./รพท. ในจังหวัดเดียวกัน">จังหวัด</th><th title="ยอดที่เจ้าหนี้บันทึกเองว่าถูกค้างชำระ (บัญชี 1102050101.203 + 1102050194.204) = สิ่งที่ รพศ./รพท. คิดว่าควรได้">ลูกหนี้นอก CUP</th><th title="ส่วนแบ่งหนี้ที่ รพช. ค้างจริง (2101020199.202) เกลี่ยมาให้เจ้าหนี้นี้ = min(ลูกหนี้ตัวเอง, ยอด รพช.ค้างรวมในจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมในจังหวัด) — ต่างจากลูกหนี้เพราะสองฝั่งบันทึกแยกเล่ม ยอดไม่ตรงกัน">ภาระที่รับ</th><th title="ผลต่องบเจ้าหนี้ — จ่ายจริง/เจาะจง: ได้เงินสดเข้า · ยกหนี้: ตัดลูกหนี้เป็นค่าใช้จ่ายอุดหนุน (ไม่ได้เงินสด)">ผลกระทบ</th><th title="ระดับวิกฤตของเจ้าหนี้ ก่อน → หลัง รับภาระตาม Option ที่เลือก">ระดับ ณ ${sepLab}</th></tr>
         ${creds.map(h=>{ const S=EXTJ.shares[h.hcode]; const r=exSimPath(h,0);
-          return `<tr><td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.type==='รพช.'?' 🔁 hub':''}</span></td><td>${h.prov}</td><td>${fmtM(h.tj.arIn)}</td><td><b>${fmtM(S)}</b></td>
+          return `<tr><td><b>${h.name}</b> <span class="tgt-note">${h.type}${h.type==='รพช.'?' 🔁 hub':''}</span></td><td>${h.prov}</td><td>${fmtM(exArIn(h))}${exArCut(h)>1?`<span class="cellsub">ดิบ ${fmtM(exArRaw(h))}</span>`:''}</td><td><b>${fmtM(S)}</b></td>
           <td class="tgt-note">${(EXST.tj.mode==='pay'||EXST.tj.mode==='smart')?'ได้เงินสด +'+fmtM(S):'ตัดลูกหนี้เป็น คชจ. −'+fmtM(S)}</td>
           <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span> → <span class="badge" style="background:${riskColor(r.sepRisk)}">${r.sepRisk!=null?r.sepRisk:'–'}</span></td></tr>`;}).join('')}
       </table>
@@ -2827,7 +2832,7 @@ function exBuildTSV(items, horLab){
     {h:'เงินสดไม่พอจ่ายเจ้าหนี้ ขาด(ลบ.)', v:x=>{const g=exPayIn(x.h)-x.h.bs.cn; return g>0?M(g):'';},
      t:()=>sum(x=>Math.max(0,exPayIn(x.h)-x.h.bs.cn))},
     ...(EX_SHOW_TJAR?[{h:'ลูกหนี้ UC-OP นอก CUP ในจังหวัด 1102050101.203+1102050194.204(ลบ.)',
-       v:x=>M((x.h.tj&&x.h.tj.arIn)||0), t:()=>sum(x=>(x.h.tj&&x.h.tj.arIn)||0)}]:[]),
+       v:x=>M(exArIn(x.h)), t:()=>sum(x=>exArIn(x.h))}]:[]),
     {h:'ภาระ MOE ถึง '+exMoeTargetLab()+'(ลบ.)', v:x=>M((x.r0.moeMo||0)*exHorMonths(x.h)), t:()=>sum(x=>(x.r0.moeMo||0)*exHorMonths(x.h))},
     {h:'เงินสดคงเหลือหลังภาระ MOE ถึง '+exMoeTargetLab()+'(ลบ. · กรณีรายรับไม่เป็นไปตามแผน · ติดลบ=ขาด)', v:x=>M(exMoeLeft(x)), t:()=>sum(x=>exMoeLeft(x))},
     {h:'ส่วนขาดสภาพคล่อง(MOE) ถึง '+exMoeTargetLab()+'(ลบ. · กรณีรายรับไม่เป็นไปตามแผน · ไม่ใช่คำของบ)', v:x=>{const t=exTopUp(x); return t>0?M(t):'';}, t:()=>sum(x=>exTopUp(x))},
