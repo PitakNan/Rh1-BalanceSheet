@@ -83,6 +83,10 @@ header .sub{font-size:11.5px;color:#cbd5e1}
 .right{flex:1;overflow-y:auto;min-width:0}
 .hint-empty{padding:60px 20px;text-align:center;color:var(--mut);font-size:14px}
 .dwrap{max-width:980px;margin:0 auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+/* ยุบแถบซ้ายแล้ว → ขยายเนื้อหาเกือบเต็มจอ (เจ้าของงานสั่ง 6 ส.ค. 69)
+   ใช้ !important เพราะ .dwrap หลายตัวใส่ max-width มาแบบ inline style (1200px) ซึ่งชนะ CSS ปกติ */
+.main.lcol .dwrap{max-width:none!important;padding-left:26px;padding-right:26px}
+.main.lcol #exTblWrap{max-height:82vh}
 .dhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .dhead h2{font-size:18px;font-weight:700;flex:1;min-width:200px}
 .dhead .meta{font-size:12px;color:var(--mut)}
@@ -1340,7 +1344,11 @@ function exDefaultState(){
           // arPct/arOvr: ลูกหนี้ตามจ่ายที่คาดว่า "เก็บได้จริง" — % รวมทั้งเขต + กำหนดเองรายแห่ง (บาท)
           arPct:100, arOvr:{},
           // wide: โหมดกว้าง — ซ่อนคอลัมน์จังหวัด + ย่อคอลัมน์ชื่อ รพ. เพื่อให้เห็นคอลัมน์ขวาครบในหน้าเดียว
-          wide:false};
+          wide:false,
+          // clGrow: ให้หนี้สินหมุนเวียนเดินตาม run-rate จริงของแต่ละ รพ. (เปิดเป็นค่าเริ่มต้นหลัง backtest 6 ส.ค. 69)
+          clGrow:true,
+          // seas: ใส่ปัจจัยฤดูกาลปลายปีงบ (NI ปิดบัญชี + หนี้สินโตเร็วขึ้น) จากข้อมูลจริงปี 67+68
+          seas:true};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exLoad(){
@@ -1527,6 +1535,10 @@ function exSimPath(h, inj, sc){
   // กันเงินสดไว้จ่าย "ค่าใช้จ่ายจำเป็น (MOE)" ของเดือนที่เหลือถึงสิ้นปีงบก่อนเสมอ
   // รายจ่ายที่จ่ายไม่ได้ → ค้างเป็นเจ้าหนี้ (หนี้สินหมุนเวียนโต) ไม่ใช่ปล่อยเงินสดติดลบ
   const moeMoV=exMoeMo(h);
+  const clGrow=EXST.clGrow!==false;                 // ให้หนี้สินหมุนเวียนเดินตาม run-rate (ค่าเริ่มต้น: เปิด)
+  const clMoV=clGrow?(+bs.clMo||0):0;
+  const seas=EXST.seas!==false;                    // ปัจจัยฤดูกาลปลายปีงบ (ค่าเริ่มต้น: เปิด)
+  const niYEV=+bs.niYE||0, clYEV=clGrow?(+bs.clYE||+bs.clMo||0):0;
   let owedAdd=0;                                    // เจ้าหนี้ที่เพิ่มจากการจ่ายไม่ได้ (แสดงในแผงเจาะเกณฑ์)
   // ── ตัวเลือก "MOE.Ver69 + จ่ายหนี้การค้า X%" (แบบ A ที่ CFO เลือก 6 ส.ค. 69) ──
   // ส่วนที่เลือกไม่จ่าย = ตั้งใจยืดเครดิตผู้ขาย (คนละเรื่องกับ owedAdd ที่เป็น "จ่ายไม่ได้เพราะเงินไม่มี")
@@ -1609,6 +1621,19 @@ function exSimPath(h, inj, sc){
     // แต่ยังห้ามเงินสดติดลบ — ส่วนที่จ่ายไม่ได้ค้างเป็นเจ้าหนี้
     if(c>=0){ st.cca+=c; st.cqn+=c; st.ccn+=c; } else drain(-c,true);
     if(stretchMo>0){ st.ccl+=stretchMo; apStretch+=stretchMo; }   // หนี้ที่ยืดไว้กองขึ้นเป็นเจ้าหนี้การค้า
+    // ══ ปัจจัยฤดูกาลปลายปีงบ (เจ้าของงานเคาะ 6 ส.ค. 69 หลัง backtest) ══════════════════
+    // ⚠️ โมเดลเดิมตรึง CL คงที่ + ลาก NI ต้นปีต่อไปดื้อ ๆ → ทำนายผิดทิศชัดเจน:
+    //    ของจริง ด.9→ด.12  ปี67 แย่ลง 33 แห่ง · ปี68 แย่ลง 65 แห่ง
+    //    โมเดลเดิม         แย่ลง 0 แห่ง (ดีขึ้นอย่างเดียว)
+    // สาเหตุหลัก: NI ไตรมาสสุดท้ายพลิกลบหนักทุกปีจากการปิดบัญชีปลายปี
+    //    (ตั้งค่าใช้จ่ายค้างจ่าย · ตัดลูกหนี้ · ค่าเสื่อมงวดสุดท้าย)
+    //    ปี67 −328 · ปี68 −843 ลบ./ด. ทั้งเขต  แต่โมเดลใช้ +259 ต่อไป
+    // ทั้ง niYE และ clYE วัดจากข้อมูลจริงรายแห่ง (เฉลี่ยปี 67+68) ใน export_exec.py
+    //    ⛔ ห้ามให้ niYE ไปลดเงินสดด้วย — รายการปิดบัญชีส่วนใหญ่เป็นเกณฑ์คงค้าง ไม่ใช่เงินสดออก
+    //       ผลต่องบดุลวัดแยกที่ clYE ซึ่งเก็บจากข้อมูลจริงเช่นกัน จึงไม่นับซ้ำกัน
+    const isYE=(st.mo>=10);                       // ก.ค.-ก.ย. = ช่วงปิดบัญชีปลายปีงบ
+    if(seas && isYE) st.ni+=niYEV;                // NI ปลายปีตามฤดูกาลจริง (ไม่แตะเงินสด)
+    if(clGrow) st.ccl=Math.max(1, st.ccl+(seas&&isYE?clYEV:clMoV));
     const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
     r=anc(sc.risk);
     if(st.mo===12 && sepRisk==null){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
@@ -1688,6 +1713,8 @@ function exSetArOvr(hc,v){
 }
 function exArClear(){ EXST.arOvr={}; EXST.arPct=100; exSave(); exRender(); }
 function exSetWide(v){ EXST.wide=!!v; exSave(); exRender(); }
+function exSetClGrow(v){ EXST.clGrow=!!v; exSave(); exRender(); }
+function exSetSeas(v){ EXST.seas=!!v; exSave(); exRender(); }
 // ── แผงโยกเงินช่วยรายแห่ง (กางจากปุ่ม 🔄 โยกช่วย ในคอลัมน์เงินสดคงเหลือหลังภาระ MOE) ──
 function exXfHtml(x, sepLab){
   const h=x.h, hc=h.hcode;
@@ -2503,6 +2530,10 @@ function exRender(){
       ${exMoeVer()==='69p'?`<label title="จ่ายเงินสดกี่ % ของยอดยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (${EX.moeVers?EX.moeVers.nP9:9} บัญชี) · 100% = เท่า Ver69 · 0% = ไม่จ่ายเลย">🧾 จ่ายหนี้การค้า:
         <input type="number" class="exnum" style="width:64px" step="5" min="0" max="100" value="${exPayPct()}" onchange="exSetPayPct(this.value)"> %</label>
       <span class="tgt-note" title="ยืดหนี้ = ไม่จ่ายเงินสดออก แต่ไปกองเป็นเจ้าหนี้การค้าเท่ากันเป๊ะ&#10;• เงินสด (CA) เพิ่ม X · เจ้าหนี้ (CL) เพิ่ม X เท่ากัน&#10;• NWC = CA − CL จึงเท่าเดิมทุกบาท&#10;• NI เท่าเดิม (เกณฑ์คงค้าง — ค่าใช้จ่ายเกิดแล้ว เพียงยังไม่จ่าย)&#10;• CR/QR/Cash ratio ขยับเล็กน้อยเท่านั้น&#10;รพ. ที่ต้องเติมเงินติดเกณฑ์ NWC ติดลบ + NI ติดลบ ซึ่งการยืดหนี้แตะไม่ได้ทั้งคู่ → เงินสนับสนุนจึงเท่าเดิม">ค้างชำระไว้ ${fmtM(stretchTot)}/ด. → เจ้าหนี้การค้าโตเดือนละเท่านี้ · NI ไม่เปลี่ยน · <b>💰 เงินสนับสนุนมักไม่ขยับตาม %</b> (ยืดหนี้ไม่ใช่เงินใหม่ — CA กับ CL โตเท่ากัน NWC/NI จึงเท่าเดิม) ℹ️</span>`:''}
+      <label title="ใส่ปัจจัยฤดูกาลปลายปีงบจากข้อมูลจริง (เฉลี่ยปีงบ 2567+2568 รายแห่ง)&#10;• NI ช่วง ก.ค.-ก.ย. ติดลบเพิ่มตามที่เคยเกิดจริง — การปิดบัญชีปลายปี (ตั้งค่าใช้จ่ายค้างจ่าย · ตัดลูกหนี้ · ค่าเสื่อมงวดท้าย)&#10;• หนี้สินหมุนเวียนโตตามอัตราปลายปีจริง แทนอัตราต้นปี&#10;⚠️ ปิดตัวเลือกนี้ = ลาก run-rate ต้นปียาวถึง ก.ย. ซึ่ง backtest พบว่าทำนายผิดทิศ&#10;   (ของจริง ด.9→ด.12 ปี67 แย่ลง 33 แห่ง ปี68 แย่ลง 65 แห่ง แต่โมเดลแบบนั้นบอกแย่ลง 0 แห่ง)">
+        <input type="checkbox" ${EXST.seas!==false?'checked':''} onchange="exSetSeas(this.checked)"> 📉 ฤดูกาลปลายปีงบ</label>
+      <label title="ให้หนี้สินหมุนเวียนเดินตามอัตราจริงของแต่ละ รพ. แทนการตรึงคงที่&#10;ของเดิมตรึงไว้ ทำให้ CR/QR/Cash ดีขึ้นเองเพราะเงินสดพอกขึ้นฝ่ายเดียว">
+        <input type="checkbox" ${EXST.clGrow!==false?'checked':''} onchange="exSetClGrow(this.checked)"> 📊 หนี้สินเดินตามจริง</label>
       ${EX_SHOW_TJAR?`<label title="ลูกหนี้ตามจ่ายที่คาดว่า &quot;เก็บได้จริง&quot; กี่ % ของยอดในบัญชี&#10;ฝั่งเจ้าหนี้เคลียร์เป็น 0 ได้แน่นอนเพราะเป็นหนี้กันเองในเครือข่าย สป.สธ.&#10;แต่ฝั่งลูกหนี้เกินมา ${fmtM(exTjGapAll().gap)} ซึ่งบางส่วนน่าจะเป็นกรมอื่น/นอกเขต = อาจเรียกเก็บไม่ได้&#10;ปรับ % รวมทั้งเขตที่นี่ หรือกด ✎ ในคอลัมน์ลูกหนี้เพื่อแก้เป็นรายแห่ง">📥 ลูกหนี้ที่เก็บได้:
         <input type="number" class="exnum" style="width:58px" step="5" min="0" max="100" value="${exArPct()}" onchange="exSetArPct(this.value)"> %</label>
       ${(()=>{ const nOvr=Object.keys(EXST.arOvr||{}).length, cutAll=EX.hosp.reduce((s,p)=>s+exArCut(p),0);

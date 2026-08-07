@@ -284,6 +284,17 @@ def main():
         # ── ตรวจ NI สอดคล้อง ──
         if abs(ni_chk - float(t["ni"])) > 5:
             ni_bad.append(f"{org5} {h.get('name')}: Σrev−Σexp={ni_chk:,.0f} ≠ t.ni={t['ni']:,.0f}")
+        # ── หนี้สินหมุนเวียนโตเฉลี่ย/เดือน จาก trend ปีงบเดียวกัน (ด.1 → งวดล่าสุด) ──
+        # ใช้ค่าจริงของแต่ละ รพ. เอง ไม่ใช่ค่ากลางทั้งเขต · ถ้าข้อมูลไม่พอให้เป็น 0 (= พฤติกรรมเดิม)
+        fy_now = int(t["t"]) // 100
+        tr_fy = [r for r in (h.get("trend") or [])
+                 if r.get("cl") is not None and r.get("t") is not None and int(r["t"]) // 100 == fy_now]
+        tr_fy.sort(key=lambda r: int(r["t"]))
+        cl_mo = 0.0
+        if len(tr_fy) >= 2:
+            span = (int(tr_fy[-1]["t"]) % 100) - (int(tr_fy[0]["t"]) % 100)
+            if span >= 1:
+                cl_mo = round((float(tr_fy[-1]["cl"]) - float(tr_fy[0]["cl"])) / span, 0)
         s = srisk.get(org5, {})
         grp = h.get("grp") or ""
         typ = "รพศ." if grp.startswith("รพศ.") else ("รพท." if grp.startswith("รพท.") else "รพช.")
@@ -299,6 +310,11 @@ def main():
                    "cn": t["cn"], "ni": t["ni"],
                    # non-cash/เดือน = ค่าเสื่อม+ตัดจำหน่าย+หนี้สูญ (ดูเหตุผลที่ NONCASH_P ด้านบน)
                    "depMo": round(max(0.0, sum(v for p, v in exp.items() if p in NONCASH_P) / mo), 0),
+                   # clMo = หนี้สินหมุนเวียนโตเฉลี่ยกี่บาท/เดือน (run-rate ปีงบนี้ ด.1 → งวดล่าสุด)
+                   # ⚠️ เพิ่ม 6 ส.ค. 69 หลัง backtest พบว่าโมเดลเดิม "ตรึง CL คงที่" ทำให้ CR/QR/Cash
+                   #    ดีขึ้นเองโดยอัตโนมัติ และทำนายผิดทิศ: ปี 67/68 จริงระดับแย่ลง แต่โมเดลว่าดีขึ้น
+                   #    วัดความลำเอียงแล้ว run-rate ดีกว่าตรึง (ปี 68: −7.3% → −2.8%)
+                   "clMo": cl_mo,
                    # รายได้ไม่ใช่เงินสด/เดือน = รับบริจาคสินทรัพย์ (หักออกจากกระแสเงินสด ดู NONCASH_REV)
                    "donMo": round(max(0.0, bal(NONCASH_REV) / mo), 0),
                    # เจ้าหนี้แยกถัง (ฐานเงินสำรอง MOE · ดู cl_bucket + RISK_EXEC_MODEL.md 3.13)
