@@ -2226,6 +2226,12 @@ function exToggle(hc){ EXOPEN[hc]=!EXOPEN[hc]; exRender(); }
 // ⚠️ เจ้าหนี้ = ยอดดิบบัญชี 2101020199.202 (exPayIn) — **ไม่ขึ้นกับ Option ตามจ่ายด้านบน**
 //    Option เป็น "ผู้ใช้" ตัวเลขนี้ไปจำลอง ไม่ใช่ "ผู้แก้" ตัวเลข (ดู RISK_EXEC_MODEL.md — คอลัมน์ tjpay)
 // ⚠️ ลูกหนี้ = ยอดหลังปรับ % เก็บได้/กำหนดเองรายแห่ง (exArIn) จึงอาจน้อยกว่ายอดเต็มในบัญชี
+let EXPROV_TSV='';
+function exCopyProvTSV(){
+  const done=ok=>{ const el=document.getElementById('exProvCopyMsg'); if(el) el.textContent=ok?'คัดลอกแล้ว ✓ วางใน Excel ได้เลย':'คัดลอกไม่ได้'; };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(EXPROV_TSV).then(()=>done(true),()=>done(false));
+  else done(false);
+}
 function exRenderProvTj(items){
   const box=document.getElementById('exProvTjBox'); if(!box) return;
   const P={};
@@ -2259,6 +2265,19 @@ function exRenderProvTj(items){
     if(p.nAr<p.n) a.push(`${p.nAr}/${p.n} แห่ง`);
     if(cut>1) a.push(`เต็ม ${fmtM(p.arRaw)} · ตัดออก ${fmtM(cut)}`);
     return a.length?`<span class="cellsub${cut>1?' warn':''}">${a.join(' · ')}</span>`:''; };
+  // ── ไฟล์ TSV ของตารางนี้ (ปุ่ม 📋 คัดลอก) — สร้างจาก P/T ชุดเดียวกับที่วาดตาราง ──
+  // ⚠️ ห้ามคำนวณใหม่แยกต่างหาก ไม่งั้นของที่วางลง Excel จะหลุดจากที่เห็นบนจอ
+  //    (บทเรียนจาก 7.13: TSV ของตารางหลักเคยส่งออกลูกหนี้ยอดดิบขณะที่จอแสดงยอดหลังปรับ)
+  const MB=v=>(v/1e6).toFixed(2);
+  EXPROV_TSV=[
+    ['จังหวัด','จำนวน รพ.','หนี้ที่ต้องจ่าย 2101020199.202(ลบ.)',
+     'ลูกหนี้ที่คาดว่าจะเก็บได้ 1102050101.203+1102050194.204(ลบ.)',
+     'ลูกหนี้เต็มจำนวนตามบัญชี(ลบ.)','ส่วนที่ตัดออก(ลบ.)','%เก็บได้ที่ตั้งไว้',
+     'สุทธิ ลูกหนี้−หนี้(ลบ.)'].join('\t'),
+    ...provs.map(pv=>{ const p=P[pv];
+      return [pv,p.n,MB(p.pay),MB(p.ar),MB(p.arRaw),MB(p.arRaw-p.ar),arPct,MB(p.ar-p.pay)].join('\t'); }),
+    ['รวมทั้งเขต',T.n,MB(T.pay),MB(T.ar),MB(T.arRaw),MB(T.arRaw-T.ar),arPct,MB(T.ar-T.pay)].join('\t'),
+  ].join('\n');
   const row=(lab,p,tot)=>{ const net=p.ar-p.pay; return `<tr${tot?' style="font-weight:700;border-top:2px solid var(--line)"':''}>
     <td>${lab}</td>
     <td style="text-align:right">${p.n}</td>
@@ -2281,6 +2300,7 @@ function exRenderProvTj(items){
           ${row('<b>รวมทั้งเขต</b>',T,true)}
         </table>
       </div>
+      <div class="tgt-row" style="margin-top:6px"><button type="button" class="tgt-apply" onclick="exCopyProvTSV()">📋 คัดลอกตารางนี้ (วางใน Excel ได้)</button> <span class="tgt-note" id="exProvCopyMsg"></span></div>
       <div class="note" style="margin-top:4px"><b>ที่มา:</b> รวมยอดจาก<b>แถวเดียวกับตารางผลจำลองด้านล่าง</b> (${T.n} แห่งตามตัวกรองที่เลือกอยู่ — เปลี่ยนตัวกรองจังหวัด/ประเภท/ขอบเขต แล้วตารางนี้เปลี่ยนตาม) · <b>หนี้ที่ต้องจ่าย</b> = Σ เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (2101020199.202) · <b>ลูกหนี้</b> = Σ ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด สังกัด สป.สธ. (1102050101.203 + 1102050194.204)</div>
       <div class="note" style="margin-top:4px">🔗 <b>คอลัมน์ "ลูกหนี้ที่คาดว่าจะเก็บได้" ผูกกับตัวควบคุม 📥 ลูกหนี้ที่เก็บได้: ${arPct}% ในตารางผลจำลองด้านล่าง</b> — ปรับ % นั้น (หรือกด ✎ แก้รายแห่ง) แล้วตารางนี้เปลี่ยนตามทันที ใช้ยอดชุดเดียวกันเสมอ${cutTot>1?` · ตอนนี้<b>ตัดออก ${fmtM(cutTot)}</b> จากยอดเต็ม ${fmtM(T.arRaw)}${nOvr?` (มีที่กำหนดเองรายแห่ง ${nOvr} แห่ง)`:''}`:` · ตอนนี้ยังไม่มีการตัดออก (${arPct}% = เก็บได้เต็มจำนวน)`}</div>
       <div class="note" style="margin-top:4px">📥 <b>วิธีเกลี่ย ${arPct}% ลงรายจังหวัด/ราย รพ. (เจ้าของงานเคาะ 7 ส.ค. 69):</b> ① ยอดรวมทั้งเขตที่คาดว่าเก็บได้ = ลูกหนี้ดิบทั้งเขต × ${arPct}% → ② แบ่งให้แต่ละจังหวัด<b>ตามสัดส่วนเจ้าหนี้ของจังหวัดนั้น</b> (ไม่เกินลูกหนี้ดิบที่จังหวัดมีจริง) → ③ แบ่งต่อให้ รพ. ตามสัดส่วนลูกหนี้ดิบของแต่ละแห่งในจังหวัด<br>ผลคือ<b>ทุกจังหวัดได้อัตราส่วน ลูกหนี้:เจ้าหนี้ เท่ากัน</b> คอลัมน์สุทธิจึงใกล้ 0 ทุกแถว — <b>ไม่ใช่</b>การตัด ${arPct}% เท่ากันทุกแห่งแบบเดิม (วิธีเดิมทำให้จังหวัดที่ลูกหนี้สูงกว่าเจ้าหนี้ยังมีเงินไหลเข้าเกิน สถานะดูดีผิดปกติ)<br>⚠️ จังหวัดที่ลูกหนี้ดิบไม่พอกับโควตาจะติดเพดาน (สุทธิติดลบ) และส่วนที่ล้น<b>ไม่ถูกเกลี่ยต่อให้จังหวัดอื่น</b>โดยตั้งใจ ยอดรวมจึงต่ำกว่า ${arPct}% เล็กน้อย</div>
