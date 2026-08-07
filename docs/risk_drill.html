@@ -68,14 +68,22 @@ header .sub{font-size:11.5px;color:#cbd5e1}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{font-family:inherit;font-size:11.5px;font-weight:600;padding:5px 8px;border:none;background:var(--card);color:var(--mut);cursor:pointer;flex:1}
 .seg button.on{background:var(--ink);color:var(--bg)}
-/* 🟡 ไฮไลต์ "ตัวกรอง" (เจ้าของงานสั่ง 7 ส.ค. 69) — เส้นเหลืองรอบตัวที่กรองว่าจะแสดง รพ. ไหนบ้าง
-   ขอบเขต: เฉพาะตัวกรองแท้ ๆ เท่านั้น (ค้นหา/ระดับ/จังหวัด/วิกฤต6-7/ประเภท รพ.)
-   ⛔ ไม่ทาให้ตัวปรับสมมติฐาน (ช่วงจำลอง · นิยาม MOE · %ลูกหนี้ · ประเมินสภาพคล่องถึง · ฤดูกาล)
-      เพราะพวกนั้น "เปลี่ยนตัวเลข" ไม่ได้ "กรองแถว" — ปนกันแล้วเส้นเหลืองจะสื่อผิด
-   ใช้ !important เพราะ .lfilt select,.lfilt input / .seg / .exctl select ตั้ง border ไว้แล้วทั้งหมด */
-.filt-hl{border:1.5px solid var(--gold)!important;border-radius:8px}
-/* กลุ่ม checkbox ประเภท รพ. ไม่มีกรอบของตัวเอง — ห่อกรอบให้ทั้งกลุ่ม */
-.filt-grp{display:inline-flex;align-items:center;gap:10px;padding:3px 8px;border:1.5px solid var(--gold);border-radius:8px}
+/* 🟡 ไฮไลต์ช่องที่ "คลิกเลือก / คลิกกรอก" ได้ ทั้งหน้า (เจ้าของงานสั่ง 7 ส.ค. 69)
+   ── รอบแรกทาเฉพาะตัวกรอง แล้วเจ้าของงานสั่งขยายเป็น "ทุกกรอบที่คลิกได้" + หนาขึ้น (1.5px → 2px)
+   ขอบเขต = ของที่ "มีกรอบอยู่แล้วและคลิกเลือก/กรอกได้":
+     • <select> ทุกตัว (10 จุด — dropdown ทุกที่ในหน้า)
+     • <input> ชนิด text / number / search ทุกตัว (16 จุด — ช่องค้นหา + ช่องกรอกตัวเลข .exnum)
+     • .seg = ปุ่มสลับแบบกลุ่ม (Risk สูงสุด/แย่ลงเร็วสุด · วิกฤต 6-7/ทุกระดับ)
+     • .filt-grp = กลุ่ม checkbox ประเภท รพ. (ตัวมันไม่มีกรอบเอง จึงห่อกรอบให้)
+   ⛔ ไม่ทา: range slider · checkbox/radio เดี่ยว ๆ · ปุ่มสั่งงาน (พิมพ์ PDF/จัดสรรอัตโนมัติ/✎/โยกช่วย)
+      และ .lvlbtn (ปุ่มเป้าระดับ 0-7) เพราะ border:none อยู่แล้ว = ไม่ใช่ "กรอบ"
+   🪤 ต้องมี !important — .lfilt select,.lfilt input / .seg / .exctl select / .exnum / #acpMonthSel
+      (อันหลังเป็น inline style ด้วย) ตั้ง border ไว้หมดแล้วและ specificity สูงกว่า
+      ถ้าลืม เส้นจะไม่ขึ้นเงียบ ๆ แบบเดียวกับบั๊ก style ซ้ำใน 7.10
+   ⚠️ ตั้งแต่ border สีอย่างเดียว ไม่แตะ border-radius — ปล่อยให้แต่ละตัวคงความโค้งเดิมของมัน */
+select,input[type=text],input[type=number],input[type=search],.seg,.filt-grp{
+  border:2px solid var(--gold)!important}
+.filt-grp{display:inline-flex;align-items:center;gap:10px;padding:3px 8px;border-radius:8px}
 .filt-grp label{margin:0}
 .llist{flex:1;overflow-y:auto}
 .lrow{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--row-strip);cursor:pointer}
@@ -566,10 +574,10 @@ table.wltbl.ex-sticky.ex-wide th:nth-child(1){left:0;z-index:5;background:var(--
   <div class="left">
     <div class="drawer-close"><button onclick="closeDrawer()">✕ ปิด</button></div>
     <div class="lfilt">
-      <input id="qSearch" class="filt-hl" type="text" placeholder="ค้นหาชื่อ รพ. / จังหวัด..." oninput="renderList()">
+      <input id="qSearch" type="text" placeholder="ค้นหาชื่อ รพ. / จังหวัด..." oninput="renderList()">
       <div class="row">
-        <select id="fLevel" class="filt-hl" onchange="renderList()"><option value="">ทุกระดับ</option></select>
-        <select id="fProv" class="filt-hl" onchange="renderList()"><option value="">ทุกจังหวัด</option></select>
+        <select id="fLevel" onchange="renderList()"><option value="">ทุกระดับ</option></select>
+        <select id="fProv" onchange="renderList()"><option value="">ทุกจังหวัด</option></select>
       </div>
       <div class="seg">
         <button id="sRisk" class="on" onclick="setSort('risk')">Risk สูงสุด</button>
@@ -2011,7 +2019,7 @@ async function renderExec(){
       <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง <span id="exHorLab2">${sepLab}</span> ด้วยโมเดล MOE</h3>
       <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + ${exRiskSrcLab()}</div>
       <div class="exctl" style="margin-top:10px">
-        <span class="seg filt-hl" style="display:inline-flex">
+        <span class="seg" style="display:inline-flex">
           <button id="exC67" class="${EXST.crisis==='67'?'on':''}" onclick="exSet('crisis','67')">🚨 วิกฤต 6-7</button>
           <button id="exCall" class="${EXST.crisis==='all'?'on':''}" onclick="exSet('crisis','all')">ทุกระดับ</button>
         </span>
@@ -2627,7 +2635,7 @@ function exRender(){
       ${(()=>{ const nOvr=Object.keys(EXST.arOvr||{}).length, cutAll=EX.hosp.reduce((s,p)=>s+exArCut(p),0);
         return cutAll>0?`<span class="tgt-note">ตัดออกรวม ${fmtM(cutAll)}${nOvr?` · กำหนดเอง ${nOvr} แห่ง`:''} <a class="ovlink" onclick="exArClear()">คืนค่าเต็มทั้งหมด</a></span>`:''; })()}`:''}
       <label>🔎 กรองจังหวัด:
-        <select class="filt-hl" onchange="exSet('prov',this.value)">
+        <select onchange="exSet('prov',this.value)">
           <option value="all" ${EXST.prov==='all'?'selected':''}>ทุกจังหวัด</option>
           ${exProvs().map(p=>`<option value="${p}" ${EXST.prov===p?'selected':''}>${p}</option>`).join('')}
         </select></label>
