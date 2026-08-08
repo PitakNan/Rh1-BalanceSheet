@@ -2430,7 +2430,7 @@ function exRenderProvTj(items){
   const P={};
   items.forEach(x=>{
     const pv=x.h.prov||'(ไม่ระบุจังหวัด)';
-    const p=P[pv]||(P[pv]={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0,cap:0,nCap:0,short:0,nShort:0,gross:0,give:[],need:[]});
+    const p=P[pv]||(P[pv]={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0,cap:0,nCap:0,short:0,nShort:0,gross:0,got:0,give:[],need:[]});
     const pay=exPayIn(x.h), arRaw=exArRaw(x.h), ar=exArIn(x.h);
     p.n++; p.pay+=pay; p.arRaw+=arRaw; p.ar+=ar;
     if(pay>0) p.nPay++; if(ar>0) p.nAr++;
@@ -2452,6 +2452,12 @@ function exRenderProvTj(items){
     // ความต้องการ "ตั้งต้น" ก่อนหักเงินที่โยกมาแล้ว = ตัวเลขใหญ่ในคอลัมน์เดียวกันของตารางล่าง
     // ต้องนับนอก if/else เพราะแห่งที่รับโยกจนพลิกเป็นบวกแล้วจะไปอยู่ฝั่งผู้ให้ แต่ยังมี gross ค้างอยู่
     p.gross+=exTopUpGross(x);
+    // 🐞 เงินที่ "รับโยกมาแล้ว" ต้องใช้ exXferIn (ยอดที่โอนเข้าจริง) — **ห้ามคำนวณจาก gross − short**
+    //    (บั๊กที่เจ้าของงานจับได้ 8 ส.ค. 69) เพราะผู้รับมัก "ได้เกินยอดที่ขาด": กติกาจัดสรรข้อ ③
+    //    เติมเกินอีก 100K ต่อแห่ง + ปุ่ม "เติมเต็มส่วนขาด" ก็ปัดขึ้นได้ · พอ short ถูกตัดที่ 0
+    //    ส่วนเกินจึงหายไป → gross−short น้อยกว่าที่โอนจริง = ตัวเลขสองที่บนหน้าเดียวกันไม่ตรง
+    //    (งวด 256909 · 3 เดือน: หายไป 3.1 ลบ. จาก 31 แห่ง)
+    p.got+=exXferIn(x.h);
   });
   // ลำดับแถวตามหัวคอลัมน์ที่ผู้ใช้คลิก — ชื่อจังหวัดเป็นตัวตัดสินเสมอ ลำดับจึงคงที่ไม่สลับไปมาเอง
   // ⚠️ ทุกอย่างที่ไล่ตาม provs (capIdx ของป็อปอัป + ไฟล์ TSV) เรียงตามนี้ด้วยอัตโนมัติ — ตั้งใจ
@@ -2461,7 +2467,7 @@ function exRenderProvTj(items){
     const c=(typeof va==='string')?va.localeCompare(vb,'th'):((va||0)-(vb||0));
     return PS.dir*c || a.localeCompare(b,'th');
   });
-  const T={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0,cap:0,nCap:0,short:0,nShort:0,gross:0,give:[],need:[]};
+  const T={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0,cap:0,nCap:0,short:0,nShort:0,gross:0,got:0,give:[],need:[]};
   provs.forEach(pv=>{ const p=P[pv];
     for(const k in T) if(!Array.isArray(T[k])) T[k]+=p[k];
     T.give=T.give.concat(p.give); T.need=T.need.concat(p.need); });
@@ -2523,10 +2529,11 @@ function exRenderProvTj(items){
   // ⚠️ ตามตัวกรองเดียวกับตารางด้านบน = นับเฉพาะรายการที่ "ผู้รับ" อยู่ในชุดที่แสดงอยู่
   //    ส่วนที่ผู้ให้อยู่ในชุดแต่ผู้รับไม่อยู่ (ถูกกรองออก) รายงานแยกเป็นบรรทัดเดียว ไม่ทิ้งเงียบ
   const shownSet={}; items.forEach(x=>shownSet[x.h.hcode]=1);
-  const XFP={}; let xfTot=0, xfN=0, xfCross=0, xfOutN=0, xfOutSum=0;
+  const XFP={}; let xfTot=0, xfN=0, xfCross=0, xfOutN=0, xfOutSum=0, xfAll=0, xfAllN=0;
   exXferList().forEach(z=>{
     const g=EX.hosp.find(p=>p.hcode===z.f), r=EX.hosp.find(p=>p.hcode===z.t), a=+z.a||0;
     if(!g||!r||!(a>0)) return;
+    xfAll+=a; xfAllN++;   // ยอด "ทั้งแผน" ไม่สนตัวกรอง = ตัวเดียวกับบรรทัด 🔄 แผนโยกเงินใต้ตารางผลจำลอง
     if(shownSet[r.hcode]){
       const pv=r.prov||'(ไม่ระบุจังหวัด)';
       (XFP[pv]=XFP[pv]||[]).push({gn:g.name,gp:g.prov,rn:r.name,rp:r.prov,a,cross:g.prov!==r.prov});
@@ -2545,7 +2552,12 @@ function exRenderProvTj(items){
         <td style="text-align:right;font-weight:700;color:var(--green)">${fmtM(sum)}</td>
         <td style="text-align:right${rest>0?';color:var(--red);font-weight:700':''}">${rest>0?fmtM(rest):'<span style="color:var(--green)">✅ ครบ</span>'}</td></tr>`;
     }).join('');
-    return `<div class="tgt-row" style="font-weight:700;margin-top:10px">🔄 โยกช่วยกันไปแล้ว: <b style="color:var(--green)">${fmtM(xfTot)}</b> <span class="tgt-note" style="font-weight:400">(${xfN} รายการ · ${xfProvs.length} จังหวัด${xfCross?` · ข้ามจังหวัด ${xfCross} รายการ`:''})</span></div>
+    // ⚠️ ตัวเลขนี้เป็น "เฉพาะที่ตัวกรองแสดงอยู่" ส่วนบรรทัด 🔄 แผนโยกเงิน ใต้ตารางผลจำลองเป็น "ทั้งแผน"
+    //    เจ้าของงานเจอสองที่ไม่ตรงกัน (8 ส.ค. 69) — ไม่ใช่เลขผิด แต่คนละขอบเขต จึงต้อง**บอกทั้งสองค่า
+    //    พร้อมส่วนต่างและเหตุผล**ตรงนี้เลย ห้ามปล่อยให้ผู้อ่านไปเดาเอง
+    const xfGap=xfAll-xfTot;
+    return `<div class="tgt-row" style="font-weight:700;margin-top:10px">🔄 โยกช่วยกันไปแล้ว: <b style="color:var(--green)">${fmtM(xfTot)}</b> <span class="tgt-note" style="font-weight:400">(${xfN} รายการ · ${xfProvs.length} จังหวัด${xfCross?` · ข้ามจังหวัด ${xfCross} รายการ`:''})</span>${
+      xfGap>1?` <span class="tgt-warn" style="font-weight:600" title="ตารางนี้นับเฉพาะรายการที่ &quot;ผู้รับ&quot; อยู่ในตัวกรองที่เลือกอยู่&#10;ส่วนบรรทัด 🔄 แผนโยกเงินช่วยกัน ใต้ตารางผลจำลอง นับทั้งแผนไม่สนตัวกรอง&#10;เอาตัวกรองออกแล้วสองค่าจะเท่ากัน">· ทั้งแผนทั้งเขต ${fmtM(xfAll)} (${xfAllN} รายการ) — ต่างกัน ${fmtM(xfGap)} เพราะผู้รับบางแห่งไม่อยู่ในตัวกรองที่เลือก</span>`:''}</div>
       <div class="acctbl-wrap extbl" style="max-height:340px;margin-top:4px">
         <table class="wltbl" style="min-width:720px">
           <tr><th title="จังหวัดของ รพ. ผู้รับ — จับคู่กับคอลัมน์ส่วนขาดสภาพคล่อง(MOE) ในตารางด้านบนได้ตรง ๆ">จังหวัด<br>(ของผู้รับ)</th>
@@ -2562,16 +2574,17 @@ function exRenderProvTj(items){
   // ⚠️ ห้ามคำนวณใหม่แยกต่างหาก ไม่งั้นของที่วางลง Excel จะหลุดจากที่เห็นบนจอ
   //    (บทเรียนจาก 7.13: TSV ของตารางหลักเคยส่งออกลูกหนี้ยอดดิบขณะที่จอแสดงยอดหลังปรับ)
   const MB=v=>(v/1e6).toFixed(2);
+  // ⚠️ คอลัมน์ "รับโยกแล้ว" ต่อท้ายเสมอ — ห้ามแทรกกลาง เพราะชุดตรวจ TSV จับคู่ดัชนีคอลัมน์ไว้
   const tsvRow=(lab,p)=>[lab,p.n,MB(p.pay),MB(p.ar),MB(p.arRaw),MB(p.arRaw-p.ar),arPct,
     MB(p.cap),p.nCap,MB(p.short),p.nShort,MB(p.cap-p.short),
-    p.short>0?(p.cap>=p.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด'].join('\t');
+    p.short>0?(p.cap>=p.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด',MB(p.got)].join('\t');
   EXPROV_TSV=[
     ['จังหวัด','จำนวน รพ.','หนี้ที่ต้องจ่าย 2101020199.202(ลบ.)',
      'ลูกหนี้ที่คาดว่าจะเก็บได้ 1102050101.203+1102050194.204(ลบ.)',
      'ลูกหนี้เต็มจำนวนตามบัญชี(ลบ.)','ส่วนที่ตัดออก(ลบ.)','%เก็บได้ที่ตั้งไว้',
      'เงินช่วยภายในจังหวัด(ลบ.)','จำนวนแห่งที่ยกให้ได้',
      'ส่วนขาดสภาพคล่อง(MOE)(ลบ.)','จำนวนแห่งที่ขาด',
-     'เงินช่วย−ส่วนขาด(ลบ.)','เพียงพอหรือไม่'].join('\t'),
+     'เงินช่วย−ส่วนขาด(ลบ.)','เพียงพอหรือไม่','รับโยกมาแล้ว(ลบ.)'].join('\t'),
     ...provs.map(pv=>tsvRow(pv,P[pv])),
     tsvRow('รวมทั้งเขต',T),
   ].join('\n');
@@ -2584,15 +2597,15 @@ function exRenderProvTj(items){
     EXST.crisis==='67'?'เฉพาะวิกฤต 6-7':'ทุกระดับ'].join(' · ');
   EXPROV_XLSNAME=`สรุปรายจังหวัด_เงินช่วยกันเอง_${EX.period||''}.xlsx`;
   EXPROV_XLSX=[
-    {name:'สรุปรายจังหวัด', widths:[14,8,14,16,14,12,10,16,10,16,10,14,14],
+    {name:'สรุปรายจังหวัด', widths:[14,8,14,16,14,12,10,16,10,16,10,14,14,14],
      rows:[EXPROV_TSV.split('\n')[0].split('\t'),
        ...provs.map(pv=>{ const p=P[pv];
          return [pv,p.n,MBn(p.pay),MBn(p.ar),MBn(p.arRaw),MBn(p.arRaw-p.ar),arPct,
                  MBn(p.cap),p.nCap,MBn(p.short),p.nShort,MBn(p.cap-p.short),
-                 p.short>0?(p.cap>=p.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด']; }),
+                 p.short>0?(p.cap>=p.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด',MBn(p.got)]; }),
        ['รวมทั้งเขต',T.n,MBn(T.pay),MBn(T.ar),MBn(T.arRaw),MBn(T.arRaw-T.ar),arPct,
         MBn(T.cap),T.nCap,MBn(T.short),T.nShort,MBn(T.cap-T.short),
-        T.short>0?(T.cap>=T.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด']]},
+        T.short>0?(T.cap>=T.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด',MBn(T.got)]]},
     {name:'แผนโยกเงิน-ใครช่วยใคร', widths:[14,26,14,26,14,14,16],
      rows:[['จังหวัด(ของผู้รับ)','รพ. ผู้ให้','จังหวัดผู้ให้','รพ. ผู้รับ','ข้ามจังหวัด','จำนวน(ลบ.)','จำนวน(บาท)'],
        ...xfProvs.flatMap(pv=>XFP[pv].map(z=>[pv,z.gn,z.gp||'',z.rn,z.cross?'ข้ามจังหวัด':'',MBn(z.a),Math.round(z.a)])),
@@ -2635,7 +2648,8 @@ function exRenderProvTj(items){
       p.cap>0?fmtM(p.cap):'<span class="tgt-note">–</span>'}<span class="cellsub">${p.nCap} แห่ง 🔎</span>${sufTxt(p)}</td>
     <td class="provcap" style="text-align:right;${p.short>0?badCss:''}" title="${shortTitle(p)}" onclick="exProvCapOpen(${idx})">${
       p.short>0?fmtM(p.short):'<span class="tgt-note">–</span>'}<span class="cellsub">${p.nShort} แห่ง 🔎</span>${
-      p.gross-p.short>1?`<span class="cellsub" style="color:var(--green)">ตั้งต้น ${fmtM(p.gross)} · รับโยกแล้ว ${fmtM(p.gross-p.short)}</span>`:''}</td></tr>`; };
+      p.got>1?`<span class="cellsub" style="color:var(--green)">ตั้งต้น ${fmtM(p.gross)} · รับโยกแล้ว ${fmtM(p.got)}${
+        p.got-(p.gross-p.short)>1?` (เกินที่ขาด ${fmtM(p.got-(p.gross-p.short))})`:''}</span>`:''}</td></tr>`; };
   box.innerHTML=`
     <details ${EXST.open&&EXST.open.provtj?'open':''} ontoggle="exKeepOpen('provtj',this.open)">
       <summary style="cursor:pointer;font-size:13.5px;font-weight:700;padding:6px 0">🗺️ สรุปรายจังหวัด: หนี้ที่ต้องจ่าย ↔ ลูกหนี้ที่คาดว่าจะเก็บได้ ↔ เงินช่วยกันเองในจังหวัด (${provs.length} จังหวัด · ${T.n} แห่ง) <span class="tgt-note" style="font-weight:600">— เจ้าหนี้รวม ${fmtM(T.pay)} · ลูกหนี้คาดเก็บได้ ${fmtM(T.ar)}${arTag?` <b style="color:var(--gold)">@ ${arTag}</b>`:''} · ช่วยกันเองได้ ${fmtM(T.cap)} (${T.nCap} แห่ง) เทียบส่วนขาด ${fmtM(T.short)} (${T.nShort} แห่ง) · กดเพื่อกาง</span></summary>

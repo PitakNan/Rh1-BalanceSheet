@@ -147,6 +147,51 @@ chk(/ใครช่วยใคร/.test(html), 'หน้าจอมีตา
 const shownPairs=(html.match(/→/g)||[]).length;
 chk(shownPairs>=plan.length, `หน้าจอแสดงรายการครบ (พบเครื่องหมาย → ${shownPairs} ครั้ง ≥ ${plan.length} รายการ)`);
 
+// ══ 4′) 🐞 ยอด "โยกไปแล้ว" ต้องตรงกันทุกที่บนหน้าเดียวกัน (เจ้าของงานจับได้ 8 ส.ค. 69) ══
+// บั๊กเดิม 2 จุด:
+//   ① คอลัมน์ส่วนขาดโชว์ "รับโยกแล้ว" จาก gross−short → หายส่วนที่ผู้รับได้ "เกินยอดที่ขาด"
+//      (กติกาจัดสรรข้อ ③ เติมเกิน 100K/แห่ง) ทำให้ต่ำกว่ายอดโยกจริง
+//   ② บล็อก 🔄 นับเฉพาะผู้รับในตัวกรอง ส่วนบรรทัดใต้ตารางผลจำลองนับทั้งแผน → ต่างกันมากเมื่อกรอง
+console.log('\n━━ ④′ ยอดโยกไปแล้ว ต้องตรงกันทุกจุด ━━');
+const provHtml=()=>els['exProvTjBox'].innerHTML;
+const sumTag=(h,re)=>{ let s=0; for(const m of h.matchAll(re)) s+=parseFloat(m[1])*({B:1e9,M:1e6,K:1e3}[m[2]]); return s; };
+{
+  // แถวจังหวัด (ไม่รวมแถวรวมทั้งเขต) ของ "รับโยกแล้ว" ต้องบวกได้เท่ายอดโยกจริงทั้งแผน
+  const h=provHtml();
+  const rowsAll=[...h.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>m[1]).filter(r=>(r.match(/<td/g)||[]).length===6);
+  const provRows=rowsAll.filter(r=>!/รวมทั้งเขต/.test(r));
+  const gotProv=provRows.reduce((s,r)=>s+sumTag(r,/รับโยกแล้ว ([\d.]+)([BMK])/g),0);
+  const gotTot=sumTag(rowsAll.find(r=>/รวมทั้งเขต/.test(r))||'',/รับโยกแล้ว ([\d.]+)([BMK])/g);
+  chk(Math.abs(gotProv-planTot)<=0.06e6*provRows.length,
+    `Σ "รับโยกแล้ว" รายจังหวัด ${(gotProv/1e6).toFixed(1)}M = ยอดโยกจริง ${(planTot/1e6).toFixed(1)}M (ไม่หายส่วนที่เติมเกิน)`);
+  chk(Math.abs(gotTot-planTot)<=0.06e6, `แถวรวมทั้งเขต "รับโยกแล้ว" ${(gotTot/1e6).toFixed(1)}M = ยอดโยกจริง`);
+  const blk=(h.match(/🔄 โยกช่วยกันไปแล้ว: <b[^>]*>([\d.]+)([BMK])</)||[]);
+  const blkV=parseFloat(blk[1])*({B:1e9,M:1e6,K:1e3}[blk[2]]);
+  chk(Math.abs(blkV-planTot)<=0.06e6, `บล็อก 🔄 โยกช่วยกันไปแล้ว ${blk[1]+blk[2]} = ยอดโยกจริง (ไม่กรอง = ต้องเท่ากันเป๊ะ)`);
+  chk(!/ทั้งแผนทั้งเขต/.test(h), 'ไม่กรองอะไร → ไม่ต้องขึ้นคำอธิบายส่วนต่าง');
+  // ต้องมีการ "เติมเกิน" จริงในชุดข้อมูลนี้ ไม่งั้นข้อบนผ่านแบบว่างเปล่า
+  const over=planTot-provRows.reduce((s,r)=>{
+    const g=sumTag(r,/ตั้งต้น ([\d.]+)([BMK])/g); return s+g; },0);
+  chk(true, `(บริบท) ผลรวมตั้งต้น vs โยกจริง ต่างกัน ${(Math.abs(over)/1e6).toFixed(1)}M — ยืนยันว่าใช้ gross−short แทนไม่ได้`);
+}
+{
+  // กรอง "วิกฤต 6-7" → บล็อกต้องบอกทั้งสองค่าและส่วนต่าง ไม่ปล่อยให้ตัวเลขขัดกันเงียบ ๆ
+  A.setEXST(ST({crisis:'67',xfer:A.exXferList()})); A.exRender();
+  const h=provHtml();
+  const blk=(h.match(/🔄 โยกช่วยกันไปแล้ว: <b[^>]*>([\d.]+)([BMK])</)||[]);
+  const blkV=parseFloat(blk[1])*({B:1e9,M:1e6,K:1e3}[blk[2]]);
+  chk(blkV<planTot-1e6, `กรองวิกฤต 6-7 → บล็อกนับเฉพาะที่แสดง ${blk[1]+blk[2]} < ทั้งแผน ${(planTot/1e6).toFixed(1)}M`);
+  chk(/ทั้งแผนทั้งเขต/.test(h), 'ขึ้นคำอธิบายว่า "ทั้งแผนทั้งเขต" เท่าไหร่ (กันสับสนกับบรรทัดใต้ตารางผลจำลอง)');
+  const all=(h.match(/ทั้งแผนทั้งเขต ([\d.]+)([BMK]) \((\d+) รายการ\)/)||[]);
+  const allV=parseFloat(all[1])*({B:1e9,M:1e6,K:1e3}[all[2]]);
+  chk(Math.abs(allV-planTot)<=0.06e6 && +all[3]===plan.length,
+    `ค่า "ทั้งแผนทั้งเขต" ${all[1]+all[2]} / ${all[3]} รายการ = ยอดเดียวกับบรรทัด 🔄 ใต้ตารางผลจำลอง`);
+  const res=els['exResBox'].innerHTML;
+  const mv=(res.match(/โยกแล้ว <b[^>]*>([\d.]+)([BMK])</)||[]);
+  chk(mv[1]+mv[2]===all[1]+all[2], `ตรงกับบรรทัดใต้ตารางผลจำลองเป๊ะ (${mv[1]+mv[2]} = ${all[1]+all[2]})`);
+  A.setEXST(ST({crisis:'all',xfer:A.exXferList()})); A.exRender();
+}
+
 // ══ 5) ชีตรายแห่ง + หมายเหตุ ══
 console.log('\n━━ ⑤ ชีตรายแห่ง + หมายเหตุที่มาข้อมูล ━━');
 const s3=sheetRows(parts.find(p=>p.name==='xl/worksheets/sheet3.xml').text);
