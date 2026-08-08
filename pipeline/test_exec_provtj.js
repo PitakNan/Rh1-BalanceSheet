@@ -232,5 +232,58 @@ const tsvTot=tsv[tsv.length-1].split('\t');
 chk(Math.abs(+tsvTot[7]-IT.cap/1e6)<0.02 && +tsvTot[8]===IT.nCap, `TSV แถวรวม: เงินช่วย ${tsvTot[7]} ลบ. / ${tsvTot[8]} แห่ง ตรงกับที่คำนวณอิสระ (${(IT.cap/1e6).toFixed(2)} / ${IT.nCap})`);
 chk(Math.abs(+tsvTot[9]-IT.short/1e6)<0.02 && +tsvTot[10]===IT.nShort, `TSV แถวรวม: ส่วนขาด ${tsvTot[9]} ลบ. / ${tsvTot[10]} แห่ง ตรงกับที่คำนวณอิสระ (${(IT.short/1e6).toFixed(2)} / ${IT.nShort})`);
 
+// ══ 8) ↕️ คลิกหัวคอลัมน์เพื่อเรียงลำดับ (8 ส.ค. 69 · เจ้าของงานสั่ง) ══
+// ⚠️ state ต้องเป็นคนละตัวกับ EXSORT ของตารางผลจำลอง — ไม่งั้นคลิกตารางหนึ่งไปสลับอีกตาราง
+console.log('\n━━ ⑧ เรียงลำดับด้วยการคลิกหัวคอลัมน์ ━━');
+const dataOf=h=>[...h.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>
+    [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c=>c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()))
+  .filter(r=>r.length===6);
+const hSort=render({});
+// หัวตารางต้องกดได้ครบ 6 คอลัมน์ และมีลูกศรเฉพาะคอลัมน์ที่เรียงอยู่
+const ths=[...hSort.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)];
+const COLS=['prov','n','pay','ar','cap','short'];
+chk(COLS.every(c=>hSort.includes(`onclick="exSetProvSort('${c}')"`)), `หัวคอลัมน์กดเรียงได้ครบ ${COLS.length} คอลัมน์`);
+chk(ths.length===6, `มีหัวคอลัมน์ 6 ช่อง (ได้ ${ths.length})`);
+const onTh=ths.filter(m=>/class="exsortth on/.test(m[0]));
+chk(onTh.length===1 && /▲|▼/.test(onTh[0][1]), `มีคอลัมน์ที่กำลังเรียงอยู่ 1 คอลัมน์ + มีลูกศรบอกทิศ (ได้ ${onTh.length})`);
+chk((hSort.match(/⇅/g)||[]).length===5, 'คอลัมน์ที่ยังไม่ได้เรียงมีสัญลักษณ์ ⇅ บอกว่ากดได้ (5 คอลัมน์)');
+// ค่าเริ่มต้น = ชื่อจังหวัด ก→ฮ (พฤติกรรมเดิมก่อนใส่ตัวเรียง ต้องไม่เปลี่ยน)
+const defOrder=dataOf(hSort).filter(r=>!r[0].includes('รวมทั้งเขต')).map(r=>r[0]);
+chk(JSON.stringify(defOrder)===JSON.stringify(provs), `ค่าเริ่มต้นยังเรียงตามชื่อจังหวัด ก→ฮ (${defOrder.slice(0,3).join(', ')}…)`);
+// เรียงตามคอลัมน์ตัวเลขทั้งสองทิศ — เทียบกับค่าที่คำนวณอิสระใน ind (กลุ่ม ⑦)
+const numOK=(col,dir,val)=>{
+  const rows=dataOf(render({provSort:{col,dir}}));
+  const tot=rows[rows.length-1];
+  const order=rows.filter(r=>!r[0].includes('รวมทั้งเขต')).map(r=>r[0]);
+  const wantOrder=provs.slice().sort((a,b)=>dir*((val(a)||0)-(val(b)||0)) || a.localeCompare(b,'th'));
+  const okTotLast=!!tot && tot[0].includes('รวมทั้งเขต');
+  chk(JSON.stringify(order)===JSON.stringify(wantOrder) && okTotLast,
+    `เรียงตาม ${col} ${dir>0?'น้อย→มาก':'มาก→น้อย'} + แถวรวมอยู่ล่างสุด → ${order.join(' > ')}`);
+};
+numOK('short',-1,p=>(ind[p]||{}).short);
+numOK('cap',1,p=>(ind[p]||{}).cap);
+numOK('pay',-1,p=>{ const r=dataRows.find(z=>z[0]===p); return want[p].pay; });
+numOK('n',-1,p=>want[p].n);
+// เรียงย้อนชื่อจังหวัด
+const descProv=dataOf(render({provSort:{col:'prov',dir:-1}})).filter(r=>!r[0].includes('รวมทั้งเขต')).map(r=>r[0]);
+chk(JSON.stringify(descProv)===JSON.stringify(provs.slice().reverse()), 'เรียงชื่อจังหวัด ฮ→ก ได้');
+// คีย์เพี้ยน/ไม่มีอยู่ ต้องกลับไปใช้ค่าเริ่มต้น ไม่ใช่พังหรือได้ลำดับมั่ว
+const badSort=dataOf(render({provSort:{col:'ไม่มีคอลัมน์นี้',dir:-1}})).filter(r=>!r[0].includes('รวมทั้งเขต')).map(r=>r[0]);
+chk(JSON.stringify(badSort)===JSON.stringify(provs), 'คอลัมน์ที่ไม่รู้จัก → กลับไปเรียงตามชื่อจังหวัด (ไม่พัง)');
+// ไฟล์ TSV ต้องเรียงตามที่เห็นบนจอ (กติกาเดิมของตารางนี้)
+const A4=new Function(code+`;return {exRender,getTSV:()=>EXPROV_TSV,
+  setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
+A4.setEX(j); A4.setEXOPEN({}); A4.setEXBRK({}); A4.setEXSORT({col:null,dir:-1});
+A4.setEXST(ST({provSort:{col:'short',dir:-1}})); A4.exRender();
+const tsvOrder=A4.getTSV().split('\n').slice(1,-1).map(l=>l.split('\t')[0]);
+const scrOrder=dataOf(render({provSort:{col:'short',dir:-1}})).filter(r=>!r[0].includes('รวมทั้งเขต')).map(r=>r[0]);
+chk(JSON.stringify(tsvOrder)===JSON.stringify(scrOrder), `ลำดับใน TSV = ลำดับบนจอ (${tsvOrder.slice(0,3).join(', ')}…)`);
+// ป็อปอัปต้องยังชี้ถูกจังหวัดหลังสลับลำดับ (index ผูกกับ provs ที่เรียงใหม่)
+const hS=render({provSort:{col:'short',dir:-1}});
+const firstRowIdx=(hS.match(/onclick="exProvCapOpen\((\d+)\)"/)||[])[1];
+chk(firstRowIdx==='0', `แถวแรกหลังเรียงใหม่ผูกกับ EXPROVCAP[0] (ได้ ${firstRowIdx}) = ป็อปอัปไม่สลับจังหวัด`);
+// ⚠️ ต้องไม่ไปยุ่งกับ EXSORT ของตารางผลจำลอง
+chk(!/exSetSort\('(prov|n|pay|ar|cap|short)'\)/.test(hSort.replace(/exSetProvSort/g,'')), 'ตารางสรุปไม่เรียก exSetSort ของตารางผลจำลอง (คนละ state)');
+
 console.log(`\n${fail.length?'❌ ไม่ผ่าน '+fail.length+' ข้อ:\n  - '+fail.join('\n  - '):'✅ ผ่านทั้งหมด'}`);
 process.exit(fail.length?1:0);
