@@ -2276,7 +2276,84 @@ function exToggle(hc){ EXOPEN[hc]=!EXOPEN[hc]; exRender(); }
 // ⚠️ เจ้าหนี้ = ยอดดิบบัญชี 2101020199.202 (exPayIn) — **ไม่ขึ้นกับ Option ตามจ่ายด้านบน**
 //    Option เป็น "ผู้ใช้" ตัวเลขนี้ไปจำลอง ไม่ใช่ "ผู้แก้" ตัวเลข (ดู RISK_EXEC_MODEL.md — คอลัมน์ tjpay)
 // ⚠️ ลูกหนี้ = ยอดหลังปรับ % เก็บได้/กำหนดเองรายแห่ง (exArIn) จึงอาจน้อยกว่ายอดเต็มในบัญชี
-let EXPROV_TSV='';
+// ══ 📥 Export Excel (.xlsx) — เขียน ZIP + XLSX เองในหน้า ไม่พึ่งไลบรารีภายนอก ═════════════
+// ⚠️ แดชบอร์ดชุดนี้เป็น "ไฟล์เดียวจบ" ไม่โหลด CDN — จะใช้ SheetJS/ExcelJS ไม่ได้ จึงเขียน container เอง
+// ใช้ ZIP วิธี "store" (ไม่บีบอัด) — Excel เปิดได้ปกติ ไฟล์โตกว่านิดหน่อยแต่ไม่ต้องมี deflate
+// ⛔ ห้ามเปลี่ยนไปใช้ .xls/SpreadsheetML แทน — Excel จะเตือน "นามสกุลไม่ตรงกับรูปแบบไฟล์" ทุกครั้งที่เปิด
+// ⚠️ วันเวลาใน ZIP ตรึงค่าไว้ (ไม่อ่านนาฬิกาเครื่อง) → ข้อมูลชุดเดิมได้ไฟล์ไบต์เดิม ชุดตรวจจึงเทียบซ้ำได้
+const XLSX_CRCT=(()=>{ const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; }
+  return t; })();
+function xlsxCrc32(b){ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=XLSX_CRCT[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+const xlsxEnc=s=>new TextEncoder().encode(s);
+function xlsxZip(files){
+  const DT=0, DD=0x2821;                       // 1 ม.ค. 2000 00:00 — ค่าตรึง
+  const parts=[], cd=[]; let off=0;
+  files.forEach(f=>{
+    const nm=xlsxEnc(f.name), crc=xlsxCrc32(f.data), n=f.data.length;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true);
+    lh.setUint16(8,0,true); lh.setUint16(10,DT,true); lh.setUint16(12,DD,true);
+    lh.setUint32(14,crc,true); lh.setUint32(18,n,true); lh.setUint32(22,n,true);
+    lh.setUint16(26,nm.length,true); lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),nm,f.data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true);
+    ch.setUint16(8,0x0800,true); ch.setUint16(10,0,true); ch.setUint16(12,DT,true); ch.setUint16(14,DD,true);
+    ch.setUint32(16,crc,true); ch.setUint32(20,n,true); ch.setUint32(24,n,true);
+    ch.setUint16(28,nm.length,true); ch.setUint32(42,off,true);
+    cd.push(new Uint8Array(ch.buffer),nm);
+    off+=30+nm.length+n;
+  });
+  const cdSize=cd.reduce((s,a)=>s+a.length,0);
+  const eo=new DataView(new ArrayBuffer(22));
+  eo.setUint32(0,0x06054b50,true); eo.setUint16(8,files.length,true); eo.setUint16(10,files.length,true);
+  eo.setUint32(12,cdSize,true); eo.setUint32(16,off,true);
+  const all=[...parts,...cd,new Uint8Array(eo.buffer)];
+  const out=new Uint8Array(all.reduce((s,a)=>s+a.length,0));
+  let p=0; all.forEach(a=>{ out.set(a,p); p+=a.length; });
+  return out;
+}
+const xlsxX=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function xlsxCol(i){ let s='', k=i+1; while(k>0){ const m=(k-1)%26; s=String.fromCharCode(65+m)+s; k=(k-m-1)/26; } return s; }
+// ⚠️ ชื่อชีต Excel: ไม่เกิน 31 ตัว และห้ามอักขระ []:*?/\ — ไม่ sanitize แล้วไฟล์เปิดไม่ขึ้นเลย
+const xlsxSheetName=s=>String(s).replace(/[\[\]:*?\/\\]/g,'-').slice(0,31)||'Sheet';
+function xlsxSheetXml(rows,widths){
+  const cols=(widths&&widths.length)?`<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`:'';
+  const body=rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>{
+    if(v==null||v==='') return '';
+    const ref=xlsxCol(ci)+(ri+1);
+    return (typeof v==='number'&&isFinite(v))
+      ? `<c r="${ref}"><v>${v}</v></c>`
+      : `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xlsxX(v)}</t></is></c>`;
+  }).join('')}</row>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${body}</sheetData></worksheet>`;
+}
+function xlsxBuild(sheets){
+  const f=[], push=(name,str)=>f.push({name,data:xlsxEnc(str)});
+  const ov=sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+  push('[Content_Types].xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${ov}</Types>`);
+  push('_rels/.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  push('xl/workbook.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s,i)=>`<sheet name="${xlsxX(xlsxSheetName(s.name))}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`);
+  push('xl/_rels/workbook.xml.rels',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}</Relationships>`);
+  sheets.forEach((s,i)=>push(`xl/worksheets/sheet${i+1}.xml`, xlsxSheetXml(s.rows,s.widths)));
+  return xlsxZip(f);
+}
+function xlsxDownload(fname,sheets){
+  const blob=new Blob([xlsxBuild(sheets)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+let EXPROV_TSV='', EXPROV_XLSX=null, EXPROV_XLSNAME='';
+function exExportProvXlsx(){
+  const el=document.getElementById('exProvCopyMsg');
+  try{
+    if(!EXPROV_XLSX||!EXPROV_XLSX.length) throw new Error('ยังไม่มีข้อมูล');
+    xlsxDownload(EXPROV_XLSNAME, EXPROV_XLSX);
+    if(el) el.textContent=`ดาวน์โหลดแล้ว ✓ ${EXPROV_XLSNAME} (${EXPROV_XLSX.length} ชีต)`;
+  }catch(e){ if(el) el.textContent='สร้างไฟล์ไม่ได้: '+e.message; }
+}
 // ── 🔎 ป็อปอัป "มีที่ไหนกี่บาท" ของคอลัมน์เงินช่วย/ส่วนขาด (เจ้าของงานสั่ง 8 ส.ค. 69) ──
 // EXPROVCAP ถูกเติมใหม่ทุกครั้งที่ exRenderProvTj ทำงาน — อ้างด้วย "เลขลำดับ" ไม่ใช่ชื่อจังหวัด
 // (ชื่อจังหวัดมาจากข้อมูล ถ้ามีอัญประกาศปนจะทำให้ onclick พังเงียบ ๆ)
@@ -2438,6 +2515,49 @@ function exRenderProvTj(items){
       ? `<span class="cellsub" style="color:var(--green)">✅ พอช่วยกันเอง (เหลือ ${fmtM(p.cap-p.short)})</span>`
       : `<span class="cellsub warn">⛔ ไม่พอ ขาดต้นทาง ${fmtM(p.short-p.cap)}</span>`;
   };
+  // ── 🔄 "ใครช่วยใครไปแล้วเท่าไหร่" รายจังหวัด (เจ้าของงานสั่ง 8 ส.ค. 69) ────────────────
+  // จัดกลุ่มตาม **จังหวัดของผู้รับ** เพราะคำถามคือ "จังหวัดนี้อุดส่วนขาดไปแล้วแค่ไหน"
+  //   → จับคู่กับคอลัมน์ "ส่วนขาดสภาพคล่อง(MOE)" ในแถวเดียวกันได้ตรง ๆ
+  // ผู้ให้ที่อยู่คนละจังหวัดยังแสดงในกลุ่มของผู้รับ แต่ติดป้าย "ข้ามจังหวัด" ไว้ (กติกา ① ให้โยกในจังหวัด
+  // ทีมจึงต้องเห็นทันทีว่ารายการไหนเป็นการโยกข้ามที่ทำเอง ไม่ใช่ผลจากปุ่มจัดสรรอัตโนมัติ)
+  // ⚠️ ตามตัวกรองเดียวกับตารางด้านบน = นับเฉพาะรายการที่ "ผู้รับ" อยู่ในชุดที่แสดงอยู่
+  //    ส่วนที่ผู้ให้อยู่ในชุดแต่ผู้รับไม่อยู่ (ถูกกรองออก) รายงานแยกเป็นบรรทัดเดียว ไม่ทิ้งเงียบ
+  const shownSet={}; items.forEach(x=>shownSet[x.h.hcode]=1);
+  const XFP={}; let xfTot=0, xfN=0, xfCross=0, xfOutN=0, xfOutSum=0;
+  exXferList().forEach(z=>{
+    const g=EX.hosp.find(p=>p.hcode===z.f), r=EX.hosp.find(p=>p.hcode===z.t), a=+z.a||0;
+    if(!g||!r||!(a>0)) return;
+    if(shownSet[r.hcode]){
+      const pv=r.prov||'(ไม่ระบุจังหวัด)';
+      (XFP[pv]=XFP[pv]||[]).push({gn:g.name,gp:g.prov,rn:r.name,rp:r.prov,a,cross:g.prov!==r.prov});
+      xfTot+=a; xfN++; if(g.prov!==r.prov) xfCross++;
+    } else if(shownSet[g.hcode]){ xfOutN++; xfOutSum+=a; }
+  });
+  const xfProvs=Object.keys(XFP).sort((a,b)=>a.localeCompare(b,'th'));
+  xfProvs.forEach(pv=>XFP[pv].sort((a,b)=>b.a-a.a));
+  const xfHtml=(()=>{
+    if(!xfN&&!xfOutN) return `<div class="note" style="margin-top:6px">🔄 <b>ยังไม่มีการโยกเงินช่วยกันในแผนนี้</b> — ตัวเลขคอลัมน์ "เงินช่วยภายในจังหวัด" จึงเป็น<b>กำลังช่วยเต็มจำนวนที่ยังไม่ถูกใช้</b> · กดปุ่ม <b>⚡ จัดสรรอัตโนมัติ</b> เหนือตารางผลจำลอง เพื่อให้ระบบเสนอว่าใครควรช่วยใคร แล้วรายการจะมาแสดงตรงนี้</div>`;
+    const rows=xfProvs.map(pv=>{
+      const L=XFP[pv], sum=L.reduce((s,z)=>s+z.a,0), p=P[pv];
+      const rest=p?p.short:0;
+      return `<tr><td><b>${pv}</b><span class="cellsub">${L.length} รายการ${L.filter(z=>z.cross).length?` · ข้ามจังหวัด ${L.filter(z=>z.cross).length}`:''}</span></td>
+        <td>${L.map(z=>`<span class="xfin" style="max-width:none;display:inline-flex;margin:1px 3px 1px 0"${z.cross?' title="ผู้ให้อยู่คนละจังหวัดกับผู้รับ — เป็นการโยกข้ามจังหวัดที่ทีมทำเอง ไม่ใช่ผลจากปุ่มจัดสรรอัตโนมัติ"':''}>${z.cross?'⤳ ':''}${z.gn}${z.cross?` (${z.gp})`:''} → ${z.rn} ${fmtM(z.a)}</span>`).join('')}</td>
+        <td style="text-align:right;font-weight:700;color:var(--green)">${fmtM(sum)}</td>
+        <td style="text-align:right${rest>0?';color:var(--red);font-weight:700':''}">${rest>0?fmtM(rest):'<span style="color:var(--green)">✅ ครบ</span>'}</td></tr>`;
+    }).join('');
+    return `<div class="tgt-row" style="font-weight:700;margin-top:10px">🔄 โยกช่วยกันไปแล้ว: <b style="color:var(--green)">${fmtM(xfTot)}</b> <span class="tgt-note" style="font-weight:400">(${xfN} รายการ · ${xfProvs.length} จังหวัด${xfCross?` · ข้ามจังหวัด ${xfCross} รายการ`:''})</span></div>
+      <div class="acctbl-wrap extbl" style="max-height:340px;margin-top:4px">
+        <table class="wltbl" style="min-width:720px">
+          <tr><th title="จังหวัดของ รพ. ผู้รับ — จับคู่กับคอลัมน์ส่วนขาดสภาพคล่อง(MOE) ในตารางด้านบนได้ตรง ๆ">จังหวัด<br>(ของผู้รับ)</th>
+            <th title="ผู้ให้ → ผู้รับ · ยอดที่โยกจริงตามแผน&#10;⤳ = ผู้ให้อยู่คนละจังหวัด (ทีมโยกข้ามเอง)">ใครช่วยใคร (เรียงยอดมาก→น้อย)</th>
+            <th style="text-align:right" title="ผลรวมที่โยกเข้ามาในจังหวัดนี้">รวมที่โยกแล้ว</th>
+            <th style="text-align:right" title="ส่วนขาดสภาพคล่อง(MOE) ที่ยังเหลือของจังหวัดนี้ หลังหักเงินที่โยกมาแล้ว">ยังขาดอีก</th></tr>
+          ${rows||'<tr><td colspan="4"><span class="tgt-note">ไม่มีรายการที่ผู้รับอยู่ในตัวกรองที่เลือก</span></td></tr>'}
+        </table>
+      </div>
+      ${xfOutN?`<div class="note" style="margin-top:4px">⚠️ อีก <b>${xfOutN} รายการ รวม ${fmtM(xfOutSum)}</b> เป็นเงินที่ รพ. ในชุดที่แสดงอยู่<b>ยกให้ผู้รับที่ถูกตัวกรองกรองออกไป</b> จึงไม่ปรากฏในตารางนี้ — เอาตัวกรองจังหวัด/ประเภทออกเพื่อดูครบ</div>`:''}
+      <div class="note" style="margin-top:4px">รายการทั้งหมดมาจาก<b>แผนโยกชุดเดียว</b>กับปุ่ม 🔄 โยกช่วย / ⚡ จัดสรรอัตโนมัติ ในตารางผลจำลอง (บันทึกถาวร รีเฟรชแล้วยังอยู่) · ยกเลิกรายการได้ที่ป้าย ✕ ในคอลัมน์ "ส่วนขาดสภาพคล่อง(MOE)" ของตารางนั้น</div>`;
+  })();
   // ── ไฟล์ TSV ของตารางนี้ (ปุ่ม 📋 คัดลอก) — สร้างจาก P/T ชุดเดียวกับที่วาดตาราง ──
   // ⚠️ ห้ามคำนวณใหม่แยกต่างหาก ไม่งั้นของที่วางลง Excel จะหลุดจากที่เห็นบนจอ
   //    (บทเรียนจาก 7.13: TSV ของตารางหลักเคยส่งออกลูกหนี้ยอดดิบขณะที่จอแสดงยอดหลังปรับ)
@@ -2455,6 +2575,54 @@ function exRenderProvTj(items){
     ...provs.map(pv=>tsvRow(pv,P[pv])),
     tsvRow('รวมทั้งเขต',T),
   ].join('\n');
+  // ── ไฟล์ Excel (.xlsx) 5 ชีต — สร้างจากตัวแปรชุดเดียวกับที่วาดตาราง เหมือนกติกาของ TSV ──
+  // ⚠️ ตัวเลขต้องเป็น "ตัวเลขจริง" (number) ไม่ใช่สตริง ไม่งั้น Excel รวม/เรียงไม่ได้ = เสียประโยชน์ของการ export
+  // หน่วยเป็น "ล้านบาท" ทุกชีตให้ตรงกับที่อ่านบนจอ + มีคอลัมน์บาทเต็มในชีตแผนโยกไว้กระทบยอด
+  const MBn=v=>Math.round((v||0)/1e4)/100;                 // ล้านบาท 2 ตำแหน่ง (เป็น number)
+  const filtLab=[EXST.prov==='all'?'ทุกจังหวัด':EXST.prov,
+    Object.keys(EXST.types||{}).filter(k=>EXST.types[k]).join('+')||'ไม่เลือกประเภท',
+    EXST.crisis==='67'?'เฉพาะวิกฤต 6-7':'ทุกระดับ'].join(' · ');
+  EXPROV_XLSNAME=`สรุปรายจังหวัด_เงินช่วยกันเอง_${EX.period||''}.xlsx`;
+  EXPROV_XLSX=[
+    {name:'สรุปรายจังหวัด', widths:[14,8,14,16,14,12,10,16,10,16,10,14,14],
+     rows:[EXPROV_TSV.split('\n')[0].split('\t'),
+       ...provs.map(pv=>{ const p=P[pv];
+         return [pv,p.n,MBn(p.pay),MBn(p.ar),MBn(p.arRaw),MBn(p.arRaw-p.ar),arPct,
+                 MBn(p.cap),p.nCap,MBn(p.short),p.nShort,MBn(p.cap-p.short),
+                 p.short>0?(p.cap>=p.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด']; }),
+       ['รวมทั้งเขต',T.n,MBn(T.pay),MBn(T.ar),MBn(T.arRaw),MBn(T.arRaw-T.ar),arPct,
+        MBn(T.cap),T.nCap,MBn(T.short),T.nShort,MBn(T.cap-T.short),
+        T.short>0?(T.cap>=T.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด']]},
+    {name:'แผนโยกเงิน-ใครช่วยใคร', widths:[14,26,14,26,14,14,16],
+     rows:[['จังหวัด(ของผู้รับ)','รพ. ผู้ให้','จังหวัดผู้ให้','รพ. ผู้รับ','ข้ามจังหวัด','จำนวน(ลบ.)','จำนวน(บาท)'],
+       ...xfProvs.flatMap(pv=>XFP[pv].map(z=>[pv,z.gn,z.gp||'',z.rn,z.cross?'ข้ามจังหวัด':'',MBn(z.a),Math.round(z.a)])),
+       ...(xfN?[['รวม','','','','',MBn(xfTot),Math.round(xfTot)]]:[])]},
+    {name:'รายแห่ง-ยกให้ได้', widths:[14,28,10,14,20,16],
+     rows:[['จังหวัด','โรงพยาบาล','ประเภท','ระดับ ณ '+tLab(exSepT()),'เงินสดคงเหลือหลังภาระ MOE(ลบ.)','ยกให้ได้(ลบ.)'],
+       ...provs.flatMap(pv=>P[pv].give.slice().sort((a,b)=>b.cap-a.cap)
+         .map(g=>[pv,g.name,g.type||'',g.risk==null?'':g.risk,MBn(g.left),MBn(g.cap)])),
+       ['รวม','','','','',MBn(T.cap)]]},
+    {name:'รายแห่ง-ยังขาด', widths:[14,28,10,14,16],
+     rows:[['จังหวัด','โรงพยาบาล','ประเภท','ระดับ ณ '+tLab(exSepT()),'ยังขาด(ลบ.)'],
+       ...provs.flatMap(pv=>P[pv].need.slice().sort((a,b)=>b.up-a.up)
+         .map(z=>[pv,z.name,z.type||'',z.risk==null?'':z.risk,MBn(z.up)])),
+       ['รวม','','','',MBn(T.short)]]},
+    {name:'หมายเหตุ-ที่มาข้อมูล', widths:[30,90],
+     rows:[['หัวข้อ','รายละเอียด'],
+       ['งวดข้อมูล',EX.periodLabel||''],
+       ['ตัวกรองที่ใช้ตอน export',filtLab],
+       ['จำนวน รพ. ที่นับ',T.n],
+       ['ลูกหนี้ที่คาดว่าจะเก็บได้',`${arPct}% ของยอดดิบ${cutTot>1?` (ตัดออก ${(cutTot/1e6).toFixed(2)} ลบ. จากยอดเต็ม ${(T.arRaw/1e6).toFixed(2)} ลบ.)`:' (เก็บได้เต็มจำนวน)'}`],
+       ['ช่วงประเมินสภาพคล่อง',`${exMoeMonths()} เดือน ถึง ${exMoeTargetLab()}`],
+       ['หนี้ที่ต้องจ่าย','Σ เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (บัญชี 2101020199.202) — ยอดดิบตามงบทดลอง ไม่เปลี่ยนตาม Option ตามจ่าย/ยกหนี้'],
+       ['ลูกหนี้ที่คาดว่าจะเก็บได้','Σ ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (1102050101.203 + 1102050194.204) หลังเกลี่ยตามสัดส่วนเจ้าหนี้รายจังหวัด'],
+       ['เงินช่วยภายในจังหวัด',`Σ เพดานที่แต่ละแห่งยกให้ได้ = ค่าที่น้อยกว่าระหว่าง (1) เงินสดคงเหลือหลังภาระ MOE (2) จำนวนที่ยกให้แล้วระดับวิกฤต ณ เดือนเป้ายังไม่เกิน ${EX_XF_HARD} — เป็นกำลังช่วย "ที่ยังเหลือ" หักที่โยกออกไปแล้ว`],
+       ['ส่วนขาดสภาพคล่อง(MOE)','ส่วนที่ติดลบของเงินสดคงเหลือหลังภาระ MOE หลังหักเงินที่โยกมาช่วยแล้ว'],
+       ['⛔ ข้อควรระวัง 1','ส่วนขาดสภาพคล่อง(MOE) เป็นผลประเมินกรณีรายรับไม่เป็นไปตามแผน (ไม่มีรายรับเข้าเลย) ไม่ใช่คำของบ — เม็ดเงินจริงดูคอลัมน์ "เงินสนับสนุนที่ต้องใช้" ในแดชบอร์ด'],
+       ['⛔ ข้อควรระวัง 2',`แถวรวมทั้งเขตเป็นภาพรวมเท่านั้น กติกาจัดสรรให้โยกภายในจังหวัดเดียวกัน เงินเหลือของจังหวัดหนึ่งจึงเอาไปอุดอีกจังหวัดโดยอัตโนมัติไม่ได้`],
+       ['⛔ ข้อควรระวัง 3','ยอดเจ้าหนี้กับลูกหนี้สองฝั่งบันทึกแยกเล่ม และคู่หนี้บางส่วนอยู่นอกชุด รพ. ในเขต — ยังไม่ได้ยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขต ใช้วางแผน ไม่ใช่ยอดสั่งจ่าย'],
+       ['ที่มาไฟล์','risk_drill.html#exec · pitaknan.github.io/Rh1-BalanceSheet — สร้างจากตัวเลขชุดเดียวกับที่แสดงบนหน้าจอ ณ ขณะกดปุ่ม']]},
+  ];
   // idx = ตำแหน่งใน EXPROVCAP สำหรับป็อปอัป · แถวรวมใช้ตัวสุดท้ายเสมอ
   // (lab ของแถวรวมมีแท็ก <b> อยู่ด้วย จึงค้น capIdx ไม่เจอ — ต้องแยกด้วย tot ไม่ใช่ปล่อยให้ fallback)
   const row=(lab,p,tot)=>{ const idx=tot?totIdx:capIdx[lab];
@@ -2485,7 +2653,9 @@ function exRenderProvTj(items){
           ${row('<b>รวมทั้งเขต</b>',T,true)}
         </table>
       </div>
-      <div class="tgt-row" style="margin-top:6px"><button type="button" class="tgt-apply" onclick="exCopyProvTSV()">📋 คัดลอกตารางนี้ (วางใน Excel ได้)</button> <span class="tgt-note" id="exProvCopyMsg"></span></div>
+      ${xfHtml}
+      <div class="tgt-row" style="margin-top:8px"><button type="button" class="tgt-apply" onclick="exExportProvXlsx()" title="ดาวน์โหลดไฟล์ Excel (.xlsx) 5 ชีต&#10;① สรุปรายจังหวัด ② แผนโยกเงิน ใครช่วยใคร ③ รายแห่งที่ยกให้ได้ ④ รายแห่งที่ยังขาด ⑤ หมายเหตุ/ที่มาข้อมูล&#10;ตัวเลขเป็นตัวเลขจริง รวม/เรียงใน Excel ได้ทันที&#10;สร้างจากตัวเลขชุดเดียวกับที่เห็นบนจอ ณ ขณะกดปุ่ม (ตามตัวกรองที่เลือกอยู่)">📥 Export Excel (.xlsx)</button>
+        <button type="button" class="tgt-apply" style="margin-left:6px" onclick="exCopyProvTSV()">📋 คัดลอกเฉพาะตารางสรุป (วางใน Excel ได้)</button> <span class="tgt-note" id="exProvCopyMsg"></span></div>
       <div class="note" style="margin-top:4px">↕️ <b>กดหัวคอลัมน์เพื่อเรียงลำดับ</b> — กดซ้ำคอลัมน์เดิมสลับมาก↔น้อย · <b>แถวรวมทั้งเขตอยู่ล่างสุดเสมอ</b> ไม่ร่วมการเรียง · จำลำดับไว้ข้ามรีเฟรช · ไฟล์ TSV ที่คัดลอกเรียงตามที่เห็นบนจอ${(()=>{ const s=exProvSort();
         const nm={prov:'จังหวัด',n:'จำนวน รพ.',pay:'หนี้ที่ต้องจ่าย',ar:'ลูกหนี้ที่คาดว่าจะเก็บได้',cap:'เงินช่วยภายในจังหวัด',short:'ส่วนขาดสภาพคล่อง(MOE)'};
         return ` · ตอนนี้เรียงตาม <b>${nm[s.col]||s.col}</b> ${s.dir>0?'น้อย→มาก':'มาก→น้อย'}`; })()}</div>
