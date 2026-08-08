@@ -383,6 +383,9 @@ table.wltbl.ex-sticky.ex-wide th:nth-child(1){left:0;z-index:5;background:var(--
 /* บรรทัดย่อยในเซลล์ตาราง (เช่น "พอจ่าย MOE X เดือน" ใต้ยอดเงินสด) */
 .cellsub{display:block;font-size:10.5px;font-weight:400;color:var(--mut);white-space:nowrap}
 .cellsub.warn{color:var(--red)}
+/* เซลล์ที่กดดูรายชื่อ รพ. ได้ ในตารางสรุปรายจังหวัด (คอลัมน์เงินช่วย + ส่วนขาด) */
+.provcap{cursor:pointer}
+.provcap:hover{outline:2px solid var(--gold);outline-offset:-2px}
 .exhist{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap}
 .exhist .b{min-width:26px;text-align:center;border-radius:7px;color:#fff;font-weight:800;font-size:11.5px;padding:3px 4px}
 .exnum{font-family:inherit;font-size:12px;width:90px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
@@ -2179,6 +2182,13 @@ function exXferWarnCap(h){                          // ให้เกินเ�
   const d=exSolveDown(h, EX_XF_WARN+1);
   return (d==null)?Infinity:Math.max(0, d-SV_STEP);
 }
+// ── cache เพดานผู้ให้ "ต่อหนึ่งรอบ render" ──────────────────────────────────────────────
+// exXferCap เรียก exSolveDown = binary search ~15 รอบของ exSimPath ต่อ 1 แห่ง
+// ในหนึ่ง render ของเดิมเรียกซ้ำ 3 จุด (เซลล์ปุ่ม 🔄 · บรรทัดสรุป capAll · และตั้งแต่ 7.12 คือตารางรายจังหวัด)
+// ⚠️ ต้องล้างที่ต้น exRender เท่านั้น — ถ้าลืมล้าง เพดานจะค้างค่าเก่าหลังผู้ใช้โยกเงิน/เปลี่ยนสมมติฐาน
+// ⛔ ห้ามใช้ตัวนี้นอก exRender (เช่น exXfSubmit ที่ตรวจเพดานก่อนบันทึก) — ต้องใช้ exXferCap สด ๆ
+let EXCAPC={};
+function exXferCapC(h){ const k=h.hcode; return (k in EXCAPC)?EXCAPC[k]:(EXCAPC[k]=exXferCap(h)); }
 function exXferAdd(f,t,a){
   a=Math.round(+a||0);
   if(!f||!t||f===t||a<=0) return;
@@ -2243,6 +2253,70 @@ function exToggle(hc){ EXOPEN[hc]=!EXOPEN[hc]; exRender(); }
 //    Option เป็น "ผู้ใช้" ตัวเลขนี้ไปจำลอง ไม่ใช่ "ผู้แก้" ตัวเลข (ดู RISK_EXEC_MODEL.md — คอลัมน์ tjpay)
 // ⚠️ ลูกหนี้ = ยอดหลังปรับ % เก็บได้/กำหนดเองรายแห่ง (exArIn) จึงอาจน้อยกว่ายอดเต็มในบัญชี
 let EXPROV_TSV='';
+// ── 🔎 ป็อปอัป "มีที่ไหนกี่บาท" ของคอลัมน์เงินช่วย/ส่วนขาด (เจ้าของงานสั่ง 8 ส.ค. 69) ──
+// EXPROVCAP ถูกเติมใหม่ทุกครั้งที่ exRenderProvTj ทำงาน — อ้างด้วย "เลขลำดับ" ไม่ใช่ชื่อจังหวัด
+// (ชื่อจังหวัดมาจากข้อมูล ถ้ามีอัญประกาศปนจะทำให้ onclick พังเงียบ ๆ)
+// ⚠️ ป็อปอัปเปิดจากสถานะ ณ ตอนเรนเดอร์ล่าสุด — ทุก action ที่เปลี่ยนตัวเลขจะเรียก exRender แล้วปิดป็อปอัปเอง
+let EXPROVCAP=[];
+function exProvCapOpen(i){
+  const it=EXPROVCAP[i]; if(!it) return;
+  const p=it.p, sepLab=tLab(exSepT());
+  let el=document.getElementById('exProvCapOverlay');
+  if(!el){ el=document.createElement('div'); el.id='exProvCapOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
+  el.onclick=exProvCapClose;
+  // เพดาน "ระดับไม่เกิน EX_XF_WARN" คำนวณตอนเปิดเท่านั้น (เป็น binary search อีกชุด ~3 ms/แห่ง)
+  // ไม่คำนวณตอนเรนเดอร์ตาราง เพราะจะบวกเวลาให้ทุก render ทั้งที่คนดูส่วนใหญ่ไม่ได้เปิดดู
+  const give=p.give.slice().sort((a,b)=>b.cap-a.cap).map(g=>{
+    const h=EX.hosp.find(q=>q.hcode===g.hcode);
+    return {...g, warn:h?exXferWarnCap(h):Infinity};
+  });
+  const need=p.need.slice().sort((a,b)=>b.up-a.up);
+  const badge=v=>v==null?'<span class="tgt-note">–</span>':`<span class="b" style="display:inline-block;min-width:22px;text-align:center;border-radius:6px;color:#fff;font-weight:800;font-size:11px;padding:1px 5px;background:${riskColor(v)}">${v}</span>`;
+  const verdict=!(p.short>0)
+    ? `<span style="color:var(--green)">✅ ไม่มี รพ. ที่ขาดสภาพคล่อง(MOE) ในกลุ่มนี้</span>`
+    : (p.cap>=p.short
+      ? `<span style="color:var(--green)">✅ ช่วยกันเองได้พอ — ยกให้ได้ ${fmtM(p.cap)} เทียบส่วนขาด ${fmtM(p.short)} เหลืออีก ${fmtM(p.cap-p.short)}</span>`
+      : `<span style="color:var(--red)">⛔ ช่วยกันเองไม่พอ — ยกให้ได้ ${fmtM(p.cap)} เทียบส่วนขาด ${fmtM(p.short)} ยัง<b>ขาดต้นทาง ${fmtM(p.short-p.cap)}</b></span>`);
+  const giveTbl=give.length?`<table class="wltbl" style="min-width:520px">
+    <tr><th>#</th><th>โรงพยาบาล</th><th style="text-align:center">ระดับ ณ ${sepLab}</th>
+      <th style="text-align:right">เงินสดคงเหลือ<br>หลังภาระ MOE</th><th style="text-align:right">ยกให้ได้<br>(ระดับไม่เกิน ${EX_XF_HARD})</th></tr>
+    ${give.map((g,i2)=>`<tr><td style="text-align:right">${i2+1}</td>
+      <td>${g.name}<span class="cellsub">${g.type||''}${
+        isFinite(g.warn)&&g.warn<g.cap
+          ? (g.warn>0 ? ` · ⚠️ ให้เกิน ${fmtM(g.warn)} ระดับจะเกิน ${EX_XF_WARN}`
+                      : ` · ⚠️ ระดับเกิน ${EX_XF_WARN} อยู่แล้ว — ยกให้ได้แต่ควรพิจารณาก่อน`)
+          : ''}</span></td>
+      <td style="text-align:center">${badge(g.risk)}</td>
+      <td style="text-align:right">${fmtM(g.left)}</td>
+      <td style="text-align:right;color:var(--green);font-weight:700">${fmtM(g.cap)}</td></tr>`).join('')}
+    <tr style="font-weight:700;border-top:2px solid var(--line)"><td></td><td>รวม ${p.nCap} แห่ง</td><td></td><td></td>
+      <td style="text-align:right;color:var(--green)">${fmtM(p.cap)}</td></tr></table>`
+    :`<div class="note">ไม่มี รพ. ที่ยกเงินช่วยได้ในกลุ่มนี้ — ทุกแห่งเงินสดคงเหลือหลังภาระ MOE ไม่เป็นบวก หรือยกให้แล้วระดับวิกฤตจะเกิน ${EX_XF_HARD}</div>`;
+  const needTbl=need.length?`<table class="wltbl" style="min-width:420px">
+    <tr><th>#</th><th>โรงพยาบาล</th><th style="text-align:center">ระดับ ณ ${sepLab}</th><th style="text-align:right">ยังขาด</th></tr>
+    ${need.map((z,i2)=>`<tr><td style="text-align:right">${i2+1}</td><td>${z.name}<span class="cellsub">${z.type||''}</span></td>
+      <td style="text-align:center">${badge(z.risk)}</td>
+      <td style="text-align:right;color:var(--red);font-weight:700">${fmtM(z.up)}</td></tr>`).join('')}
+    <tr style="font-weight:700;border-top:2px solid var(--line)"><td></td><td>รวม ${p.nShort} แห่ง</td><td></td>
+      <td style="text-align:right;color:var(--red)">${fmtM(p.short)}</td></tr></table>`
+    :`<div class="note">ไม่มี รพ. ที่ขาดสภาพคล่อง(MOE) ในกลุ่มนี้</div>`;
+  el.innerHTML=`<div class="nip-modal" style="max-width:860px" onclick="event.stopPropagation()">
+    <div class="nip-head" style="display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0"><h3>🔄 เงินช่วยภายในจังหวัด — ${it.lab}</h3>
+        <div class="note">${verdict}</div></div>
+      <button type="button" class="tgt-apply" style="margin:0;flex-shrink:0" onclick="exProvCapClose()">✕ ปิด</button>
+    </div>
+    <div class="nip-body" style="display:block">
+      <div class="tgt-row" style="font-weight:700;margin-top:2px">🟢 ฝั่งที่ยกเงินให้ได้ (${p.nCap} แห่ง · รวม ${fmtM(p.cap)})</div>
+      <div class="acctbl-wrap extbl" style="max-height:none;margin-top:4px">${giveTbl}</div>
+      <div class="tgt-row" style="font-weight:700;margin-top:12px">🔴 ฝั่งที่ยังขาดสภาพคล่อง(MOE) (${p.nShort} แห่ง · รวม ${fmtM(p.short)})</div>
+      <div class="acctbl-wrap extbl" style="max-height:none;margin-top:4px">${needTbl}</div>
+      <div class="note" style="margin-top:10px">เพดาน "ยกให้ได้" ของแต่ละแห่ง = ค่าที่<b>น้อยกว่า</b>ระหว่าง ① เงินสดคงเหลือหลังภาระ MOE ถึง ${exMoeTargetLab()} (สมมติไม่มีรายรับเข้าเลย) ② จำนวนที่ยกให้แล้วระดับวิกฤต ณ ${sepLab} <b>ยังไม่เกิน ${EX_XF_HARD}</b> (แบบจำลองที่นับรายรับตามจริง) — จงใจเอาค่าที่ต่ำกว่าเพื่อระมัดระวังทั้งสองทาง<br>⚠️ ตัวเลขเป็น<b>กำลังช่วยที่ยังเหลือ</b> ถ้ามีแผนโยกอยู่แล้วจะหักที่โยกออกไปแล้ว · สั่งโยกจริงได้ที่ปุ่ม <b>🔄 โยกช่วย</b> ในตารางผลจำลอง หรือ <b>⚡ จัดสรรอัตโนมัติ</b> (โยกในจังหวัดเดียวกันเท่านั้น)</div>
+    </div>
+  </div>`;
+  el.style.display='flex';
+}
+function exProvCapClose(){ const el=document.getElementById('exProvCapOverlay'); if(el) el.style.display='none'; }
 function exCopyProvTSV(){
   const done=ok=>{ const el=document.getElementById('exProvCopyMsg'); if(el) el.textContent=ok?'คัดลอกแล้ว ✓ วางใน Excel ได้เลย':'คัดลอกไม่ได้'; };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(EXPROV_TSV).then(()=>done(true),()=>done(false));
@@ -2250,23 +2324,45 @@ function exCopyProvTSV(){
 }
 function exRenderProvTj(items){
   const box=document.getElementById('exProvTjBox'); if(!box) return;
+  // ปิดป็อปอัปรายชื่อ รพ. ทุกครั้งที่ตัวเลขถูกคำนวณใหม่ — กันไม่ให้ค้างแสดงยอดของสถานะเก่า
+  exProvCapClose();
   const P={};
   items.forEach(x=>{
     const pv=x.h.prov||'(ไม่ระบุจังหวัด)';
-    const p=P[pv]||(P[pv]={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0});
+    const p=P[pv]||(P[pv]={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0,cap:0,nCap:0,short:0,nShort:0,gross:0,give:[],need:[]});
     const pay=exPayIn(x.h), arRaw=exArRaw(x.h), ar=exArIn(x.h);
     p.n++; p.pay+=pay; p.arRaw+=arRaw; p.ar+=ar;
     if(pay>0) p.nPay++; if(ar>0) p.nAr++;
+    // ── 🔄 เงินช่วยภายในจังหวัด + ส่วนขาดสภาพคล่อง(MOE) (เจ้าของงานสั่ง 8 ส.ค. 69) ──
+    // ทั้งสองก้อนมาจาก exMoeLeft ตัวเดียวกัน = คอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" ของตารางล่างเป๊ะ ๆ
+    //   left > 0 → เป็น "ผู้ให้ได้" · เพดาน = exXferCap (คุมระดับวิกฤตไม่เกิน EX_XF_HARD)
+    //   left < 0 → เป็น "ผู้ขาด"  · ยอดขาด = exTopUp
+    // จึงเป็นคนละแห่งกันเสมอ (แห่งเดียวเป็นได้แค่ฝั่งเดียว) เทียบสองคอลัมน์นี้ได้ตรง ๆ = ฐานเดียวกัน
+    const left=exMoeLeft(x);
+    if(left>0){
+      const c=exXferCapC(x.h);
+      if(c>0){ p.cap+=c; p.nCap++;
+        p.give.push({name:x.h.name,hcode:x.h.hcode,type:x.h.type,cap:c,left,risk:x.r0.sepRisk}); }
+    } else {
+      const up=exTopUp(x);
+      if(up>0){ p.short+=up; p.nShort++;
+        p.need.push({name:x.h.name,hcode:x.h.hcode,type:x.h.type,up,risk:x.r0.sepRisk}); }
+    }
+    // ความต้องการ "ตั้งต้น" ก่อนหักเงินที่โยกมาแล้ว = ตัวเลขใหญ่ในคอลัมน์เดียวกันของตารางล่าง
+    // ต้องนับนอก if/else เพราะแห่งที่รับโยกจนพลิกเป็นบวกแล้วจะไปอยู่ฝั่งผู้ให้ แต่ยังมี gross ค้างอยู่
+    p.gross+=exTopUpGross(x);
   });
   const provs=Object.keys(P).sort((a,b)=>a.localeCompare(b,'th'));
-  const T={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0};
-  provs.forEach(pv=>{ const p=P[pv]; for(const k in T) T[k]+=p[k]; });
+  const T={n:0,pay:0,arRaw:0,ar:0,nPay:0,nAr:0,cap:0,nCap:0,short:0,nShort:0,gross:0,give:[],need:[]};
+  provs.forEach(pv=>{ const p=P[pv];
+    for(const k in T) if(!Array.isArray(T[k])) T[k]+=p[k];
+    T.give=T.give.concat(p.give); T.need=T.need.concat(p.need); });
   // 🪤 ห้ามคืนค่าเป็น ` style="…"` แล้วไปแปะต่อท้าย <td style="text-align:right"> —
   //    จะได้ <td> ที่มี attribute style สองอัน ซึ่ง HTML spec ให้ใช้อันแรกและ **ทิ้งอันที่สอง**
   //    ผลคือสีเขียว/แดงไม่ขึ้นเลยแบบเงียบ ๆ (เจ้าของงานทักว่าไม่เห็นสี 7 ส.ค. 69 — บั๊กจริง)
   //    จึงคืนเป็น "ตัว declaration ล้วน" แล้วต่อเข้า style เดียวกันเสมอ
-  const netCss=v=>v<0?'color:var(--red);font-weight:700;background:rgba(220,38,38,.10)'
-                 :(v>0?'color:var(--green);font-weight:700;background:rgba(22,163,74,.10)':'');
+  const okCss='color:var(--green);font-weight:700;background:rgba(22,163,74,.10)';
+  const badCss='color:var(--red);font-weight:700;background:rgba(220,38,38,.10)';
   const cutTot=T.arRaw-T.ar;
   // ── ป้ายบอกว่ากำลังใช้ค่าจากตัวควบคุม "📥 ลูกหนี้ที่เก็บได้: __%" ของตารางหลักอยู่ ──
   // ตัวเลขเชื่อมกันอยู่แล้วผ่าน exArIn() → exArPct()/arOvr (exSetArPct เรียก exRender → exRenderProvTj)
@@ -2281,36 +2377,78 @@ function exRenderProvTj(items){
     if(p.nAr<p.n) a.push(`${p.nAr}/${p.n} แห่ง`);
     if(cut>1) a.push(`เต็ม ${fmtM(p.arRaw)} · ตัดออก ${fmtM(cut)}`);
     return a.length?`<span class="cellsub${cut>1?' warn':''}">${a.join(' · ')}</span>`:''; };
+  // ── ข้อมูลป็อปอัป "มีที่ไหนกี่บาท" (เจ้าของงานสั่ง 8 ส.ค. 69) ─────────────────────────
+  // เก็บเป็น **อาร์เรย์อ้างด้วยเลขลำดับ** ไม่ส่งชื่อจังหวัดเข้า onclick เป็นสตริง
+  // เพราะชื่อจังหวัดมาจากข้อมูล ถ้าวันหนึ่งมีอัญประกาศ/เครื่องหมายพิเศษ onclick จะพังเงียบ ๆ
+  // ตัวสุดท้ายของอาร์เรย์คือ "รวมทั้งเขต" เสมอ (แถวรวมกดดูได้ด้วย)
+  EXPROVCAP=[...provs.map(pv=>({lab:pv,p:P[pv]})), {lab:'รวมทั้งเขต (ทุกจังหวัดที่แสดงอยู่)',p:T}];
+  const capIdx={}; provs.forEach((pv,i)=>capIdx[pv]=i); const totIdx=provs.length;
+  // tooltip ตอนชี้ = รายชื่อ รพ. + ยอดที่ยกให้ได้ (ตัดที่ 8 อันดับแรกกันยาวเกินจอ ที่เหลือดูในป็อปอัป)
+  const ATT=s=>String(s).replace(/"/g,'&quot;').replace(/\n/g,'&#10;');
+  const capTitle=p=>{
+    if(!p.give.length) return ATT(`ไม่มี รพ. ในกลุ่มนี้ที่มีเงินสดคงเหลือหลังภาระ MOE เหลือพอจะยกให้ได้\n(ทุกแห่งเงินสดเหลือ ≤ 0 หรือยกให้แล้วระดับวิกฤตจะเกิน ${EX_XF_HARD})`);
+    const g=p.give.slice().sort((a,b)=>b.cap-a.cap);
+    const show=g.slice(0,8).map((z,i)=>`${i+1}. ${z.name} — ${fmtM(z.cap)}${z.risk!=null?` (ระดับ ${z.risk})`:''}`);
+    if(g.length>8) show.push(`… และอีก ${g.length-8} แห่ง รวม ${fmtM(g.slice(8).reduce((s,z)=>s+z.cap,0))}`);
+    return ATT(`รพ. ที่ยกเงินช่วยได้ ${p.nCap} แห่ง · รวม ${fmtM(p.cap)}\n${show.join('\n')}\n\nเพดานของแต่ละแห่ง = ค่าที่น้อยกว่าระหว่าง\n① เงินสดคงเหลือหลังภาระ MOE (คอลัมน์ในตารางผลจำลองด้านล่าง)\n② จำนวนที่ยกให้แล้วระดับวิกฤต ณ เดือนเป้า **ยังไม่เกิน ${EX_XF_HARD}**\n\n👉 กดที่ช่องนี้เพื่อดูครบทุกแห่ง + ฝั่งที่ต้องรับความช่วยเหลือ`);
+  };
+  const shortTitle=p=>{
+    if(!p.need.length) return ATT('ไม่มี รพ. ในกลุ่มนี้ที่ขาดสภาพคล่อง(MOE) — เงินสดคงเหลือหลังภาระ MOE เป็นบวกทุกแห่ง');
+    const g=p.need.slice().sort((a,b)=>b.up-a.up);
+    const show=g.slice(0,8).map((z,i)=>`${i+1}. ${z.name} — ขาด ${fmtM(z.up)}${z.risk!=null?` (ระดับ ${z.risk})`:''}`);
+    if(g.length>8) show.push(`… และอีก ${g.length-8} แห่ง รวม ${fmtM(g.slice(8).reduce((s,z)=>s+z.up,0))}`);
+    return ATT(`รพ. ที่ยังขาด ${p.nShort} แห่ง · รวม ${fmtM(p.short)}\n${show.join('\n')}\n\n= ผลรวมคอลัมน์ "ส่วนขาดสภาพคล่อง(MOE)" ของตารางผลจำลองด้านล่าง (ยอดที่ยังขาดหลังหักที่โยกมาแล้ว)\n⛔ เป็นสถานการณ์สมมติว่ารายรับไม่เป็นไปตามแผน **ไม่ใช่คำของบ**\n\n👉 กดที่ช่องนี้เพื่อดูครบทุกแห่ง`);
+  };
+  // ── ป้าย "พอ/ไม่พอ" ใต้ยอดเงินช่วย — เทียบกับส่วนขาดสภาพคล่อง(MOE) ของกลุ่มเดียวกัน ──
+  // (เจ้าของงานเคาะ 8 ส.ค. 69 ว่าให้เทียบกับตัวนี้ ไม่ใช่สุทธิ ลูกหนี้−หนี้)
+  const sufTxt=p=>{
+    if(!(p.short>0)) return '<span class="cellsub" style="color:var(--green)">✅ ไม่มีแห่งที่ขาด</span>';
+    return p.cap>=p.short
+      ? `<span class="cellsub" style="color:var(--green)">✅ พอช่วยกันเอง (เหลือ ${fmtM(p.cap-p.short)})</span>`
+      : `<span class="cellsub warn">⛔ ไม่พอ ขาดต้นทาง ${fmtM(p.short-p.cap)}</span>`;
+  };
   // ── ไฟล์ TSV ของตารางนี้ (ปุ่ม 📋 คัดลอก) — สร้างจาก P/T ชุดเดียวกับที่วาดตาราง ──
   // ⚠️ ห้ามคำนวณใหม่แยกต่างหาก ไม่งั้นของที่วางลง Excel จะหลุดจากที่เห็นบนจอ
   //    (บทเรียนจาก 7.13: TSV ของตารางหลักเคยส่งออกลูกหนี้ยอดดิบขณะที่จอแสดงยอดหลังปรับ)
   const MB=v=>(v/1e6).toFixed(2);
+  const tsvRow=(lab,p)=>[lab,p.n,MB(p.pay),MB(p.ar),MB(p.arRaw),MB(p.arRaw-p.ar),arPct,
+    MB(p.cap),p.nCap,MB(p.short),p.nShort,MB(p.cap-p.short),
+    p.short>0?(p.cap>=p.short?'พอ':'ไม่พอ'):'ไม่มีแห่งที่ขาด'].join('\t');
   EXPROV_TSV=[
     ['จังหวัด','จำนวน รพ.','หนี้ที่ต้องจ่าย 2101020199.202(ลบ.)',
      'ลูกหนี้ที่คาดว่าจะเก็บได้ 1102050101.203+1102050194.204(ลบ.)',
      'ลูกหนี้เต็มจำนวนตามบัญชี(ลบ.)','ส่วนที่ตัดออก(ลบ.)','%เก็บได้ที่ตั้งไว้',
-     'สุทธิ ลูกหนี้−หนี้(ลบ.)'].join('\t'),
-    ...provs.map(pv=>{ const p=P[pv];
-      return [pv,p.n,MB(p.pay),MB(p.ar),MB(p.arRaw),MB(p.arRaw-p.ar),arPct,MB(p.ar-p.pay)].join('\t'); }),
-    ['รวมทั้งเขต',T.n,MB(T.pay),MB(T.ar),MB(T.arRaw),MB(T.arRaw-T.ar),arPct,MB(T.ar-T.pay)].join('\t'),
+     'เงินช่วยภายในจังหวัด(ลบ.)','จำนวนแห่งที่ยกให้ได้',
+     'ส่วนขาดสภาพคล่อง(MOE)(ลบ.)','จำนวนแห่งที่ขาด',
+     'เงินช่วย−ส่วนขาด(ลบ.)','เพียงพอหรือไม่'].join('\t'),
+    ...provs.map(pv=>tsvRow(pv,P[pv])),
+    tsvRow('รวมทั้งเขต',T),
   ].join('\n');
-  const row=(lab,p,tot)=>{ const net=p.ar-p.pay; return `<tr${tot?' style="font-weight:700;border-top:2px solid var(--line)"':''}>
+  // idx = ตำแหน่งใน EXPROVCAP สำหรับป็อปอัป · แถวรวมใช้ตัวสุดท้ายเสมอ
+  // (lab ของแถวรวมมีแท็ก <b> อยู่ด้วย จึงค้น capIdx ไม่เจอ — ต้องแยกด้วย tot ไม่ใช่ปล่อยให้ fallback)
+  const row=(lab,p,tot)=>{ const idx=tot?totIdx:capIdx[lab];
+    return `<tr${tot?' style="font-weight:700;border-top:2px solid var(--line)"':''}>
     <td>${lab}</td>
     <td style="text-align:right">${p.n}</td>
     <td style="text-align:right">${p.pay>0?fmtM(p.pay):'<span class="tgt-note">–</span>'}${p.nPay&&p.nPay<p.n?`<span class="cellsub">${p.nPay}/${p.n} แห่ง</span>`:''}</td>
     <td style="text-align:right">${p.ar>0?fmtM(p.ar):'<span class="tgt-note">–</span>'}${arSub(p)}</td>
-    <td style="text-align:right;${netCss(net)}">${net>=0?'+':'−'}${fmtM(Math.abs(net))}</td></tr>`; };
+    <td class="provcap" style="text-align:right;${p.cap>0?okCss:''}" title="${capTitle(p)}" onclick="exProvCapOpen(${idx})">${
+      p.cap>0?fmtM(p.cap):'<span class="tgt-note">–</span>'}<span class="cellsub">${p.nCap} แห่ง 🔎</span>${sufTxt(p)}</td>
+    <td class="provcap" style="text-align:right;${p.short>0?badCss:''}" title="${shortTitle(p)}" onclick="exProvCapOpen(${idx})">${
+      p.short>0?fmtM(p.short):'<span class="tgt-note">–</span>'}<span class="cellsub">${p.nShort} แห่ง 🔎</span>${
+      p.gross-p.short>1?`<span class="cellsub" style="color:var(--green)">ตั้งต้น ${fmtM(p.gross)} · รับโยกแล้ว ${fmtM(p.gross-p.short)}</span>`:''}</td></tr>`; };
   box.innerHTML=`
     <details ${EXST.open&&EXST.open.provtj?'open':''} ontoggle="exKeepOpen('provtj',this.open)">
-      <summary style="cursor:pointer;font-size:13.5px;font-weight:700;padding:6px 0">🗺️ สรุปรายจังหวัด: หนี้ที่ต้องจ่าย ↔ ลูกหนี้ที่คาดว่าจะเก็บได้ (${provs.length} จังหวัด · ${T.n} แห่ง) <span class="tgt-note" style="font-weight:600">— เจ้าหนี้รวม ${fmtM(T.pay)} · ลูกหนี้คาดเก็บได้ ${fmtM(T.ar)}${arTag?` <b style="color:var(--gold)">@ ${arTag}</b>`:''} · กดเพื่อกาง</span></summary>
+      <summary style="cursor:pointer;font-size:13.5px;font-weight:700;padding:6px 0">🗺️ สรุปรายจังหวัด: หนี้ที่ต้องจ่าย ↔ ลูกหนี้ที่คาดว่าจะเก็บได้ ↔ เงินช่วยกันเองในจังหวัด (${provs.length} จังหวัด · ${T.n} แห่ง) <span class="tgt-note" style="font-weight:600">— เจ้าหนี้รวม ${fmtM(T.pay)} · ลูกหนี้คาดเก็บได้ ${fmtM(T.ar)}${arTag?` <b style="color:var(--gold)">@ ${arTag}</b>`:''} · ช่วยกันเองได้ ${fmtM(T.cap)} (${T.nCap} แห่ง) เทียบส่วนขาด ${fmtM(T.short)} (${T.nShort} แห่ง) · กดเพื่อกาง</span></summary>
       <div class="acctbl-wrap extbl" style="max-height:none;margin-top:6px">
-        <table class="wltbl" style="min-width:720px">
+        <table class="wltbl" style="min-width:860px">
           <tr>
             <th title="จังหวัดที่ตั้งของโรงพยาบาล">จังหวัด</th>
             <th style="text-align:right" title="จำนวน รพ. ที่อยู่ในตารางผลจำลองด้านล่าง (ตามตัวกรองที่เลือก)">รพ.</th>
             <th style="text-align:right" title="Σ คอลัมน์ &quot;เจ้าหนี้ OP-UC นอก CUP&quot; ของตารางด้านล่าง (บัญชี 2101020199.202)&#10;= หนี้ค่ารักษาที่ รพ. ในจังหวัดนี้บันทึกว่าค้างจ่ายให้ รพ. อื่น&#10;⚠️ ยอดดิบตามงบทดลอง ไม่เปลี่ยนตาม Option ตามจ่าย/ยกหนี้">หนี้ที่ต้องจ่าย<br><span style="font-size:10px;font-weight:600;opacity:.75">2101020199.202</span></th>
             <th style="text-align:right" title="Σ คอลัมน์ &quot;ลูกหนี้ UC-OP นอก CUP&quot; ของตารางด้านล่าง (บัญชี 1102050101.203 + 1102050194.204)&#10;= ยอดหลังปรับ % ที่คาดว่าเก็บได้จริง / ค่าที่กำหนดเองรายแห่ง&#10;ถ้าปรับลดไว้ จะมีบรรทัดเล็กบอกยอดเต็มและส่วนที่ตัดออก">ลูกหนี้ที่คาด<br>ว่าจะเก็บได้${arTag?`<br><span style="font-size:10px;font-weight:700;color:var(--gold)">📥 ${arTag}</span>`:''}<br><span style="font-size:10px;font-weight:600;opacity:.75">1102050101.203 + .194.204</span></th>
-            <th style="text-align:right" title="ลูกหนี้ที่คาดว่าจะเก็บได้ − หนี้ที่ต้องจ่าย&#10;+ (เขียว) = ในจังหวัดมีลูกหนี้มากกว่าหนี้ → เคลียร์กันเองแล้วยังเหลือ&#10;− (แดง) = หนี้มากกว่าลูกหนี้ → ต้องหาเงินจากทางอื่นมาปิดส่วนต่าง">สุทธิ<br>ลูกหนี้ − หนี้</th>
+            <th style="text-align:right" title="Σ เพดานที่ รพ. ในจังหวัดนี้ยกเงินไปช่วยแห่งอื่นได้&#10;นับเฉพาะแห่งที่คอลัมน์ &quot;เงินสดคงเหลือหลังภาระ MOE&quot; (ตารางผลจำลองด้านล่าง) เป็นบวก&#10;เพดานรายแห่ง = ค่าที่น้อยกว่าระหว่าง ① เงินสดคงเหลือหลังภาระ MOE  ② จำนวนที่ยกให้แล้วระดับวิกฤต ณ เดือนเป้ายังไม่เกิน ${EX_XF_HARD}&#10;ป้ายใต้ยอด = เทียบกับคอลัมน์ถัดไป (ส่วนขาดสภาพคล่อง(MOE) ของจังหวัดเดียวกัน)&#10;⚠️ เป็นกำลังช่วย &quot;ที่ยังเหลืออยู่&quot; — ถ้ามีแผนโยกแล้ว ยอดที่โยกออกไปถูกหักออกจากตัวเลขนี้แล้ว&#10;👉 กดที่ช่องเพื่อดูรายชื่อ รพ. ทุกแห่ง">เงินช่วย<br>ภายในจังหวัด<br><span style="font-size:10px;font-weight:700;color:var(--green)">🔄 ระดับผู้ให้ ≤ ${EX_XF_HARD}</span></th>
+            <th style="text-align:right" title="Σ คอลัมน์ &quot;ส่วนขาดสภาพคล่อง(MOE)&quot; ของตารางผลจำลองด้านล่าง&#10;= ส่วนที่ติดลบของ &quot;เงินสดคงเหลือหลังภาระ MOE&quot; หลังหักเงินที่โยกมาช่วยแล้ว&#10;⛔ เป็นผลประเมินกรณีรายรับไม่เป็นไปตามแผน (ไม่มีรายรับเข้าเลย) ไม่ใช่คำของบ&#10;👉 กดที่ช่องเพื่อดูรายชื่อ รพ. ที่ขาดทุกแห่ง">ส่วนขาด<br>สภาพคล่อง(MOE)</th>
           </tr>
           ${provs.map(pv=>row(pv,P[pv],false)).join('')}
           ${row('<b>รวมทั้งเขต</b>',T,true)}
@@ -2318,8 +2456,10 @@ function exRenderProvTj(items){
       </div>
       <div class="tgt-row" style="margin-top:6px"><button type="button" class="tgt-apply" onclick="exCopyProvTSV()">📋 คัดลอกตารางนี้ (วางใน Excel ได้)</button> <span class="tgt-note" id="exProvCopyMsg"></span></div>
       <div class="note" style="margin-top:4px"><b>ที่มา:</b> รวมยอดจาก<b>แถวเดียวกับตารางผลจำลองด้านล่าง</b> (${T.n} แห่งตามตัวกรองที่เลือกอยู่ — เปลี่ยนตัวกรองจังหวัด/ประเภท/ขอบเขต แล้วตารางนี้เปลี่ยนตาม) · <b>หนี้ที่ต้องจ่าย</b> = Σ เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (2101020199.202) · <b>ลูกหนี้</b> = Σ ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด สังกัด สป.สธ. (1102050101.203 + 1102050194.204)</div>
+      <div class="note" style="margin-top:4px">🔄 <b>คอลัมน์ "เงินช่วยภายในจังหวัด" (เจ้าของงานสั่ง 8 ส.ค. 69)</b> = Σ เงินที่ รพ. ในจังหวัดนั้น<b>ยกไปช่วยแห่งอื่นได้</b> โดยตัวเองยัง<b>ไม่ตกเกินระดับวิกฤต ${EX_XF_HARD}</b> — นับเฉพาะแห่งที่คอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" ในตารางผลจำลองด้านล่างเป็นบวก แล้วหาว่ายกให้ได้สูงสุดเท่าไหร่ก่อนระดับจะแตะ ${EX_XF_HARD+1}<br>เพดานรายแห่ง = ค่าที่<b>น้อยกว่า</b>ระหว่าง ① เงินสดคงเหลือหลังภาระ MOE (สมมติไม่มีรายรับเข้าเลย) ② จำนวนที่ยกให้แล้วระดับ ณ เดือนเป้ายังไม่เกิน ${EX_XF_HARD} (แบบจำลองที่นับรายรับตามจริง) — <b>จงใจเอาค่าที่ต่ำกว่า</b> เพื่อระมัดระวังทั้งสองทาง · ป้ายเตือนแห่งที่ยกให้เกินแล้วระดับจะเกิน ${EX_XF_WARN} ดูได้ในป็อปอัป<br>👉 <b>กดที่ช่องตัวเลข</b> (หรือชี้ค้าง) เพื่อดูว่า<b>มีที่ไหน ให้ได้กี่บาท</b> ครบทุกแห่ง</div>
+      <div class="note" style="margin-top:4px">⚖️ <b>ป้าย "พอ/ไม่พอ" เทียบกับคอลัมน์ "ส่วนขาดสภาพคล่อง(MOE)" ของจังหวัดเดียวกัน</b> — สองคอลัมน์นี้มาจากตัวเลขตัวเดียวกันคือ "เงินสดคงเหลือหลังภาระ MOE" (ฝั่งบวก = ให้ได้ · ฝั่งลบ = ขาด) จึงเทียบกันได้ตรง ๆ ฐานเดียวกัน<br>⚠️ <b>แถวรวมทั้งเขตบอกได้แค่ภาพรวม</b> — ตามกติกาจัดสรร ข้อ ① <b>ปุ่ม ⚡ จัดสรรอัตโนมัติโยกเฉพาะภายในจังหวัดเดียวกัน</b> เงินเหลือของจังหวัดหนึ่งจึงเอาไปอุดอีกจังหวัดให้เองไม่ได้ ต้องดู<b>รายแถว</b>ว่าจังหวัดไหน ⛔ ไม่พอ แล้วทีมตัดสินใจโยกข้ามจังหวัดเอง (ทำมือได้ที่ปุ่ม 🔄 โยกช่วย)<br>⚠️ ตัวเลขนี้เป็น<b>กำลังช่วยที่ยังเหลือ</b> — ถ้ามีแผนโยกอยู่แล้ว ยอดที่โยกออกไปถูกหักจากผู้ให้และไปลดส่วนขาดของผู้รับเรียบร้อยแล้ว</div>
       <div class="note" style="margin-top:4px">🔗 <b>คอลัมน์ "ลูกหนี้ที่คาดว่าจะเก็บได้" ผูกกับตัวควบคุม 📥 ลูกหนี้ที่เก็บได้: ${arPct}% ในตารางผลจำลองด้านล่าง</b> — ปรับ % นั้น (หรือกด ✎ แก้รายแห่ง) แล้วตารางนี้เปลี่ยนตามทันที ใช้ยอดชุดเดียวกันเสมอ${cutTot>1?` · ตอนนี้<b>ตัดออก ${fmtM(cutTot)}</b> จากยอดเต็ม ${fmtM(T.arRaw)}${nOvr?` (มีที่กำหนดเองรายแห่ง ${nOvr} แห่ง)`:''}`:` · ตอนนี้ยังไม่มีการตัดออก (${arPct}% = เก็บได้เต็มจำนวน)`}</div>
-      <div class="note" style="margin-top:4px">📥 <b>วิธีเกลี่ย ${arPct}% ลงรายจังหวัด/ราย รพ. (เจ้าของงานเคาะ 7 ส.ค. 69):</b> ① ยอดรวมทั้งเขตที่คาดว่าเก็บได้ = ลูกหนี้ดิบทั้งเขต × ${arPct}% → ② แบ่งให้แต่ละจังหวัด<b>ตามสัดส่วนเจ้าหนี้ของจังหวัดนั้น</b> (ไม่เกินลูกหนี้ดิบที่จังหวัดมีจริง) → ③ แบ่งต่อให้ รพ. ตามสัดส่วนลูกหนี้ดิบของแต่ละแห่งในจังหวัด<br>ผลคือ<b>ทุกจังหวัดได้อัตราส่วน ลูกหนี้:เจ้าหนี้ เท่ากัน</b> คอลัมน์สุทธิจึงใกล้ 0 ทุกแถว — <b>ไม่ใช่</b>การตัด ${arPct}% เท่ากันทุกแห่งแบบเดิม (วิธีเดิมทำให้จังหวัดที่ลูกหนี้สูงกว่าเจ้าหนี้ยังมีเงินไหลเข้าเกิน สถานะดูดีผิดปกติ)<br>⚠️ จังหวัดที่ลูกหนี้ดิบไม่พอกับโควตาจะติดเพดาน (สุทธิติดลบ) และส่วนที่ล้น<b>ไม่ถูกเกลี่ยต่อให้จังหวัดอื่น</b>โดยตั้งใจ ยอดรวมจึงต่ำกว่า ${arPct}% เล็กน้อย</div>
+      <div class="note" style="margin-top:4px">📥 <b>วิธีเกลี่ย ${arPct}% ลงรายจังหวัด/ราย รพ. (เจ้าของงานเคาะ 7 ส.ค. 69):</b> ① ยอดรวมทั้งเขตที่คาดว่าเก็บได้ = ลูกหนี้ดิบทั้งเขต × ${arPct}% → ② แบ่งให้แต่ละจังหวัด<b>ตามสัดส่วนเจ้าหนี้ของจังหวัดนั้น</b> (ไม่เกินลูกหนี้ดิบที่จังหวัดมีจริง) → ③ แบ่งต่อให้ รพ. ตามสัดส่วนลูกหนี้ดิบของแต่ละแห่งในจังหวัด<br>ผลคือ<b>ทุกจังหวัดได้อัตราส่วน ลูกหนี้:เจ้าหนี้ เท่ากัน</b> — <b>ไม่ใช่</b>การตัด ${arPct}% เท่ากันทุกแห่งแบบเดิม (วิธีเดิมทำให้จังหวัดที่ลูกหนี้สูงกว่าเจ้าหนี้ยังมีเงินไหลเข้าเกิน สถานะดูดีผิดปกติ)<br>⚠️ จังหวัดที่ลูกหนี้ดิบไม่พอกับโควตาจะติดเพดาน (ลูกหนี้ที่คาดว่าเก็บได้ต่ำกว่าหนี้ที่ต้องจ่าย) และส่วนที่ล้น<b>ไม่ถูกเกลี่ยต่อให้จังหวัดอื่น</b>โดยตั้งใจ ยอดรวมจึงต่ำกว่า ${arPct}% เล็กน้อย</div>
       <div class="note" style="margin-top:4px">⚠️ <b>ส่วนคอลัมน์ "หนี้ที่ต้องจ่าย" เป็นยอดดิบตามงบทดลอง ไม่เปลี่ยนตาม Option ตามจ่าย/ยกหนี้ด้านบน</b> — Option เป็นตัว<b>ใช้</b>ยอดนี้ไปจำลองผล (ระดับ ณ ก.ย. / เงินสนับสนุน) ไม่ใช่ตัวแก้ยอด</div>
       ${(()=>{
         // ⚠️ คำเตือน "สองฝั่งบันทึกไม่ตรงกัน" ต้องใช้ยอด **ดิบ** ทั้งเขต (arRaw) ไม่ใช่ยอดหลังปรับ %
@@ -2328,7 +2468,7 @@ function exRenderProvTj(items){
         //    ประโยคเลยกลับด้านและโชว์เลขติดลบ (เจอตอนตรวจ 7 ส.ค. 69) → ต้องผันคำตามเครื่องหมาย
         const payAll=EX.hosp.reduce((s,p)=>s+exPayIn(p),0), arAll=EX.hosp.reduce((s,p)=>s+exArRaw(p),0);
         const g=arAll-payAll;
-        return `<div class="note" style="margin-top:4px">⚠️ <b>สุทธิ ≠ เคลียร์จบในจังหวัด</b> — ยอด<b>ดิบทั้งเขต</b>ฝั่งลูกหนี้ (${fmtM(arAll)}) ${g>=0?'มากกว่า':'น้อยกว่า'}ฝั่งเจ้าหนี้ (${fmtM(payAll)}) อยู่ ${fmtM(Math.abs(g))} เพราะสองฝั่งบันทึกแยกเล่ม และคู่หนี้บางส่วนอยู่<b>นอกชุด ${EX.hosp.length} แห่งนี้</b> (รพ.สังกัดกรมอื่น · นอกเขต · เอกชนคู่สัญญา) · <b>ยังไม่ได้ยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขต</b> ใช้เป็นภาพรวมเพื่อวางแผน ไม่ใช่ยอดสั่งจ่าย</div>`;
+        return `<div class="note" style="margin-top:4px">⚠️ <b>เก็บลูกหนี้ครบก็ยังไม่ได้แปลว่าเคลียร์จบในจังหวัด</b> — ยอด<b>ดิบทั้งเขต</b>ฝั่งลูกหนี้ (${fmtM(arAll)}) ${g>=0?'มากกว่า':'น้อยกว่า'}ฝั่งเจ้าหนี้ (${fmtM(payAll)}) อยู่ ${fmtM(Math.abs(g))} เพราะสองฝั่งบันทึกแยกเล่ม และคู่หนี้บางส่วนอยู่<b>นอกชุด ${EX.hosp.length} แห่งนี้</b> (รพ.สังกัดกรมอื่น · นอกเขต · เอกชนคู่สัญญา) · <b>ยังไม่ได้ยืนยันกับตารางเคลียร์ริ่งของ สสจ./เขต</b> ใช้เป็นภาพรวมเพื่อวางแผน ไม่ใช่ยอดสั่งจ่าย</div>`;
       })()}
     </details>`;
 }
@@ -2344,6 +2484,7 @@ function exRender(){
   // ไม่งั้นทุกครั้งที่ปรับสไลด์ ตารางเด้งกลับแถวแรก/คอลัมน์ซ้ายสุด ทั้งที่หน้ายังอยู่ที่เดิม
   const exTblEl=document.getElementById('exTblWrap');
   const exTblPos=exTblEl?{t:exTblEl.scrollTop,l:exTblEl.scrollLeft}:null;
+  EXCAPC={};        // ⚠️ ล้าง cache เพดานผู้ให้ทุกรอบ — ต้องอยู่ก่อนทุกจุดที่เรียก exXferCapC
   EXTJ=exTjCalc();
   if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
     // ⚠️ hub ต้องอยู่ใน sig ด้วย (เพิ่ม 6 ส.ค. 69) — hub เปลี่ยน → shares เปลี่ยน → sepRisk ของ
@@ -2651,7 +2792,7 @@ function exRender(){
         const sub=r0.cashOut!=null
           ? `<span class="cellsub warn">ปกติ: เงินสดติดลบ${r0.cashOut===0?'แล้ว':' '+tLab(addMo(h.bs.t,r0.cashOut))}</span>`
           : `<span class="cellsub" style="color:var(--green)">ปกติ: เงินสดไม่ติดลบ</span>`;
-        const cap=left>0?exXferCap(h):0;
+        const cap=left>0?exXferCapC(h):0;
         const btn=(left>0||xOut>0)
           ? `<span class="cellsub"><button type="button" class="xfbtn${EXXF[hc]?' on':''}" onclick="exXfToggle('${hc}')" title="โยกเงินสดส่วนที่เหลือไปช่วย รพ. ที่ขาด (ข้ามจังหวัดได้)&#10;เพดาน: ให้ได้จนระดับ ณ ${sepLab} แตะ 5&#10;ให้ได้อีก ${fmtM(cap)}">🔄 โยกช่วย${xOut>0?' ('+fmtM(xOut)+')':''} ${EXXF[hc]?'▾':'▸'}</button></span>`
           : '';
@@ -2793,7 +2934,7 @@ function exRender(){
         // 🔄 สรุปแผนโยกเงิน — ตัวเลข "ไม่ Over" ที่เจ้าของงานต้องการ: บอกว่าเงินมาจากไหนได้เท่าไหร่
         //    และเหลือเท่าไหร่ที่หาต้นทางในเขตไม่ได้จริง ๆ (ต้องขอจากนอกเขต)
         const XL=exXferList();
-        const capAll=items.filter(z=>exMoeLeft(z)>0).reduce((s,z)=>s+exXferCap(z.h),0);
+        const capAll=items.filter(z=>exMoeLeft(z)>0).reduce((s,z)=>s+exXferCapC(z.h),0);
         const stillShort=items.reduce((s,z)=>s+exTopUp(z),0);
         const moved=XL.reduce((s,z)=>s+(+z.a||0),0);
         const btns=`<button type="button" class="tgt-apply" style="margin-left:8px" onclick="exXferAuto()" title="กติกาจัดสรร (เจ้าของงานกำหนด 7 ส.ค. 69):&#10;① โยกเฉพาะภายในจังหวัดเดียวกัน — ไม่ข้ามจังหวัดให้เอง&#10;② เพดาน ${EX_XF_MAX_PER/1e6} ลบ. ต่อหนึ่งรายการ (ผู้ให้ 1 → ผู้รับ 1) ไม่พอให้ผู้ให้ลำดับถัดไปจ่ายต่อ เรียงตามสภาพคล่องดีสุดก่อน&#10;③ เติมเกินความต้องการอีก ${EX_XF_EXTRA/1e3}K&#10;④ จังหวัดเงินไม่พอ = เติมเท่าที่ได้แล้วหยุด แสดงส่วนที่ยังขาดให้ทีมปรับเอง&#10;⑤ กดซ้ำ = ล้างแผนเดิมทั้งหมดแล้วคำนวณใหม่ตามเงื่อนไขปัจจุบัน&#10;&#10;ลำดับผู้รับ: ระดับวิกฤตสูงสุดก่อน แล้วค่อยยอดขาดมากสุด&#10;ผู้ให้ไม่ตกเกินระดับ ${EX_XF_HARD} เสมอ">⚡ จัดสรรอัตโนมัติ</button>${

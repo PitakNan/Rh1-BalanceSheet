@@ -77,14 +77,17 @@ for(const st of [{},{arPct:62},{crisis:'67',arPct:62},{prov:'ลำปาง',ar
   A2.setEXST(ST(st)); A2.setEXOPEN({}); A2.setEXBRK({}); A2.setEXSORT({col:null,dir:-1}); A2.exRender();
   const t=A2.getProvTSV().split('\n').map(l=>l.split('\t'));
   const scrRows=[...els['exProvTjBox'].innerHTML.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)]
-    .map(m=>[...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>x[1])).filter(r=>r.length===5);
+    .map(m=>[...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>x[1])).filter(r=>r.length===6);
   const lab=JSON.stringify(st);
   chk(t.length-1===scrRows.length, `${lab}: จำนวนแถวตรงกัน (TSV ${t.length-1} = จอ ${scrRows.length})`);
   chk(t.every(r=>r.length===t[0].length), `${lab}: ทุกแถวมีจำนวนช่องเท่าหัวตาราง`);
   let bad=0, ex='';
   scrRows.forEach((r,i)=>{
     const tr=t[i+1]; if(!tr) return;
-    const pairs=[[0,0,'จังหวัด'],[1,1,'จำนวน รพ.'],[2,2,'หนี้'],[3,3,'ลูกหนี้'],[4,7,'สุทธิ']];
+    // [ดัชนีคอลัมน์บนจอ, ดัชนีช่องใน TSV, ชื่อ] — คอลัมน์สุทธิถูกถอดออก 8 ส.ค. 69
+    // แทนด้วย เงินช่วยภายในจังหวัด (จอ 4 ↔ TSV 7) และ ส่วนขาดสภาพคล่อง(MOE) (จอ 5 ↔ TSV 9)
+    const pairs=[[0,0,'จังหวัด'],[1,1,'จำนวน รพ.'],[2,2,'หนี้'],[3,3,'ลูกหนี้'],
+                 [4,7,'เงินช่วยภายในจังหวัด'],[5,9,'ส่วนขาดสภาพคล่อง(MOE)']];
     pairs.forEach(([si,ti,nm])=>{
       const sv=cellMain(r[si]), tv=String(tr[ti]).trim();
       if(si===0||si===1){ if(sv.replace(/<[^>]+>/g,'')!==tv && !sv.includes(tv)){ bad++; if(!ex) ex=`${nm}: จอ "${sv}" ≠ TSV "${tv}"`; } return; }

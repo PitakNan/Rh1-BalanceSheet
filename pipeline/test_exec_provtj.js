@@ -37,31 +37,30 @@ const want={};
 j.hosp.forEach(h=>{ const p=want[h.prov]||(want[h.prov]={n:0,pay:0,ar:0});
   p.n++; p.pay+=(h.tj&&h.tj.payIn)||0; p.ar+=(h.tj&&h.tj.arIn)||0; });
 const provs=Object.keys(want).sort((a,b)=>a.localeCompare(b,'th'));
-// ดึงแถวออกจาก HTML: <tr>...<td>จังหวัด</td><td>n</td><td>pay</td><td>arRaw</td><td>ar</td><td>net</td>
+// ดึงแถวออกจาก HTML: <td>จังหวัด</td><td>n</td><td>pay</td><td>ar</td><td>เงินช่วยในจังหวัด</td><td>ส่วนขาด(MOE)</td>
+// (คอลัมน์ "สุทธิ ลูกหนี้−หนี้" ถูกถอดออก 8 ส.ค. 69 ตามที่เจ้าของงานสั่ง — แทนด้วยสองคอลัมน์ท้าย)
 const rows=[...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>
   [...m[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map(c=>c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()));
-const dataRows=rows.filter(r=>r.length===5 && provs.includes(r[0]));
+const dataRows=rows.filter(r=>r.length===6 && provs.includes(r[0]));
 chk(dataRows.length===provs.length, `มีครบทุกจังหวัด ${dataRows.length}/${provs.length}`);
 let bad=0;
 dataRows.forEach(r=>{
   const w=want[r[0]];
   const okN=r[1]===String(w.n), okPay=r[2].startsWith(M(w.pay)), okAr=r[3].startsWith(M(w.ar));
   if(!(okN&&okPay&&okAr)) bad++;
-  console.log(`  ${okN&&okPay&&okAr?'✅':'❌'} ${r[0].padEnd(10)} รพ.${r[1].padStart(3)} · หนี้ ${r[2].padEnd(24)} · ลูกหนี้ ${r[3].padEnd(30)} · สุทธิ ${r[4]}`);
+  console.log(`  ${okN&&okPay&&okAr?'✅':'❌'} ${r[0].padEnd(10)} รพ.${r[1].padStart(3)} · หนี้ ${r[2].padEnd(24)} · ลูกหนี้ ${r[3].padEnd(30)} · ช่วยในจังหวัด ${r[4].padEnd(34)} · ส่วนขาด ${r[5]}`);
   if(!okN) console.log(`      ↳ n ควรเป็น ${w.n}`);
   if(!okPay) console.log(`      ↳ หนี้ ควรเป็น ${M(w.pay)}`);
   if(!okAr) console.log(`      ↳ ลูกหนี้ ควรเป็น ${M(w.ar)}`);
 });
 chk(bad===0, `ยอดทุกจังหวัดตรง (ผิด ${bad})`);
 const T={n:0,pay:0,ar:0}; provs.forEach(p=>{T.n+=want[p].n;T.pay+=want[p].pay;T.ar+=want[p].ar;});
-const totRow=rows.find(r=>r.length===5 && r[0].includes('รวมทั้งเขต'));
+const totRow=rows.find(r=>r.length===6 && r[0].includes('รวมทั้งเขต'));
 chk(!!totRow, 'มีแถวรวมทั้งเขต');
 if(totRow){
   chk(totRow[1]===String(T.n), `แถวรวม: จำนวน รพ. = ${T.n}`);
   chk(totRow[2].startsWith(M(T.pay)), `แถวรวม: หนี้ที่ต้องจ่าย = ${M(T.pay)} (ได้ ${totRow[2]})`);
   chk(totRow[3].startsWith(M(T.ar)), `แถวรวม: ลูกหนี้คาดเก็บได้ = ${M(T.ar)} (ได้ ${totRow[3]})`);
-  const net=T.ar-T.pay;
-  chk(totRow[4].replace(/[+−]/,'')===M(Math.abs(net)), `แถวรวม: สุทธิ = ${net>=0?'+':'−'}${M(Math.abs(net))} (ได้ ${totRow[4]})`);
 }
 
 // ══ 2) ยุบเป็นค่าเริ่มต้น ══
@@ -78,7 +77,7 @@ for(const mode of ['off','pay','forgive','smart']){
   const h2=render({tj:{mode,scope:'all'}});
   const tr=[...h2.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>
     [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c=>c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()));
-  const tot=tr.find(r=>r.length===5 && r[0].includes('รวมทั้งเขต'));
+  const tot=tr.find(r=>r.length===6 && r[0].includes('รวมทั้งเขต'));
   payByMode[mode]=tot?tot[2]:'(ไม่พบ)';
   console.log(`  Option = ${mode.padEnd(8)} → หนี้ที่ต้องจ่ายรวม ${payByMode[mode]}`);
 }
@@ -90,7 +89,7 @@ console.log('\n━━ ④ ลูกหนี้ตอบสนอง % ที่
 const h50=render({arPct:50});
 const tr50=[...h50.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>
   [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c=>c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()));
-const tot50=tr50.find(r=>r.length===5 && r[0].includes('รวมทั้งเขต'));
+const tot50=tr50.find(r=>r.length===6 && r[0].includes('รวมทั้งเขต'));
 chk(!!tot50 && tot50[3].startsWith(M(T.ar*0.5)), `arPct=50: คอลัมน์ "คาดว่าเก็บได้" = ${M(T.ar*0.5)} (ได้ ${tot50&&tot50[3]})`);
 chk(!!tot50 && tot50[3].includes('เต็ม '+M(T.ar)) && tot50[3].includes('ตัดออก '+M(T.ar-T.ar*0.5)),
   `arPct=50: บรรทัดเล็กบอกยอดเต็ม ${M(T.ar)} + ตัดออก ${M(T.ar*0.5)} (ได้ "${tot50&&tot50[3]}")`);
@@ -105,7 +104,7 @@ chk(!!tot50 && tot50[2].startsWith(M(T.pay)), `arPct=50: หนี้ที่�
 console.log('\n━━ ④′ ป้ายเชื่อมโยงกับตัวควบคุม 📥 ลูกหนี้ที่เก็บได้ ━━');
 const grab=h=>{ const tr=[...h.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>
     [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c=>c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()));
-  return tr.find(r=>r.length===5 && r[0].includes('รวมทั้งเขต')); };
+  return tr.find(r=>r.length===6 && r[0].includes('รวมทั้งเขต')); };
 // ค่าจริงที่เจ้าของงานใช้อยู่ = 62%
 const h62=render({arPct:62});
 // ⚠️ ตั้งแต่ 7 ส.ค. 69 ยอดรวมที่ 62% **ไม่เท่ากับ** ลูกหนี้ดิบ×62% อีกแล้ว
@@ -147,39 +146,91 @@ const pv=provs[0];
 const hp=render({prov:pv});
 const trp=[...hp.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>
   [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c=>c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()));
-const dp=trp.filter(r=>r.length===5 && !r[0].includes('รวมทั้งเขต'));
+const dp=trp.filter(r=>r.length===6 && !r[0].includes('รวมทั้งเขต'));
 chk(dp.length===1 && dp[0][0]===pv, `กรอง "${pv}" แล้วเหลือ 1 จังหวัด (ได้ ${dp.length}: ${dp.map(r=>r[0]).join(',')})`);
 chk(dp.length===1 && dp[0][1]===String(want[pv].n), `จำนวน รพ. = ${want[pv].n}`);
 
-// ══ 6) 🎨 คอลัมน์สุทธิ: บวก=เขียว ลบ=แดง และต้อง "ขึ้นจริง" บนเบราว์เซอร์ ══
+// ══ 6) 🎨 สีสองคอลัมน์ท้าย + ต้อง "ขึ้นจริง" บนเบราว์เซอร์ ══
 // 🪤 บั๊กที่เจอ 7 ส.ค. 69: เขียน <td style="text-align:right"${netCls}> โดย netCls คืน ` style="…"`
 //    → ได้ <td> ที่มี attribute style สองอัน · HTML spec ให้ใช้อันแรก **ทิ้งอันที่สอง** สีเลยหายเงียบ ๆ
 //    ชุดตรวจนี้จึงต้องดู "แท็กดิบ" ไม่ใช่แค่ว่ามีคำว่า var(--green) อยู่ในหน้า
-console.log('\n━━ ⑥ สีคอลัมน์สุทธิ (บวก=เขียว · ลบ=แดง) ━━');
-const netCells=h=>[...h.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>{
+console.log('\n━━ ⑥ สีคอลัมน์เงินช่วย (เขียว) · ส่วนขาด (แดง) ━━');
+// cells(i) = เซลล์คอลัมน์ที่ i ของทุกแถวข้อมูล (0-based) พร้อม "แท็กดิบ" ไว้ตรวจ style
+const colCells=(h,i)=>[...h.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>{
     const tds=[...m[1].matchAll(/(<td[^>]*>)([\s\S]*?)<\/td>/g)];
-    if(tds.length!==5) return null;
-    return {prov:tds[0][2].replace(/<[^>]+>/g,'').trim(), tag:tds[4][1], val:tds[4][2].replace(/<[^>]+>/g,'').trim()};
+    if(tds.length!==6) return null;
+    return {prov:tds[0][2].replace(/<[^>]+>/g,'').trim(), tag:tds[i][1], val:tds[i][2].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()};
   }).filter(Boolean);
 // ห้ามมี attribute ซ้ำในแท็กเดียว (ตัวบั๊กจริง) — ตรวจทุกแท็กในกล่องนี้ ทุกโหมด
 const DUP=/<[a-zA-Z]+\b[^>]*?\sstyle\s*=\s*"[^"]*"[^>]*?\sstyle\s*=/;
 let dup=0;
 for(const st of [{},{arPct:62},{arPct:0},{tj:{mode:'forgive',scope:'all'}},{prov:provs[0]}]) if(DUP.test(render(st))) dup++;
 chk(dup===0, `ไม่มีแท็กที่มี attribute style ซ้ำสองอัน (สีจะถูกทิ้งเงียบ ๆ) — พบ ${dup}/5 โหมด`);
-// สีต้องตรงเครื่องหมายทุกแถว ทุกค่า %
 for(const pc of [100,62,0]){
-  const cells=netCells(render({arPct:pc}));
-  const wrong=cells.filter(c=>{
-    const neg=c.val.startsWith('−'), green=/var\(--green\)/.test(c.tag), red=/var\(--red\)/.test(c.tag);
-    return neg ? !(red&&!green) : !(green&&!red);
-  });
-  const nNeg=cells.filter(c=>c.val.startsWith('−')).length;
-  chk(wrong.length===0 && cells.length>0,
-    `arPct=${pc}: สีตรงเครื่องหมายครบ ${cells.length} แถว (ลบ ${nNeg} แถว = แดง · ที่เหลือเขียว)${wrong.length?' ผิด: '+wrong.map(c=>c.prov+'='+c.val).join(', '):''}`);
+  const hh=render({arPct:pc});
+  // เงินช่วย: มียอด → เขียว · ไม่มี (–) → ไม่ทาสี ｜ ส่วนขาด: มียอด → แดง · ไม่มี → ไม่ทาสี
+  const capW=colCells(hh,4).filter(c=>/var\(--green\)/.test(c.tag)!==!c.val.startsWith('–'));
+  const shW=colCells(hh,5).filter(c=>/var\(--red\)/.test(c.tag)===c.val.startsWith('–'));
+  chk(capW.length===0, `arPct=${pc}: คอลัมน์เงินช่วย ทาเขียวเฉพาะแถวที่มียอด (ผิด ${capW.length})`);
+  chk(shW.length===0, `arPct=${pc}: คอลัมน์ส่วนขาด ทาแดงเฉพาะแถวที่มียอด (ผิด ${shW.length})`);
 }
-// แถวรวมทั้งเขตต้องมีสีด้วย (เคยโดน style ของ <tr> ทับ)
-const totCell=netCells(render({})).find(c=>c.prov.includes('รวมทั้งเขต'));
-chk(!!totCell && /var\(--green\)|var\(--red\)/.test(totCell.tag), `แถวรวมทั้งเขตมีสีด้วย (${totCell&&totCell.val})`);
+
+// ══ 7) ⭐ คอลัมน์ใหม่ "เงินช่วยภายในจังหวัด" + "ส่วนขาดสภาพคล่อง(MOE)" (8 ส.ค. 69) ══
+console.log('\n━━ ⑦ เงินช่วยภายในจังหวัด ↔ ส่วนขาดสภาพคล่อง(MOE) ━━');
+const A2=new Function(code+`;return {exRender,exMoeLeft,exTopUp,exXferCap,exSimPath,exXferList,
+  setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
+A2.setEX(j); A2.setEXOPEN({}); A2.setEXBRK({}); A2.setEXSORT({col:null,dir:-1});
+// คำนวณอิสระ: ผู้ให้ = moeLeft>0 (เพดาน exXferCap) · ผู้ขาด = exTopUp
+A2.setEXST(ST({})); A2.exRender();
+const ind={};
+j.hosp.forEach(h=>{ const x={h,r0:A2.exSimPath(h,0)}; const p=ind[h.prov]||(ind[h.prov]={cap:0,nCap:0,short:0,nShort:0});
+  const L=A2.exMoeLeft(x);
+  if(L>0){ const c=A2.exXferCap(h); if(c>0){ p.cap+=c; p.nCap++; } }
+  else { const u=A2.exTopUp(x); if(u>0){ p.short+=u; p.nShort++; } } });
+const IT={cap:0,nCap:0,short:0,nShort:0}; Object.values(ind).forEach(p=>{for(const k in IT) IT[k]+=p[k];});
+const h7=render({});
+const rows7=[...h7.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>
+  [...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c=>c[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()));
+let bad7=0;
+provs.forEach(p=>{ const r=rows7.find(z=>z.length===6&&z[0]===p), w=ind[p]||{cap:0,nCap:0,short:0,nShort:0};
+  const okCap=w.cap>0 ? r[4].startsWith(M(w.cap)) : r[4].startsWith('–');
+  const okSh =w.short>0 ? r[5].startsWith(M(w.short)) : r[5].startsWith('–');
+  const okN  =r[4].includes(`${w.nCap} แห่ง`) && r[5].includes(`${w.nShort} แห่ง`);
+  if(!(okCap&&okSh&&okN)) bad7++;
+  console.log(`  ${okCap&&okSh&&okN?'✅':'❌'} ${p.padEnd(10)} ช่วยได้ ${M(w.cap).padStart(7)} (${String(w.nCap).padStart(2)} แห่ง) · ขาด ${M(w.short).padStart(7)} (${String(w.nShort).padStart(2)} แห่ง)${okCap&&okSh&&okN?'':`  ↳ ได้ "${r[4]}" / "${r[5]}"`}`);
+});
+chk(bad7===0, `ยอดเงินช่วย+ส่วนขาด+จำนวนแห่ง ตรงทุกจังหวัด (ผิด ${bad7})`);
+const tot7=rows7.find(r=>r.length===6&&r[0].includes('รวมทั้งเขต'));
+chk(tot7[4].startsWith(M(IT.cap)) && tot7[4].includes(`${IT.nCap} แห่ง`), `แถวรวม: เงินช่วย = ${M(IT.cap)} (${IT.nCap} แห่ง) · ได้ "${tot7[4]}"`);
+chk(tot7[5].startsWith(M(IT.short)) && tot7[5].includes(`${IT.nShort} แห่ง`), `แถวรวม: ส่วนขาด = ${M(IT.short)} (${IT.nShort} แห่ง) · ได้ "${tot7[5]}"`);
+// ผู้ให้กับผู้ขาดต้องไม่ทับกัน (มาจาก exMoeLeft ตัวเดียวกัน ฝั่งบวก/ลบ)
+chk(IT.nCap+IT.nShort<=j.hosp.length, `ผู้ให้ ${IT.nCap} + ผู้ขาด ${IT.nShort} ≤ ${j.hosp.length} แห่ง (ไม่นับซ้ำ)`);
+// ป้ายพอ/ไม่พอ ต้องตรงกับการเทียบจริงทุกจังหวัด
+let badSuf=0;
+provs.forEach(p=>{ const r=rows7.find(z=>z.length===6&&z[0]===p), w=ind[p]||{cap:0,short:0};
+  const want=!(w.short>0)?'✅ ไม่มีแห่งที่ขาด':(w.cap>=w.short?'✅ พอช่วยกันเอง':'⛔ ไม่พอ ขาดต้นทาง');
+  if(!r[4].includes(want)) { badSuf++; console.log(`  ❌ ${p}: ควรขึ้น "${want}" แต่ได้ "${r[4]}"`); } });
+chk(badSuf===0, `ป้าย พอ/ไม่พอ ตรงกับการเทียบ cap≥short ทุกจังหวัด (ผิด ${badSuf})`);
+// เพดานผู้ให้ต้องคุมระดับไม่เกิน 5 จริง — ยกให้เต็มเพดานแล้ว sepRisk ต้อง ≤ 5
+const givers=j.hosp.filter(h=>{ const L=A2.exMoeLeft({h,r0:A2.exSimPath(h,0)}); return L>0 && A2.exXferCap(h)>0; });
+const overs=givers.filter(h=>{ const c=A2.exXferCap(h), r=A2.exSimPath(h,-c); return r.sepRisk!=null && r.sepRisk>5; });
+chk(overs.length===0, `ยกให้เต็มเพดานแล้วผู้ให้ทุกแห่งยังระดับ ≤ 5 (${givers.length} แห่ง · เกิน ${overs.length})`);
+// ป็อปอัป: ต้องกดได้ทุกแถว + มีข้อมูลใน EXPROVCAP ครบ (จังหวัด + แถวรวม)
+const nClick=(h7.match(/onclick="exProvCapOpen\(/g)||[]).length;
+chk(nClick===(provs.length+1)*2, `เซลล์กดดูรายชื่อได้ ${nClick} ช่อง = (${provs.length} จังหวัด + 1 แถวรวม) × 2 คอลัมน์`);
+chk(/title="[^"]*รพ\. ที่ยกเงินช่วยได้/.test(h7)||/title="[^"]*ไม่มี รพ\. ในกลุ่มนี้ที่มีเงินสด/.test(h7), 'มี tooltip รายชื่อ รพ. ตอนชี้ค้าง');
+// TSV ต้องมีคอลัมน์ใหม่และไม่มีคอลัมน์สุทธิที่ถอดออกแล้ว
+const A3=new Function(code+`;return {exRender,getTSV:()=>EXPROV_TSV,
+  setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
+A3.setEX(j); A3.setEXOPEN({}); A3.setEXBRK({}); A3.setEXSORT({col:null,dir:-1}); A3.setEXST(ST({})); A3.exRender();
+const tsv=A3.getTSV().split('\n'), hd=tsv[0].split('\t');
+chk(hd.includes('เงินช่วยภายในจังหวัด(ลบ.)') && hd.includes('ส่วนขาดสภาพคล่อง(MOE)(ลบ.)') && hd.includes('เพียงพอหรือไม่'),
+  `TSV มีคอลัมน์ใหม่ครบ (${hd.length} คอลัมน์)`);
+chk(!hd.some(c=>c.includes('สุทธิ ลูกหนี้')), 'TSV ไม่มีคอลัมน์ "สุทธิ ลูกหนี้−หนี้" ที่ถอดออกแล้ว');
+chk(tsv.length===provs.length+2, `TSV มี ${provs.length} จังหวัด + หัวตาราง + แถวรวม = ${provs.length+2} บรรทัด (ได้ ${tsv.length})`);
+const tsvTot=tsv[tsv.length-1].split('\t');
+chk(Math.abs(+tsvTot[7]-IT.cap/1e6)<0.02 && +tsvTot[8]===IT.nCap, `TSV แถวรวม: เงินช่วย ${tsvTot[7]} ลบ. / ${tsvTot[8]} แห่ง ตรงกับที่คำนวณอิสระ (${(IT.cap/1e6).toFixed(2)} / ${IT.nCap})`);
+chk(Math.abs(+tsvTot[9]-IT.short/1e6)<0.02 && +tsvTot[10]===IT.nShort, `TSV แถวรวม: ส่วนขาด ${tsvTot[9]} ลบ. / ${tsvTot[10]} แห่ง ตรงกับที่คำนวณอิสระ (${(IT.short/1e6).toFixed(2)} / ${IT.nShort})`);
 
 console.log(`\n${fail.length?'❌ ไม่ผ่าน '+fail.length+' ข้อ:\n  - '+fail.join('\n  - '):'✅ ผ่านทั้งหมด'}`);
 process.exit(fail.length?1:0);

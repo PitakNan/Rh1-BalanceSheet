@@ -35,7 +35,9 @@ for(const st of [{}, {arPct:62}, {crisis:'67'}, {crisis:'67',arPct:62}, {prov:'�
   // ── แถวของตารางสรุปรายจังหวัด
   const pRows=[...prov.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>{
     const t=[...m[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>x[1]);
-    return t.length===5?{prov:t[0].replace(/<[^>]+>/g,'').trim(), n:+t[1], pay:num(cell(t[2])), ar:num(cell(t[3])), net:num(cell(t[4]).replace('−','-').replace('+',''))}:null;
+    // 6 ช่อง: จังหวัด · n · หนี้ · ลูกหนี้ · เงินช่วยภายในจังหวัด · ส่วนขาด(MOE)
+    // (คอลัมน์ "สุทธิ ลูกหนี้−หนี้" ถอดออก 8 ส.ค. 69 — ยอดเงินช่วย/ส่วนขาดตรวจใน test_exec_provtj ⑦)
+    return t.length===6?{prov:t[0].replace(/<[^>]+>/g,'').trim(), n:+t[1], pay:num(cell(t[2])), ar:num(cell(t[3]))}:null;
   }).filter(Boolean);
   const tot=pRows.find(r=>r.prov.includes('รวมทั้งเขต')), data=pRows.filter(r=>!r.prov.includes('รวมทั้งเขต'));
   const lab=JSON.stringify(st);
