@@ -2378,40 +2378,87 @@ function exProvCapOpen(i){
     : (p.cap>=p.short
       ? `<span style="color:var(--green)">✅ ช่วยกันเองได้พอ — ยกให้ได้ ${fmtM(p.cap)} เทียบส่วนขาด ${fmtM(p.short)} เหลืออีก ${fmtM(p.cap-p.short)}</span>`
       : `<span style="color:var(--red)">⛔ ช่วยกันเองไม่พอ — ยกให้ได้ ${fmtM(p.cap)} เทียบส่วนขาด ${fmtM(p.short)} ยัง<b>ขาดต้นทาง ${fmtM(p.short-p.cap)}</b></span>`);
-  const giveTbl=give.length?`<table class="wltbl" style="min-width:520px">
+  // บรรทัดสถานะแผนโยก — ให้เห็นตั้งแต่หัวป็อปอัปว่า "ทำไปแล้วแค่ไหน" ไม่ต้องเลื่อนลงไปหา
+  // 🪤 การกระทบยอด: ผู้รับแบ่งเป็น "ยังขาดอยู่" (อยู่ในตารางแดง) กับ "พลิกเป็นบวกแล้ว"
+  //    ⚠️ ห้ามคิดยอดกลุ่มหลังจาก Σ p.give — เพราะ p.give เก็บเฉพาะแห่งที่ยัง **ยกต่อได้** (cap>0)
+  //       แห่งที่รับเงินจนเป็นบวกแต่ยกต่อไม่ได้ (ระดับจะเกิน EX_XF_HARD) ไม่อยู่ในตารางไหนเลย
+  //       เคยคิดแบบนั้นแล้วยอดหาย 39 ลบ. ที่แถวรวมทั้งเขต (ชุดตรวจ ⑨ จับได้ 8 ส.ค. 69)
+  //    → นิยามให้เป็นส่วนที่เหลือเสมอ: พลิกเป็นบวกแล้ว = p.got − ที่ยังขาดอยู่ · กระทบยอดได้ 100%
+  //    รายละเอียดรายคู่ดูที่ตาราง 🔄 ด้านล่าง ซึ่งไล่จากแผนโยกโดยตรง ครบทุกรายการอยู่แล้ว
+  const gotNeed=p.need.reduce((s,z)=>s+(z.got||0),0), gotPos=Math.max(0,p.got-gotNeed);
+  const movedLine=p.got>0
+    ? `<span class="tgt-note">· 🔄 รับโยกมาแล้ว <b style="color:var(--green)">${fmtM(p.got)}</b> <span title="แยกเป็น&#10;• ${fmtM(gotNeed)} = เงินที่เข้าไปยัง รพ. ที่ยังขาดอยู่ (ตารางแดงด้านล่าง)&#10;• ${fmtM(gotPos)} = เงินที่เข้าไปยัง รพ. ที่รับจนเงินสดพลิกเป็นบวกแล้ว จึงไม่อยู่ในตารางแดงอีก&#10;รายละเอียดรายคู่ดูที่ตาราง 🔄 ท้ายป็อปอัป">(ยังขาดอยู่ ${fmtM(gotNeed)} + พลิกเป็นบวกแล้ว ${fmtM(gotPos)})</span> — ตัวเลขข้างบนเป็นยอด<b>หลังหัก</b>ที่โยกไปแล้ว</span>`
+    : '<span class="tgt-note">· 🔄 ยังไม่มีการโยกเงินช่วยกันในกลุ่มนี้</span>';
+  const giveTbl=give.length?`<table class="wltbl" style="min-width:620px">
     <tr><th>#</th><th>โรงพยาบาล</th><th style="text-align:center">ระดับ ณ ${sepLab}</th>
-      <th style="text-align:right">เงินสดคงเหลือ<br>หลังภาระ MOE</th><th style="text-align:right">ยกให้ได้<br>(ระดับไม่เกิน ${EX_XF_HARD})</th></tr>
+      <th style="text-align:right">เงินสดคงเหลือ<br>หลังภาระ MOE</th>
+      <th style="text-align:right">ยกไปแล้ว</th><th style="text-align:right">ยังยกได้อีก<br>(ระดับไม่เกิน ${EX_XF_HARD})</th></tr>
     ${give.map((g,i2)=>`<tr><td style="text-align:right">${i2+1}</td>
       <td>${g.name}<span class="cellsub">${g.type||''}${
         isFinite(g.warn)&&g.warn<g.cap
           ? (g.warn>0 ? ` · ⚠️ ให้เกิน ${fmtM(g.warn)} ระดับจะเกิน ${EX_XF_WARN}`
                       : ` · ⚠️ ระดับเกิน ${EX_XF_WARN} อยู่แล้ว — ยกให้ได้แต่ควรพิจารณาก่อน`)
-          : ''}</span></td>
+          : ''}</span>${
+        // 🔑 แห่งที่ "รับโยกมาจนพลิกเป็นบวก" จะย้ายมาอยู่ฝั่งผู้ให้ ถ้าไม่โชว์ยอดที่รับมาตรงนี้
+        //    ผลรวม "รับมาแล้ว" ในตารางผู้ขาดจะน้อยกว่ายอดโยกจริงที่หัวป็อปอัป = กระทบยอดไม่ได้
+        g.got>0?`<span class="cellsub" style="color:var(--green)">รับโยกมาแล้ว ${fmtM(g.got)} (จนพลิกเป็นบวก)</span>`:''}</td>
       <td style="text-align:center">${badge(g.risk)}</td>
       <td style="text-align:right">${fmtM(g.left)}</td>
+      <td style="text-align:right">${g.out>0?`<b style="color:var(--gold)">${fmtM(g.out)}</b>`:'<span class="tgt-note">–</span>'}</td>
       <td style="text-align:right;color:var(--green);font-weight:700">${fmtM(g.cap)}</td></tr>`).join('')}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td></td><td>รวม ${p.nCap} แห่ง</td><td></td><td></td>
+      <td style="text-align:right;color:var(--gold)">${fmtM(give.reduce((s,g)=>s+(g.out||0),0))}</td>
       <td style="text-align:right;color:var(--green)">${fmtM(p.cap)}</td></tr></table>`
-    :`<div class="note">ไม่มี รพ. ที่ยกเงินช่วยได้ในกลุ่มนี้ — ทุกแห่งเงินสดคงเหลือหลังภาระ MOE ไม่เป็นบวก หรือยกให้แล้วระดับวิกฤตจะเกิน ${EX_XF_HARD}</div>`;
-  const needTbl=need.length?`<table class="wltbl" style="min-width:420px">
-    <tr><th>#</th><th>โรงพยาบาล</th><th style="text-align:center">ระดับ ณ ${sepLab}</th><th style="text-align:right">ยังขาด</th></tr>
+    :`<div class="note">ไม่มี รพ. ที่ยังยกเงินช่วยได้อีกในกลุ่มนี้ — ทุกแห่งเงินสดคงเหลือหลังภาระ MOE ไม่เป็นบวก หรือยกให้อีกแล้วระดับวิกฤตจะเกิน ${EX_XF_HARD}${
+        p.got>0?' (แห่งที่ยกไปแล้วดูได้ที่ตาราง 🔄 ด้านล่าง)':''}</div>`;
+  const needTbl=need.length?`<table class="wltbl" style="min-width:560px">
+    <tr><th>#</th><th>โรงพยาบาล</th><th style="text-align:center">ระดับ ณ ${sepLab}</th>
+      <th style="text-align:right">ต้องการตั้งต้น</th><th style="text-align:right">รับมาแล้ว</th><th style="text-align:right">ยังขาด</th></tr>
     ${need.map((z,i2)=>`<tr><td style="text-align:right">${i2+1}</td><td>${z.name}<span class="cellsub">${z.type||''}</span></td>
       <td style="text-align:center">${badge(z.risk)}</td>
+      <td style="text-align:right">${fmtM(z.gross)}</td>
+      <td style="text-align:right">${z.got>0?`<b style="color:var(--green)">${fmtM(z.got)}</b>`:'<span class="tgt-note">ยังไม่ได้รับ</span>'}</td>
       <td style="text-align:right;color:var(--red);font-weight:700">${fmtM(z.up)}</td></tr>`).join('')}
     <tr style="font-weight:700;border-top:2px solid var(--line)"><td></td><td>รวม ${p.nShort} แห่ง</td><td></td>
+      <td style="text-align:right">${fmtM(need.reduce((s,z)=>s+(z.gross||0),0))}</td>
+      <td style="text-align:right;color:var(--green)">${fmtM(need.reduce((s,z)=>s+(z.got||0),0))}</td>
       <td style="text-align:right;color:var(--red)">${fmtM(p.short)}</td></tr></table>`
     :`<div class="note">ไม่มี รพ. ที่ขาดสภาพคล่อง(MOE) ในกลุ่มนี้</div>`;
-  el.innerHTML=`<div class="nip-modal" style="max-width:860px" onclick="event.stopPropagation()">
+  // ── 🔄 ใครช่วยใครไปแล้วบ้าง (เจ้าของงานสั่งเพิ่มในป็อปอัป 8 ส.ค. 69) ──────────────────
+  // แยกเป็น 2 ทิศ: "โยกเข้ามาในจังหวัดนี้" (xfin) กับ "จังหวัดนี้ยกออกไปช่วยจังหวัดอื่น" (xfout)
+  // ⚠️ ทิศที่สองมีเฉพาะป็อปอัประดับจังหวัด — แถวรวมทั้งเขตนับไปแล้วในทิศแรก ใส่อีกจะซ้ำ
+  const xin=it.xfin||[], xout=it.xfout||[];
+  const xfRows=(L,dir)=>L.map((z,i2)=>`<tr><td style="text-align:right">${i2+1}</td>
+    <td>${z.gn}${z.cross&&dir==='in'?`<span class="cellsub warn">⤳ ข้ามจังหวัดจาก ${z.gp}</span>`:''}</td>
+    <td style="text-align:center;color:var(--mut)">→</td>
+    <td>${z.rn}${z.cross&&dir==='out'?`<span class="cellsub warn">⤳ ข้ามไป ${z.rp}</span>`:''}</td>
+    <td style="text-align:right;font-weight:700;color:${dir==='in'?'var(--green)':'var(--gold)'}">${fmtM(z.a)}</td></tr>`).join('');
+  const xfTbl=(L,dir,lab)=>`<table class="wltbl" style="min-width:520px">
+    <tr><th>#</th><th>ผู้ให้</th><th></th><th>ผู้รับ</th><th style="text-align:right">จำนวน</th></tr>
+    ${xfRows(L,dir)}
+    <tr style="font-weight:700;border-top:2px solid var(--line)"><td></td><td colspan="3">${lab} ${L.length} รายการ</td>
+      <td style="text-align:right;color:${dir==='in'?'var(--green)':'var(--gold)'}">${fmtM(L.reduce((s,z)=>s+z.a,0))}</td></tr></table>`;
+  const xinSum=xin.reduce((s,z)=>s+z.a,0), xoutSum=xout.reduce((s,z)=>s+z.a,0);
+  const xfBlock=(xin.length||xout.length)?`
+    <div class="tgt-row" style="font-weight:700;margin-top:14px">🔄 โยกช่วยกันไปแล้ว${
+      xin.length?` — รับเข้ามา <b style="color:var(--green)">${fmtM(xinSum)}</b> <span class="tgt-note" style="font-weight:400">(${xin.length} รายการ)</span>`:''}${
+      xout.length?` · ยกออกไปช่วยจังหวัดอื่น <b style="color:var(--gold)">${fmtM(xoutSum)}</b> <span class="tgt-note" style="font-weight:400">(${xout.length} รายการ)</span>`:''}</div>
+    ${xin.length?`<div class="acctbl-wrap extbl" style="max-height:none;margin-top:4px">${xfTbl(xin,'in','รวมรับเข้า')}</div>`:''}
+    ${xout.length?`<div class="tgt-row tgt-note" style="margin-top:8px">⤳ รายการที่ รพ. ในจังหวัดนี้ยกออกไปช่วย<b>จังหวัดอื่น</b> (ในตารางหน้าหลักรายการนี้ไปอยู่กลุ่มของจังหวัดผู้รับ)</div>
+      <div class="acctbl-wrap extbl" style="max-height:none;margin-top:4px">${xfTbl(xout,'out','รวมยกออก')}</div>`:''}`
+    :`<div class="note" style="margin-top:14px">🔄 <b>ยังไม่มีการโยกเงินช่วยกันในกลุ่มนี้</b> — ตัวเลข "ยังยกได้อีก" จึงเป็นกำลังช่วยเต็มจำนวนที่ยังไม่ถูกใช้ · สั่งโยกได้ที่ปุ่ม <b>🔄 โยกช่วย</b> ในตารางผลจำลอง หรือกด <b>⚡ จัดสรรอัตโนมัติ</b></div>`;
+  el.innerHTML=`<div class="nip-modal" style="max-width:960px" onclick="event.stopPropagation()">
     <div class="nip-head" style="display:flex;align-items:flex-start;gap:10px">
       <div style="flex:1;min-width:0"><h3>🔄 เงินช่วยภายในจังหวัด — ${it.lab}</h3>
-        <div class="note">${verdict}</div></div>
+        <div class="note">${verdict} ${movedLine}</div></div>
       <button type="button" class="tgt-apply" style="margin:0;flex-shrink:0" onclick="exProvCapClose()">✕ ปิด</button>
     </div>
     <div class="nip-body" style="display:block">
-      <div class="tgt-row" style="font-weight:700;margin-top:2px">🟢 ฝั่งที่ยกเงินให้ได้ (${p.nCap} แห่ง · รวม ${fmtM(p.cap)})</div>
+      <div class="tgt-row" style="font-weight:700;margin-top:2px">🟢 ฝั่งที่ยังยกเงินให้ได้อีก (${p.nCap} แห่ง · รวม ${fmtM(p.cap)})</div>
       <div class="acctbl-wrap extbl" style="max-height:none;margin-top:4px">${giveTbl}</div>
       <div class="tgt-row" style="font-weight:700;margin-top:12px">🔴 ฝั่งที่ยังขาดสภาพคล่อง(MOE) (${p.nShort} แห่ง · รวม ${fmtM(p.short)})</div>
       <div class="acctbl-wrap extbl" style="max-height:none;margin-top:4px">${needTbl}</div>
+      ${xfBlock}
       <div class="note" style="margin-top:10px">เพดาน "ยกให้ได้" ของแต่ละแห่ง = ค่าที่<b>น้อยกว่า</b>ระหว่าง ① เงินสดคงเหลือหลังภาระ MOE ถึง ${exMoeTargetLab()} (สมมติไม่มีรายรับเข้าเลย) ② จำนวนที่ยกให้แล้วระดับวิกฤต ณ ${sepLab} <b>ยังไม่เกิน ${EX_XF_HARD}</b> (แบบจำลองที่นับรายรับตามจริง) — จงใจเอาค่าที่ต่ำกว่าเพื่อระมัดระวังทั้งสองทาง<br>⚠️ ตัวเลขเป็น<b>กำลังช่วยที่ยังเหลือ</b> ถ้ามีแผนโยกอยู่แล้วจะหักที่โยกออกไปแล้ว · สั่งโยกจริงได้ที่ปุ่ม <b>🔄 โยกช่วย</b> ในตารางผลจำลอง หรือ <b>⚡ จัดสรรอัตโนมัติ</b> (โยกในจังหวัดเดียวกันเท่านั้น)</div>
     </div>
   </div>`;
@@ -2439,15 +2486,20 @@ function exRenderProvTj(items){
     //   left > 0 → เป็น "ผู้ให้ได้" · เพดาน = exXferCap (คุมระดับวิกฤตไม่เกิน EX_XF_HARD)
     //   left < 0 → เป็น "ผู้ขาด"  · ยอดขาด = exTopUp
     // จึงเป็นคนละแห่งกันเสมอ (แห่งเดียวเป็นได้แค่ฝั่งเดียว) เทียบสองคอลัมน์นี้ได้ตรง ๆ = ฐานเดียวกัน
-    const left=exMoeLeft(x);
+    // xin/xout = โยกเข้า/โยกออกไปแล้วจริงของแห่งนี้ — ติดไปกับรายการทั้งสองฝั่ง เพื่อให้ป็อปอัป
+    // ตอบได้ว่า "ให้ไปแล้วเท่าไหร่ · ยังให้ได้อีกเท่าไหร่" และ "รับมาแล้วเท่าไหร่ · ยังขาดอีกเท่าไหร่"
+    const left=exMoeLeft(x), xin=exXferIn(x.h), xout=exXferOut(x.h), gross=exTopUpGross(x);
     if(left>0){
       const c=exXferCapC(x.h);
+      // ⚠️ เงื่อนไข c>0 เท่านั้น — ห้ามใส่แห่งที่ "ยกจนหมดเพดานแล้ว" เข้ามาในลิสต์นี้
+      //    เพราะ p.nCap/p.cap คือคอลัมน์ "เงินช่วยภายในจังหวัด" = กำลังช่วย**ที่ยังเหลือ**
+      //    แห่งที่ยกไปแล้วดูได้ที่ตาราง "โยกกันไปแล้ว" ในป็อปอัป ซึ่งไล่จากแผนโยกโดยตรง
       if(c>0){ p.cap+=c; p.nCap++;
-        p.give.push({name:x.h.name,hcode:x.h.hcode,type:x.h.type,cap:c,left,risk:x.r0.sepRisk}); }
+        p.give.push({name:x.h.name,hcode:x.h.hcode,type:x.h.type,cap:c,left,risk:x.r0.sepRisk,out:xout,got:xin}); }
     } else {
       const up=exTopUp(x);
       if(up>0){ p.short+=up; p.nShort++;
-        p.need.push({name:x.h.name,hcode:x.h.hcode,type:x.h.type,up,risk:x.r0.sepRisk}); }
+        p.need.push({name:x.h.name,hcode:x.h.hcode,type:x.h.type,up,risk:x.r0.sepRisk,got:xin,gross}); }
     }
     // ความต้องการ "ตั้งต้น" ก่อนหักเงินที่โยกมาแล้ว = ตัวเลขใหญ่ในคอลัมน์เดียวกันของตารางล่าง
     // ต้องนับนอก if/else เพราะแห่งที่รับโยกจนพลิกเป็นบวกแล้วจะไปอยู่ฝั่งผู้ให้ แต่ยังมี gross ค้างอยู่
@@ -2529,7 +2581,7 @@ function exRenderProvTj(items){
   // ⚠️ ตามตัวกรองเดียวกับตารางด้านบน = นับเฉพาะรายการที่ "ผู้รับ" อยู่ในชุดที่แสดงอยู่
   //    ส่วนที่ผู้ให้อยู่ในชุดแต่ผู้รับไม่อยู่ (ถูกกรองออก) รายงานแยกเป็นบรรทัดเดียว ไม่ทิ้งเงียบ
   const shownSet={}; items.forEach(x=>shownSet[x.h.hcode]=1);
-  const XFP={}; let xfTot=0, xfN=0, xfCross=0, xfOutN=0, xfOutSum=0, xfAll=0, xfAllN=0;
+  const XFP={}, XFOUT={}; let xfTot=0, xfN=0, xfCross=0, xfOutN=0, xfOutSum=0, xfAll=0, xfAllN=0;
   exXferList().forEach(z=>{
     const g=EX.hosp.find(p=>p.hcode===z.f), r=EX.hosp.find(p=>p.hcode===z.t), a=+z.a||0;
     if(!g||!r||!(a>0)) return;
@@ -2539,9 +2591,24 @@ function exRenderProvTj(items){
       (XFP[pv]=XFP[pv]||[]).push({gn:g.name,gp:g.prov,rn:r.name,rp:r.prov,a,cross:g.prov!==r.prov});
       xfTot+=a; xfN++; if(g.prov!==r.prov) xfCross++;
     } else if(shownSet[g.hcode]){ xfOutN++; xfOutSum+=a; }
+    // รายการที่ "ยกออกไปจังหวัดอื่น" — เก็บไว้ให้ป็อปอัปของจังหวัดผู้ให้เห็นด้วย
+    // (ในตารางบนหน้าจอรายการนี้ไปอยู่กลุ่มของจังหวัดผู้รับ จังหวัดผู้ให้จึงไม่เห็นเลยถ้าไม่เก็บแยก)
+    if(g.prov!==r.prov && shownSet[g.hcode]){
+      const pg=g.prov||'(ไม่ระบุจังหวัด)';
+      (XFOUT[pg]=XFOUT[pg]||[]).push({gn:g.name,gp:g.prov,rn:r.name,rp:r.prov,a,cross:true});
+    }
   });
   const xfProvs=Object.keys(XFP).sort((a,b)=>a.localeCompare(b,'th'));
   xfProvs.forEach(pv=>XFP[pv].sort((a,b)=>b.a-a.a));
+  Object.keys(XFOUT).forEach(pv=>XFOUT[pv].sort((a,b)=>b.a-a.a));
+  // ผูกรายการโยกเข้า/ออก เข้ากับข้อมูลป็อปอัป (EXPROVCAP ถูกสร้างไว้ก่อนหน้าในฟังก์ชันเดียวกัน)
+  // ⚠️ แถวรวมทั้งเขต: xfout ต้องเป็น [] เพราะรายการข้ามจังหวัดถูกนับใน xfin ของจังหวัดผู้รับไปแล้ว
+  //    ถ้าใส่ด้วยจะกลายเป็นนับซ้ำในป็อปอัปเดียวกัน
+  EXPROVCAP.forEach((it,i)=>{
+    const isTot=(i===EXPROVCAP.length-1);
+    it.xfin  = isTot ? xfProvs.flatMap(pv=>XFP[pv]) : (XFP[it.lab]||[]);
+    it.xfout = isTot ? [] : (XFOUT[it.lab]||[]);
+  });
   const xfHtml=(()=>{
     if(!xfN&&!xfOutN) return `<div class="note" style="margin-top:6px">🔄 <b>ยังไม่มีการโยกเงินช่วยกันในแผนนี้</b> — ตัวเลขคอลัมน์ "เงินช่วยภายในจังหวัด" จึงเป็น<b>กำลังช่วยเต็มจำนวนที่ยังไม่ถูกใช้</b> · กดปุ่ม <b>⚡ จัดสรรอัตโนมัติ</b> เหนือตารางผลจำลอง เพื่อให้ระบบเสนอว่าใครควรช่วยใคร แล้วรายการจะมาแสดงตรงนี้</div>`;
     const rows=xfProvs.map(pv=>{

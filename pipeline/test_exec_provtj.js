@@ -285,5 +285,59 @@ chk(firstRowIdx==='0', `แถวแรกหลังเรียงใหม�
 // ⚠️ ต้องไม่ไปยุ่งกับ EXSORT ของตารางผลจำลอง
 chk(!/exSetSort\('(prov|n|pay|ar|cap|short)'\)/.test(hSort.replace(/exSetProvSort/g,'')), 'ตารางสรุปไม่เรียก exSetSort ของตารางผลจำลอง (คนละ state)');
 
+// ══ 9) 🔄 ป็อปอัปต้องบอกด้วยว่า "ใครช่วยใครไปแล้ว" (เจ้าของงานสั่ง 8 ส.ค. 69) ══
+// เดิมป็อปอัปบอกแต่ "ยังยกได้อีก / ยังขาด" ไม่มีที่ไหนบอกว่าโยกกันไปแล้วคู่ไหนบ้าง
+console.log('\n━━ ⑨ ป็อปอัป: รายการโยกที่ทำไปแล้ว ━━');
+global.confirm=()=>true;
+const A5=new Function(code+`;return {exRender,exXferAuto,exXferAdd,exXferList,exProvCapOpen,getCap:()=>EXPROVCAP,
+  setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
+A5.setEX(j); A5.setEXOPEN({}); A5.setEXBRK({}); A5.setEXSORT({col:null,dir:-1});
+A5.setEXST(ST({})); A5.exRender(); A5.exXferAuto();
+// ใส่รายการ "ข้ามจังหวัด" ด้วยมือ 1 รายการ เพื่อทดสอบทิศ "ยกออกไปช่วยจังหวัดอื่น" ซึ่งกติกา
+// จัดสรรอัตโนมัติไม่มีทางสร้างเอง (ข้อ ① โยกในจังหวัดเท่านั้น)
+const gCross=j.hosp.find(h=>h.prov==='เชียงราย'&&/เชียงรายประชานุเคราะห์/.test(h.name));
+const rCross=j.hosp.find(h=>h.prov==='ลำพูน'&&/^ลำพูน/.test(h.name));
+A5.exXferAdd(gCross.hcode, rCross.hcode, 5e6);
+const plan5=A5.exXferList();
+const inBy={}, outBy={};
+plan5.forEach(z=>{ const g=j.hosp.find(p=>p.hcode===z.f), r=j.hosp.find(p=>p.hcode===z.t);
+  inBy[r.prov]=(inBy[r.prov]||0)+(+z.a||0);
+  if(g.prov!==r.prov) outBy[g.prov]=(outBy[g.prov]||0)+(+z.a||0); });
+const mval=s=>{ const m=s&&s.match(/([\d.]+)([BMK])/); return m?parseFloat(m[1])*({B:1e9,M:1e6,K:1e3}[m[2]]):0; };
+const cap5=A5.getCap();
+let badPop=0, sawCross=false, sawRecon=false;
+cap5.forEach((it,i)=>{
+  A5.exProvCapOpen(i);
+  const h=els['exProvCapOverlay'].innerHTML, isTot=/รวมทั้งเขต/.test(it.lab);
+  const gotIn=mval((h.match(/รับเข้ามา <b[^>]*>([\d.]+[BMK])</)||[])[1]);
+  const gotOut=mval((h.match(/ยกออกไปช่วยจังหวัดอื่น <b[^>]*>([\d.]+[BMK])</)||[])[1]);
+  const wantIn=isTot?plan5.reduce((s,z)=>s+(+z.a||0),0):(inBy[it.lab]||0);
+  const wantOut=isTot?0:(outBy[it.lab]||0);          // แถวรวมต้องไม่นับซ้ำ
+  const nRow=(h.match(/>→<\/td>/g)||[]).length;
+  const wantRow=(it.xfin||[]).length+(it.xfout||[]).length;
+  const clean=!/undefined|NaN/.test(h);
+  const ok=Math.abs(gotIn-wantIn)<=0.06e6 && Math.abs(gotOut-wantOut)<=0.06e6 && nRow===wantRow && clean;
+  if(!ok){ badPop++; console.log(`  ❌ ${it.lab}: เข้า ${gotIn}/${wantIn} · ออก ${gotOut}/${wantOut} · แถว ${nRow}/${wantRow}${clean?'':' · มี undefined/NaN'}`); }
+  if(!isTot && wantOut>0){ sawCross=true;
+    chk(/ยกออกไปช่วยจังหวัดอื่น/.test(h) && /⤳ ข้ามไป/.test(h),
+      `${it.lab}: แสดงรายการที่ยกออกไปช่วยจังหวัดอื่น พร้อมป้าย ⤳ (${(wantOut/1e6).toFixed(1)}M)`); }
+  // กระทบยอดได้: หัวป็อปอัปแยก "ยังขาดอยู่ + พลิกเป็นบวกแล้ว" ต้องบวกได้เท่ายอดรับเข้าทั้งหมด
+  const rec=h.match(/รับโยกมาแล้ว <b[^>]*>([\d.]+[BMK])<\/b>[\s\S]*?\(ยังขาดอยู่ ([\d.]+[BMK]) \+ พลิกเป็นบวกแล้ว ([\d.]+[BMK])\)/);
+  if(rec){ sawRecon=true;
+    if(Math.abs(mval(rec[2])+mval(rec[3])-mval(rec[1]))>0.06e6){ badPop++;
+      console.log(`  ❌ ${it.lab}: ${rec[2]} + ${rec[3]} ≠ ${rec[1]}`); } }
+});
+chk(badPop===0, `ป็อปอัปทุกกลุ่ม (${cap5.length}) แสดงรายการโยกครบ + ยอดตรงกับแผนจริง (ผิด ${badPop})`);
+chk(sawCross, 'มีเคสข้ามจังหวัดจริงในชุดตรวจ (ไม่ผ่านแบบว่างเปล่า)');
+chk(sawRecon, 'หัวป็อปอัปแยกยอด "ยังขาดอยู่ + พลิกเป็นบวกแล้ว" ให้กระทบยอดได้');
+// แถวรวมทั้งเขตต้องไม่เอารายการข้ามจังหวัดมานับซ้ำทั้งสองทิศ
+const totIt=cap5[cap5.length-1];
+chk((totIt.xfout||[]).length===0, 'แถวรวมทั้งเขต: ไม่นับรายการข้ามจังหวัดซ้ำ (xfout ว่าง)');
+chk((totIt.xfin||[]).length===plan5.length, `แถวรวมทั้งเขต: ครบทุกรายการในแผน (${(totIt.xfin||[]).length}/${plan5.length})`);
+// ยังไม่มีแผนโยก → ต้องบอกให้ไปกดจัดสรรอัตโนมัติ ไม่ใช่ตารางว่าง
+A5.setEXST(ST({})); A5.exRender(); A5.exProvCapOpen(0);
+chk(/ยังไม่มีการโยกเงินช่วยกันในกลุ่มนี้/.test(els['exProvCapOverlay'].innerHTML),
+  'ยังไม่มีแผนโยก → ป็อปอัปบอกให้ไปกด ⚡ จัดสรรอัตโนมัติ');
+
 console.log(`\n${fail.length?'❌ ไม่ผ่าน '+fail.length+' ข้อ:\n  - '+fail.join('\n  - '):'✅ ผ่านทั้งหมด'}`);
 process.exit(fail.length?1:0);
