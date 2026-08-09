@@ -4,7 +4,9 @@
 //   โมเดลเดิม (ตรึง CL + ลาก NI ต้นปี): ดีขึ้น 29/แย่ลง 0  ← ผิดทิศชัดเจน
 // ชุดตรวจนี้ล็อกไว้ว่าโมเดลต้อง "ทำนายว่ามีแห่งที่แย่ลงด้วย" ไม่ใช่ดีขึ้นอย่างเดียว
 const fs=require('fs'),path=require('path');
-const dir='docs/data/risk/h';
+// ⚠️ ต้องอิง __dirname ไม่ใช่ cwd — เดิมเป็น 'docs/data/risk/h' ทำให้ ENOENT ถ้ารันจากโฟลเดอร์ pipeline
+//    (ชุดตรวจอื่นรันได้ทั้งสองที่ ชุดนี้ชุดเดียวที่พัง — แก้ 9 ส.ค. 69)
+const dir=path.join(__dirname,'..','docs','data','risk','h');
 const files=fs.readdirSync(dir).filter(f=>f.endsWith('.json'));
 const dist=r=>[0,1,2,3,4,5,6,7].map(L=>L+'×'+(r[L]||0)).join(' ');
 for(const fy of [2567,2568]){
