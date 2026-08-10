@@ -14,14 +14,16 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const mkA=()=>new Function(code+`;return {exRender,exTjCalc,exTjGive,exTjRole,exIsCred,exTjHubAdd,exTjHubDel,exTjGapAll,
+const mkA=()=>new Function(code+`;return {fmtM,exRender,exTjCalc,exTjGive,exTjRole,exIsCred,exTjHubAdd,exTjHubDel,exTjGapAll,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},
   getHub:()=>EXTJHUB,getDefaultHub:()=>EX_TJHUB_DEFAULT,SHOW_TJAR:EX_SHOW_TJAR};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=(mode,scope)=>({mmo:3,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
   tj:{mode,scope},inj:{},open:{}});
-const fmtM=v=>{if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()};
+// ⚠️ ห้ามลอกสูตร fmtM มาไว้ที่นี่ — ดึงจากหน้าเว็บตรง ๆ ไม่งั้นพอเปลี่ยนจำนวนทศนิยม
+//    เทสต์จะเทียบกับสูตรเก่าของตัวเองแล้วฟ้องผิดทั้งที่หน้าเว็บถูก (เกิดจริง 9 ส.ค. 69)
+const fmtM=mkA().fmtM;
 let fail=[];
 const chk=(ok,msg)=>{ console.log(`  ${ok?'✅':'❌'} ${msg}`); if(!ok) fail.push(msg); };
 
@@ -227,7 +229,7 @@ console.log();
 console.log('━━ 12) %จ่ายหนี้การค้า: ยืนยันกลไก + หน้าจอต้องอธิบายว่าทำไมเงินสนับสนุนไม่ขยับ ━━');
 {
   // เจ้าของงานถามเรื่องนี้ 2 ครั้ง → หน้าจอต้องบอกเอง ไม่ใช่ให้จำจากคำตอบครั้งก่อน
-  const B=new Function(code+`;return {exRender,exSimPath,exSolve,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
+  const B=new Function(code+`;return {fmtM,exRender,exSimPath,exSolve,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
     setEXTJ:v=>{EXTJ=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
   B.setEX(j); B.setEXTJ({debtors:new Set(),shares:{},refund:{},total:0,uncovered:0});
   const S=p=>({mmo:3,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',

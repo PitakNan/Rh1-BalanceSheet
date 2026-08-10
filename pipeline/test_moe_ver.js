@@ -18,7 +18,7 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {exRender,exSimPath,exSolveFor,exNiMo,exMoeMo,exMoeAccMo,exMoeStretchMo,
+const A=new Function(code+`;return {fmtM,exRender,exSimPath,exSolveFor,exNiMo,exMoeMo,exMoeAccMo,exMoeStretchMo,
   exMoeGrpRaw,exMoeCashMo,exXmoeMo,exMoeVer,exPayPct,exMoeVerLab,exMoeLeft,exTopUp,SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v},setEXBRK:v=>{EXBRK=v},setEXOPEN:v=>{EXOPEN=v},setEXSORT:v=>{EXSORT=v}};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
@@ -149,7 +149,7 @@ for(const [ver,pct,lab] of [['69',100,'MOE.Ver69'],['68',100,'MOE.Ver68'],['69p'
   const h0=j.hosp.find(h=>main[0].includes('<b>'+h.name+'</b>'))||j.hosp[0];
   const shown=(main.find(r=>r.includes('<b>'+h0.name+'</b>'))||'').match(/<td[^>]*>([\s\S]*?)<\/td>/g)||[];
   const want=A.exMoeMo(h0);
-  const fmt=v=>{const a=Math.abs(v);return a>=1e9?(v/1e9).toFixed(2)+'B':a>=1e6?(v/1e6).toFixed(1)+'M':a>=1e3?(v/1e3).toFixed(0)+'K':Math.round(v).toLocaleString();};
+  const fmt=A.fmtM;   // ดึงจากหน้าเว็บ ห้ามลอกสูตรมาไว้ที่นี่ (ทศนิยมเปลี่ยนแล้วเทสต์จะฟ้องผิดเอง)
   chk((shown[3]||'').includes(fmt(want)), `  └ คอลัมน์ MOE/เดือน ของ ${h0.name} = ${fmt(want)} (เงินสดจ่ายจริงของโหมดนี้)`);
 }
 

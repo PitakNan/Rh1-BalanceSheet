@@ -14,7 +14,7 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {exRender,exPayIn,exArIn,exArRaw,exArPct,
+const A=new Function(code+`;return {fmtM,exRender,exPayIn,exArIn,exArRaw,exArPct,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=o=>({mmo:3,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext:0,tgt:6,
@@ -23,7 +23,9 @@ const ST=o=>({mmo:3,crisis:'all',types:{'รพศ.':true,'รพท.':true,'ร
 const txt=s=>s.replace(/<[^>]+>/g,'|').replace(/\|+/g,'|');
 let fail=[];
 const chk=(ok,msg)=>{ console.log(`  ${ok?'✅':'❌'} ${msg}`); if(!ok) fail.push(msg); };
-const M=v=>{const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()};
+// ⚠️ ห้ามลอกสูตร fmtM มาไว้ที่นี่ — ดึงจากหน้าเว็บตรง ๆ ไม่งั้นพอเปลี่ยนจำนวนทศนิยม
+//    เทสต์จะเทียบกับสูตรเก่าของตัวเองแล้วฟ้องผิดทั้งที่หน้าเว็บถูก (เกิดจริง 9 ส.ค. 69)
+const M=A.fmtM;
 
 A.setEX(j); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1});
 const render=st=>{ A.setEXST(ST(st)); A.exRender(); return els['exProvTjBox'].innerHTML; };
@@ -177,7 +179,7 @@ for(const pc of [100,62,0]){
 
 // ══ 7) ⭐ คอลัมน์ใหม่ "เงินช่วยภายในจังหวัด" + "ส่วนขาดสภาพคล่อง(MOE)" (8 ส.ค. 69) ══
 console.log('\n━━ ⑦ เงินช่วยภายในจังหวัด ↔ ส่วนขาดสภาพคล่อง(MOE) ━━');
-const A2=new Function(code+`;return {exRender,exMoeLeft,exTopUp,exXferCap,exSimPath,exXferList,
+const A2=new Function(code+`;return {fmtM,exRender,exMoeLeft,exTopUp,exXferCap,exSimPath,exXferList,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
 A2.setEX(j); A2.setEXOPEN({}); A2.setEXBRK({}); A2.setEXSORT({col:null,dir:-1});
 // คำนวณอิสระ: ผู้ให้ = moeLeft>0 (เพดาน exXferCap) · ผู้ขาด = exTopUp
@@ -220,7 +222,7 @@ const nClick=(h7.match(/onclick="exProvCapOpen\(/g)||[]).length;
 chk(nClick===(provs.length+1)*2, `เซลล์กดดูรายชื่อได้ ${nClick} ช่อง = (${provs.length} จังหวัด + 1 แถวรวม) × 2 คอลัมน์`);
 chk(/title="[^"]*รพ\. ที่ยกเงินช่วยได้/.test(h7)||/title="[^"]*ไม่มี รพ\. ในกลุ่มนี้ที่มีเงินสด/.test(h7), 'มี tooltip รายชื่อ รพ. ตอนชี้ค้าง');
 // TSV ต้องมีคอลัมน์ใหม่และไม่มีคอลัมน์สุทธิที่ถอดออกแล้ว
-const A3=new Function(code+`;return {exRender,getTSV:()=>EXPROV_TSV,
+const A3=new Function(code+`;return {fmtM,exRender,getTSV:()=>EXPROV_TSV,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
 A3.setEX(j); A3.setEXOPEN({}); A3.setEXBRK({}); A3.setEXSORT({col:null,dir:-1}); A3.setEXST(ST({})); A3.exRender();
 const tsv=A3.getTSV().split('\n'), hd=tsv[0].split('\t');
@@ -271,7 +273,7 @@ chk(JSON.stringify(descProv)===JSON.stringify(provs.slice().reverse()), 'เร�
 const badSort=dataOf(render({provSort:{col:'ไม่มีคอลัมน์นี้',dir:-1}})).filter(r=>!r[0].includes('รวมทั้งเขต')).map(r=>r[0]);
 chk(JSON.stringify(badSort)===JSON.stringify(provs), 'คอลัมน์ที่ไม่รู้จัก → กลับไปเรียงตามชื่อจังหวัด (ไม่พัง)');
 // ไฟล์ TSV ต้องเรียงตามที่เห็นบนจอ (กติกาเดิมของตารางนี้)
-const A4=new Function(code+`;return {exRender,getTSV:()=>EXPROV_TSV,
+const A4=new Function(code+`;return {fmtM,exRender,getTSV:()=>EXPROV_TSV,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
 A4.setEX(j); A4.setEXOPEN({}); A4.setEXBRK({}); A4.setEXSORT({col:null,dir:-1});
 A4.setEXST(ST({provSort:{col:'short',dir:-1}})); A4.exRender();
@@ -289,7 +291,7 @@ chk(!/exSetSort\('(prov|n|pay|ar|cap|short)'\)/.test(hSort.replace(/exSetProvSor
 // เดิมป็อปอัปบอกแต่ "ยังยกได้อีก / ยังขาด" ไม่มีที่ไหนบอกว่าโยกกันไปแล้วคู่ไหนบ้าง
 console.log('\n━━ ⑨ ป็อปอัป: รายการโยกที่ทำไปแล้ว ━━');
 global.confirm=()=>true;
-const A5=new Function(code+`;return {exRender,exXferAuto,exXferAdd,exXferList,exProvCapOpen,getCap:()=>EXPROVCAP,
+const A5=new Function(code+`;return {fmtM,exRender,exXferAuto,exXferAdd,exXferList,exProvCapOpen,getCap:()=>EXPROVCAP,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
 A5.setEX(j); A5.setEXOPEN({}); A5.setEXBRK({}); A5.setEXSORT({col:null,dir:-1});
 A5.setEXST(ST({})); A5.exRender(); A5.exXferAuto();

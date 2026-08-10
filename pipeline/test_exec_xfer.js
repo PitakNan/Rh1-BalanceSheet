@@ -18,7 +18,7 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.confirm=()=>true;   // ⚡ จัดสรรอัตโนมัติถามยืนยันก่อนล้างแผนเดิม (7 ส.ค. 69)
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const mkA=()=>new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exSolve,exSolveDown,
+const mkA=()=>new Function(code+`;return {fmtM,exRender,exSimPath,exMoeLeft,exTopUp,exSolve,exSolveDown,
   exXferAdd,exXferDel,exXferClear,exXferAuto,exXferCap,exXferWarnCap,exXferList,exXferIn,exXferOut,exXferNet,
   exXfToggle,exXfSubmit,exXfOpen,exXfClose,HARD:EX_XF_HARD,WARN:EX_XF_WARN,getShort:()=>EXXF_SHORT,
   exTopUpGross,exArIn,exArRaw,exArCut,exSetArPct,exSetArOvr,exArClear,exArPct,
@@ -29,7 +29,9 @@ const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/ex
 const ST=mmo=>({mmo,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
   tj:{mode:'off',scope:'crisis'},inj:{},open:{},xfer:[],arPct:100,arOvr:{},wide:false});
-const fmtM=v=>{if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()};
+// ⚠️ ห้ามลอกสูตร fmtM มาไว้ที่นี่ — ดึงจากหน้าเว็บตรง ๆ ไม่งั้นพอเปลี่ยนจำนวนทศนิยม
+//    เทสต์จะเทียบกับสูตรเก่าของตัวเองแล้วฟ้องผิดทั้งที่หน้าเว็บถูก (เกิดจริง 9 ส.ค. 69)
+const fmtM=mkA().fmtM;
 let fail=[];
 const chk=(ok,msg)=>{ console.log(`  ${ok?'✅':'❌'} ${msg}`); if(!ok) fail.push(msg); };
 const boot=(mmo=3)=>{ els={}; STORE={}; const A=mkA(); A.setEX(j);

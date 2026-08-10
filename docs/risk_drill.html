@@ -319,6 +319,15 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .ovbulk{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .ovbulkbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:4px 10px;font-size:11.5px;font-family:inherit;cursor:pointer;white-space:nowrap}
 .ovbulkbtn:hover{background:var(--hover);border-color:var(--blue)}
+/* แถบยกแผนข้ามงวด — ขึ้นหัวแท็บ #exec เท่านั้น ไม่ติดไปกับ PDF (no-print) */
+.excarry{border:1px solid var(--gold);border-left:4px solid var(--gold);background:var(--th-bg);border-radius:9px;padding:10px 13px;margin-bottom:12px;font-size:12.5px;line-height:1.6}
+.excarry.done{border-color:var(--green);border-left-color:var(--green);display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.excarry.done>div:first-child{flex:1 1 100%}
+.excarry-d{color:var(--mut);font-size:11.5px;margin-top:4px}
+.excarry-u{margin:5px 0 0;padding-left:18px}
+.excarry-u li{margin-bottom:3px}
+.excarry-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+.excarry-b .tgt-apply{margin-left:0;font-size:12px;padding:5px 13px}
 .ovtgl:hover{background:var(--hover)}
 tr.ovbad td{background:rgba(220,60,60,.06)}
 tr.ovsub td{background:var(--hover);padding:10px 14px}
@@ -651,7 +660,9 @@ const TH_M=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.'
 //    (สูตรเดียวกับ index.html และ explorer.html ที่แก้ไว้ก่อนแล้ว — หน้านี้ตกขบวน แก้ 5 ส.ค. 69)
 function tLab(t){const fy=Math.floor(t/100),fm=t%100;const by=fm<=3?fy-1:fy;
   return TH_M[fm-1]+String(by%100).padStart(2,'0');}
-function fmtM(v){if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()}
+// ทศนิยม: B และ M = 2 ตำแหน่ง (เจ้าของงานกำหนด 9 ส.ค. 69) · K คงเป็นจำนวนเต็มตามเดิม
+// ⚠️ ต้องตรงกับ fmtM ใน explorer.html — สองหน้านี้แสดงยอดเดียวกัน ถ้าไม่ตรงจะอ่านเป็นคนละเลข
+function fmtM(v){if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(2)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()}
 function fmtR(v){return v==null?'—':v.toFixed(2)}
 // ── ไอคอน ⓘ tooltip: ความหมาย/สูตร/ที่มาข้อมูล — hover (desktop) หรือแตะ (มือถือ ผ่าน tabindex+click toggle) ──
 function tip(text){ return `<span class="tip" tabindex="0" onclick="event.stopPropagation();this.classList.toggle('show')">ⓘ<span class="tip-box">${text}</span></span>`; }
@@ -855,6 +866,7 @@ function renderWatchlist(){
 // เลือกวิธีรายแห่ง (อัตโนมัติ/💪/💰/⚖️) + คันโยกเร่งเก็บลูกหนี้/ชำระหนี้/สมดุลผสม
 // ใช้ solveTargetFor()+buildSurvCtx() ชุดเดียวกับ Simulator รายโรงพยาบาล → ตัวเลขตรงกันเป๊ะ
 let OV_CTX=null, OV_TGT=null, OV_OPEN={}, OV_PLAN={}, OV_TSV='';
+let OV_CARRY=null;   // แผนงวดก่อนหน้าที่พบตอนโหลด (รอผู้ใช้กดยืนยัน) — ดู carryFindPrev
 function survOverviewHtml(rows){
   if(!rows.length) return '';
   return `<div class="panel" id="ovBox" style="margin-top:14px">
@@ -877,7 +889,43 @@ function arSuggest(ctx){
 function ovDefaultPlan(ctx){ return {method:'auto', alpha:50, acp:arSuggest(ctx), acpMonth:2, debt:0}; }
 function ovPlanOf(hc, ctx){ let p=OV_PLAN[hc]; if(!p){ p=ovDefaultPlan(ctx); OV_PLAN[hc]=p; } return p; }
 function ovStoreKey(){ return 'rh1-ovplan-'+((SUMMARY&&SUMMARY.period)||''); }
-function ovLoadPlan(){ try{ const s=JSON.parse(localStorage.getItem(ovStoreKey())||'null'); if(s){ OV_PLAN=s.plans||{}; OV_TGT=(s.tgt!=null?s.tgt:null); } }catch(e){} }
+// นับเฉพาะแถวที่ทีม "แก้เอง" จริง ๆ — ovSavePlan เซฟค่า default ที่ระบบสร้างเองลงไปด้วย
+// จึงนับจำนวน plans เฉย ๆ ไม่ได้ (จะเด้งแถบเสนอทั้งที่ไม่มีใครแตะอะไรเลย)
+// method!=='auto' และ debt>0 เกิดจากการกดของผู้ใช้เท่านั้น (ovDefaultPlan ให้ 'auto'/0)
+function ovCarryWork(s){
+  const p=(s&&s.plans)||{};
+  return Object.keys(p).filter(k=>p[k] && (p[k].method!=='auto' || +p[k].debt>0)).length;
+}
+function ovLoadPlan(){
+  OV_CARRY=null;
+  let raw=null; try{ raw=localStorage.getItem(ovStoreKey()); }catch(e){}
+  if(raw){ try{ const s=JSON.parse(raw||'null'); if(s){ OV_PLAN=s.plans||{}; OV_TGT=(s.tgt!=null?s.tgt:null); } }catch(e){} }
+  else OV_CARRY=carryFindPrev('rh1-ovplan-', +((SUMMARY&&SUMMARY.period)||0), ovCarryWork);
+}
+function ovCarryHtml(){
+  if(!OV_CARRY) return '';
+  const c=OV_CARRY;
+  return `<div class="excarry no-print">
+    <div><b>🗓️ พบแผนจัดสรรรายแห่งของงวด ${tLab(c.period)} — งวดนี้ (${SUMMARY.periodLabel} ${SUMMARY.period}) ยังไม่มีแผน</b></div>
+    <div class="excarry-d">แก้เองไว้ ${c.n} แห่ง · ไม่ได้ยกมาให้เอง เพราะฐานตัวเลขเปลี่ยนตามงบทดลองงวดใหม่ — ยกมาแล้วต้องไล่ตรวจเองอีกรอบ</div>
+    <div class="excarry-b">
+      <button type="button" class="tgt-apply" onclick="ovCarryApply()">📥 ยกแผนงวด ${tLab(c.period)} มาใช้ต่อ</button>
+      <button type="button" class="ovbulkbtn" onclick="ovCarrySkip()">เริ่มใหม่จากงวดนี้</button>
+    </div></div>`;
+}
+function ovCarryApply(){
+  if(!OV_CARRY) return;
+  const s=OV_CARRY.state;
+  OV_PLAN=s.plans||{}; OV_TGT=(s.tgt!=null?s.tgt:null);
+  OV_CARRY=null; ovSavePlan();
+  const box=document.getElementById('ovCarryBox'); if(box) box.innerHTML='';
+  if(OV_TGT!=null) svOverviewTarget(OV_TGT); else ovRender();
+}
+function ovCarrySkip(){
+  if(!OV_CARRY) return;
+  OV_CARRY=null; ovSavePlan();   // เขียนคีย์งวดนี้ทิ้งไว้ = รอบหน้าไม่ถามซ้ำ
+  const box=document.getElementById('ovCarryBox'); if(box) box.innerHTML='';
+}
 function ovSavePlan(){ try{ localStorage.setItem(ovStoreKey(), JSON.stringify({tgt:OV_TGT, plans:OV_PLAN})); }catch(e){} }
 async function loadSurvOverview(rows){
   const need=rows.filter(h=>!(h.hcode in H_CACHE));
@@ -891,6 +939,7 @@ async function loadSurvOverview(rows){
   const okList=OV_CTX.filter(o=>o.ctx), bad=OV_CTX.length-okList.length;
   const sepLab=okList.length?svSepLabelFor(okList[0].ctx):'ก.ย.';
   el.innerHTML=`
+    <div id="ovCarryBox">${ovCarryHtml()}</div>
     <div class="tgt-title">🎯 ตั้งเป้าระดับวิกฤตร่วมกันภายใน <b>${sepLab}</b> (ใช้กับ ${okList.length} แห่ง) — กดเลขระดับที่ต้องการ</div>
     <div class="tgt-legend">เลข 0-6 = ต้องทำกำไร/เติมเงินก้อนเท่าไหร่ถึงจะลดลงถึงเป้าภายใน ${sepLab} · เลข <b>7</b> = เพดานขาดทุนก่อนตกไประดับ 7 (สำหรับแห่งที่ยังอยู่ระดับ 6)</div>
     <div class="lvlbtns" id="ovLvlBtns">${[0,1,2,3,4,5,6,7].map(L=>`<button type="button" class="lvlbtn" data-l="${L}" style="background:${riskColor(L)}" onclick="svOverviewTarget(${L})">${L}</button>`).join('')}</div>
@@ -1256,6 +1305,8 @@ function linCards(){
 // + Solver เงินสนับสนุนขั้นต่ำรายแห่งให้ถึงเป้าระดับวิกฤต ≤ เป้า และเงินสดไม่หมด
 // ══════════════════════════════════════════════════════════════════════
 let EX=null, EXST=null, EXOPEN={}, EXTJ=null, EXROWS=null, EX_TSV='';
+// แผนงวดก่อนหน้าที่พบตอนโหลด (ยังไม่ยกมา — รอผู้ใช้กดยืนยัน) · null = ไม่มี/ยกมาแล้ว/กดข้ามแล้ว
+let EX_CARRY=null, EX_CARRY_MSG='';
 let EXBRK={};   // hcode -> ระดับเป้าที่กางแผงเจาะเกณฑ์ 7 คะแนนอยู่ (undefined = ปิด) — ไม่เซฟลง localStorage เพราะเป็นมุมมองชั่วคราว
 let EXXF={};    // hcode -> กางแผงโยกเงินอยู่ (มุมมองชั่วคราว ไม่เซฟ · ตัวแผนโยกจริงอยู่ใน EXST.xfer ซึ่งเซฟถาวร)
 let EXAR={};    // hcode -> กำลังแก้ตัวเลขลูกหนี้ในเซลล์อยู่ (ชั่วคราว · ค่าที่กำหนดเองเก็บใน EXST.arOvr ซึ่งเซฟถาวร)
@@ -1442,6 +1493,38 @@ function exProvTh(label,col,title,right){
 }
 function exKey(p,seg){ return p+'|'+seg; }
 function exStoreKey(){ return 'rh1-exec-'+(EX?EX.period:''); }
+// ══ 🗓️ ยกแผนข้ามงวด — กันแผนหายเงียบตอนข้อมูลเดินงวด ══════════════════════════════════
+// แผนที่ทีมทำมือ (โยกเงินช่วยกัน · ลูกหนี้ที่คาดเก็บได้ · เงินสนับสนุนรายแห่ง) เก็บใน localStorage
+// ด้วยคีย์ที่**ผูกเลขงวด** เช่น rh1-exec-256909 — จงใจผูก เพราะยอดขาด/เพดานผู้ให้เปลี่ยนตามงบทดลอง
+// แผนของงวดเก่าจึงเอามาใช้ดิบ ๆ กับงวดใหม่ไม่ได้ ต้องให้คนตรวจก่อน
+// ⚠️ ของเดิม (ถึง 9 ส.ค. 69) พองวดขยับ 256909→256910 คีย์เปลี่ยน = แผนหายเงียบ ไม่มีอะไรบอกผู้ใช้เลย
+//    รอบข้อมูลจริงถัดไปคือ 16 ส.ค. 69 ระหว่างที่แผนช่วยเหลือยังใช้งานอยู่ (หมุด 31 ส.ค. / 30 ก.ย.)
+// วิธีแก้: ไม่ยกให้เอง แต่ **เสนอ** แผนงวดก่อนหน้าที่ใกล้ที่สุด ให้กดยืนยันเอง แล้วตรวจให้ว่ารายการไหนใช้ไม่ได้แล้ว
+// ⛔ ห้ามเปลี่ยนไปใช้คีย์เดียวไม่ผูกงวด — จะกลายเป็นเอาแผนเก่ามาทับสถานการณ์ใหม่โดยไม่มีใครรู้
+function carryFindPrev(prefix, curPeriod, hasWork){
+  if(!curPeriod) return null;
+  let best=null;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(!k || k.indexOf(prefix)!==0) continue;
+      const p=+k.slice(prefix.length);
+      if(!isFinite(p) || !p || p>=curPeriod) continue;      // เอาเฉพาะงวดก่อนหน้า
+      if(best && p<=best.period) continue;                  // เอางวดที่ใกล้ที่สุดงวดเดียว
+      let s=null; try{ s=JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ continue; }
+      const n=s?hasWork(s):0;
+      if(!n) continue;                                      // ค่าเริ่มต้นเปล่า ๆ ไม่ต้องเสนอ
+      best={key:k, period:p, state:s, n};
+    }
+  }catch(e){}
+  return best;
+}
+// นับ "งานที่ทีมทำมือ" ในสถานะหนึ่ง — ใช้ตัดสินว่าคุ้มจะเสนอให้ยกมาไหม
+function exCarryWork(s){
+  const nx=Array.isArray(s.xfer)?s.xfer.length:0;
+  const cnt=o=>o?Object.keys(o).length:0;
+  return nx + cnt(s.arOvr) + cnt(s.inj) + cnt(s.ovr) + cnt(s.moeOvr);
+}
 function exDefaultState(){
   // moePct: % ปรับรายกลุ่ม MOE จากค่าเฉลี่ย (default 0% = ตาม run-rate) · xmoe: คชจ.นอกนิยาม run-rate (default คงไว้ = NI ตรงบัญชีจริง)
   // adjAll/moePctAll: ค่ากลุ่มที่บังคับล่าสุด (สไลด์ต้องจำค่าไว้ ไม่รีเซ็ตเป็น 0 หลัง render) · open: สถานะยุบ/กางเมนู (default ยุบ)
@@ -1464,9 +1547,79 @@ function exDefaultState(){
           provSort:{col:'prov',dir:1}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
+function exMergeState(s){
+  if(!s) return;
+  EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},xfer:Array.isArray(s.xfer)?s.xfer:[],arOvr:{...(s.arOvr||{})}};
+}
 function exLoad(){
-  EXST=exDefaultState();
-  try{ const s=JSON.parse(localStorage.getItem(exStoreKey())||'null'); if(s) EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},xfer:Array.isArray(s.xfer)?s.xfer:[],arOvr:{...(s.arOvr||{})}}; }catch(e){}
+  EXST=exDefaultState(); EX_CARRY=null;
+  let raw=null; try{ raw=localStorage.getItem(exStoreKey()); }catch(e){}
+  if(raw){ try{ exMergeState(JSON.parse(raw||'null')); }catch(e){} }
+  // ยังไม่เคยมีแผนของงวดนี้ → มองหาแผนงวดก่อนหน้ามาเสนอให้ยกมาใช้ต่อ (ดู carryFindPrev)
+  else EX_CARRY=carryFindPrev('rh1-exec-', +((EX&&EX.period)||0), exCarryWork);
+}
+// ── แถบเสนอยกแผนงวดก่อนหน้า (ขึ้นหัวแท็บ #exec เมื่อยังไม่มีแผนของงวดนี้) ──────────────
+function exCarryHtml(){
+  if(EX_CARRY_MSG) return `<div class="excarry done no-print">${EX_CARRY_MSG}<button type="button" class="ovbulkbtn" onclick="EX_CARRY_MSG='';renderExec()">ปิด</button></div>`;
+  if(!EX_CARRY) return '';
+  const c=EX_CARRY, nx=Array.isArray(c.state.xfer)?c.state.xfer.length:0;
+  const sum=(Array.isArray(c.state.xfer)?c.state.xfer:[]).reduce((s,x)=>s+(+x.a||0),0);
+  return `<div class="excarry no-print">
+    <div><b>🗓️ พบแผนของงวด ${tLab(c.period)} — งวดนี้ (${EX.periodLabel}) ยังไม่มีแผน</b></div>
+    <div class="excarry-d">ข้อมูลเดินงวดแล้ว แผนเดิมไม่ได้ถูกยกมาให้เอง เพราะ<b>ยอดขาดและเพดานผู้ให้เปลี่ยนไปตามงบทดลองใหม่</b>
+      — มี${nx?`โยกเงินช่วยกัน ${nx} รายการ รวม ${fmtM(sum)}`:''}${nx&&c.n>nx?' · ':''}${c.n>nx?`ค่าที่ปรับเอง ${c.n-nx} รายการ`:''}
+      · ถ้ายกมา ระบบจะตรวจให้ทันทีว่ารายการไหนใช้กับงวดใหม่ไม่ได้แล้ว</div>
+    <div class="excarry-b">
+      <button type="button" class="tgt-apply" onclick="exCarryApply()">📥 ยกแผนงวด ${tLab(c.period)} มาใช้ต่อ</button>
+      <button type="button" class="ovbulkbtn" onclick="exCarrySkip()">เริ่มใหม่จากงวดนี้</button>
+    </div></div>`;
+}
+function exCarrySkip(){
+  if(!EX_CARRY) return;
+  EX_CARRY=null; exSave();      // เขียนคีย์งวดนี้ทิ้งไว้ = รอบหน้าจะไม่ถามซ้ำ
+  renderExec();
+}
+function exCarryApply(){
+  if(!EX_CARRY) return;
+  const c=EX_CARRY;
+  exMergeState(c.state);
+  EX_CARRY=null; exSave();
+  EXCAPC={};                    // เพดานผู้ให้ต้องคิดใหม่ทั้งหมดหลังยกแผนเข้ามา
+  EX_CARRY_MSG=exCarryReport(c.period);
+  renderExec();
+}
+// ตรวจแผนที่เพิ่งยกมากับข้อมูลงวดใหม่ — บอกให้ครบว่ารายการไหนใช้ไม่ได้แล้ว ไม่ปล่อยเงียบ
+// เกณฑ์: ① รพ. หายจากชุดข้อมูลงวดใหม่ ② ผู้ให้ติดลบเองหลังให้ตามแผนเดิม ③ ผู้รับยังขาดอยู่
+// (exMoeLeft นับ exXferNet อยู่แล้ว → เลขที่ได้คือสถานะ "หลังโยกตามแผน" ตรงกับที่ตารางแสดง)
+// ค่าเผื่อเศษ: ยอดโยกปัดเป็นบาทเต็ม (Math.round) ส่วน MOE/เดือนเป็นทศนิยม ผู้ให้ที่ให้เต็มเพดาน
+// จึงลงเอยที่ −0.x บาทได้ตามปกติ (วัดจริงงวด 256909: ลำพูน −0.0000 · แม่ทา −0.67)
+// ถ้าไม่เผื่อ รายงานจะฟ้องว่า "ให้เกินกำลัง" ทั้งที่ไม่มีอะไรผิด แล้วทีมจะไล่หาส่วนต่างที่ไม่มีอยู่จริง
+const EX_CARRY_EPS=1000;
+function exCarryReport(prevPeriod){
+  const byH={}; EX.hosp.forEach(h=>byH[h.hcode]=h);
+  const gone=[], over=[], short=[];
+  const seen={};
+  exXferList().forEach(x=>{
+    [x.f,x.t].forEach(hc=>{ if(!byH[hc]){ if(!seen['g'+hc]){ seen['g'+hc]=1; gone.push(hc); } } });
+  });
+  EX.hosp.forEach(h=>{
+    const L=exMoeLeft({h, r0:exSimPath(h,0)});
+    if(L>=-EX_CARRY_EPS) return;
+    // ผู้รับ: นับ**ทุกแห่งที่ยังขาด** ไม่ใช่เฉพาะที่อยู่ในแผนเดิม — งวดใหม่อาจมีแห่งที่เพิ่งตกมาขาด
+    // ซึ่งแผนเดิมไม่ได้เผื่อไว้ให้ ถ้านับเฉพาะที่มีชื่อในแผนจะตอบคำถาม "แผนนี้ยังพอไหม" ไม่ครบ
+    if(exXferOut(h)>0) over.push({h, d:-L});
+    else short.push({h, d:-L});
+  });
+  const part=[];
+  if(gone.length) part.push(`<li>⛔ ${gone.length} รหัส รพ. ในแผนเดิมไม่มีในข้อมูลงวดนี้ — รายการนั้นจะไม่มีผล (${gone.join(', ')})</li>`);
+  if(over.length) part.push(`<li>⚠️ ผู้ให้ ${over.length} แห่งให้เกินกำลังของงวดใหม่แล้ว (ตัวเองติดลบ): ${over.sort((a,b)=>b.d-a.d).slice(0,5).map(o=>`${o.h.name} ${fmtM(o.d)}`).join(' · ')}${over.length>5?` และอีก ${over.length-5} แห่ง`:''}</li>`);
+  if(short.length){
+    const tot=short.reduce((s,o)=>s+o.d,0);
+    part.push(`<li>⚠️ ยังขาดอยู่ ${short.length} แห่ง รวม ${fmtM(tot)} หลังโยกตามแผนเดิม: ${short.sort((a,b)=>b.d-a.d).slice(0,5).map(o=>`${o.h.name} ${fmtM(o.d)}`).join(' · ')}${short.length>5?` และอีก ${short.length-5} แห่ง`:''}</li>`);
+  }
+  const head=`<div><b>📥 ยกแผนงวด ${tLab(prevPeriod)} มาใช้กับงวด ${EX.periodLabel} แล้ว</b></div>`;
+  if(!part.length) return head+`<div class="excarry-d">ตรวจแล้ว<b>แผนเดิมยังพอกับข้อมูลงวดใหม่</b> — ไม่มีผู้ให้ที่ให้เกินกำลัง และไม่มีแห่งไหนเหลือขาด</div>`;
+  return head+`<div class="excarry-d">สถานะของแผนเดิมภายใต้ข้อมูลงวดใหม่:<ul class="excarry-u">${part.join('')}</ul>กด <b>⚡ จัดสรรอัตโนมัติ</b> เพื่อคำนวณใหม่ทั้งหมด หรือแก้รายแห่งเองในตาราง</div>`;
 }
 // % ปรับรายรับ (จำนวนเต็ม −100..+200): override ราย รพ. > ค่ากลุ่ม > 0
 function exPct(hc,p,seg){
@@ -2121,6 +2274,7 @@ async function renderExec(){
   const sepLab=tLab(exSepT());
   document.getElementById('right').innerHTML=`
   <div class="dwrap" style="max-width:1200px">
+    ${exCarryHtml()}
     <div class="print-head">
       <div style="font-size:16px;font-weight:800">รายงานแนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง ${sepLab} (โมเดล MOE)</div>
       <div style="font-size:11px;color:#555">เขตสุขภาพที่ 1 · งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} · พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH')}</div>

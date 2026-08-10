@@ -362,11 +362,13 @@ async function init(){
 }
 
 // ── Helpers ──────────────────────────────────────────────
+// ทศนิยม: B และ M = 2 ตำแหน่ง (เจ้าของงานกำหนด 9 ส.ค. 69) · K คงเป็นจำนวนเต็มตามเดิม
+// ⚠️ ต้องตรงกับ fmtM ใน risk_drill.html — สองหน้านี้แสดงยอดเดียวกัน ถ้าไม่ตรงจะอ่านเป็นคนละเลข
 function fmtM(v){
   if(v==null)return '-';
   const a=Math.abs(v);
   if(a>=1e9) return (v/1e9).toFixed(2)+'B';
-  if(a>=1e6) return (v/1e6).toFixed(1)+'M';
+  if(a>=1e6) return (v/1e6).toFixed(2)+'M';
   if(a>=1e3) return (v/1e3).toFixed(0)+'K';
   return v.toLocaleString();
 }

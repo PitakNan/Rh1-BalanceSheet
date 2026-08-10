@@ -14,14 +14,16 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
+const A=new Function(code+`;return {fmtM,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
   SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=(ext,mmo)=>({mmo,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext,tgt:6,
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
   tj:{mode:'off',scope:'crisis'},inj:{},open:{}});
-const fmtM=v=>{if(v==null)return '—';const a=Math.abs(v);if(a>=1e9)return(v/1e9).toFixed(2)+'B';if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(0)+'K';return Math.round(v).toLocaleString()};
+// ⚠️ ห้ามลอกสูตร fmtM มาไว้ที่นี่ — ดึงจากหน้าเว็บตรง ๆ ไม่งั้นพอเปลี่ยนจำนวนทศนิยม
+//    เทสต์จะเทียบกับสูตรเก่าของตัวเองแล้วฟ้องผิดทั้งที่หน้าเว็บถูก (เกิดจริง 9 ส.ค. 69)
+const fmtM=A.fmtM;
 const txt=s=>s.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
 let fail=[];
 const chk=(ok,msg)=>{ console.log(`  ${ok?'✅':'❌'} ${msg}`); if(!ok) fail.push(msg); };
@@ -202,7 +204,7 @@ console.log();
 // (เคยพลาดมาแล้ว ตอนย้ายหัวตารางขึ้นไปสร้างก่อนเพื่อคำนวณ colspan)
 console.log('━━ tooltip หัวคอลัมน์ (เรนเดอร์ครั้งแรก) ━━');
 {
-  const B=new Function(code+`;return {exRender,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
+  const B=new Function(code+`;return {fmtM,exRender,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
     setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();   // instance ใหม่ = EX_COLDEF_MAP ว่างจริง
   B.setEX(j); B.setEXST(ST(0,3)); B.setEXOPEN({}); B.setEXBRK({}); B.setEXSORT({col:null,dir:-1});
   B.exRender();
