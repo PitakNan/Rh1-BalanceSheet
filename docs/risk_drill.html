@@ -1345,12 +1345,12 @@ function exIsCred(h){ return h.type==='รพศ.'||h.type==='รพท.'||EXTJH
 // ── 💧 ประเมินสภาพคล่อง: เงินสดคงเหลือหลังภาระ MOE กรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลย) ──
 // ⚠️ เป็นการประเมินภายใต้สมมติฐาน (stress test) ไม่ใช่คำของบ — ตัวเลขคือ "ต้องมีเงินเท่าไหร่ถ้าไม่มีรายรับเข้าเลย" ไม่ใช่เงินที่ต้องขอจริง
 //    ถ้านับรายรับตามแบบจำลอง ไม่มี รพ. ไหนเงินสดหมดเลยแม้ 15 เดือน (ดู RISK_EXEC_MODEL.md 7.8 ⑦)
-// ⛔ ช่วงเวลาของคอลัมน์นี้ "แยกจาก" dropdown ช่วงจำลอง (EXST.ext) โดยตั้งใจ —
-//    เดิมผูกกันทำให้เลือก +12 เดือนแล้วตัวเลขบวมเป็นหมื่นล้าน อ่านเป็นเม็ดเงินจริงไม่ได้
-//    จึงจำกัดเพดานไว้ ซึ่งเป็นช่วงที่การทดสอบยังสมเหตุสมผล
+// 🗓️ 11 ส.ค. 69 (รอบ 2): dropdown "ช่วงจำลอง (EXST.ext)" ถูกยุบรวมมาเป็นตัวเลือกเดียวกับคอลัมน์นี้แล้ว
+//    (เจ้าของงานสั่ง) — เดือนที่เลือกที่นี่คุมทั้งคอลัมน์สภาพคล่อง + ระดับวิกฤต + เงินสนับสนุน
+//    ยังจำกัดเพดานไว้เพราะยิ่งเลือกไกล ยอด "ภาระ MOE" ยิ่งบวมจนอ่านเป็นเม็ดเงินจริงไม่ได้
 //    5 ส.ค. 69: CFO ขอขยายเพดานเป็น 13 เดือน (ครอบคลุมข้ามปีงบ 1 งวดเต็ม) — ยอดจะบวมตามช่วงที่เลือก
 //    ให้อ่านเป็น "ลำดับความเปราะ" ไม่ใช่คำของบ ตามคำเตือนใต้ตัวกรอง
-const EX_MMO_MAX=13;
+const EX_MMO_MAX=14;   // 11 ส.ค. 69: 13→14 เดือน ให้ครอบคลุม ก.ย. ของปีงบถัดไป (แทนตัวเลือก +12 ของ dropdown ช่วงจำลองที่ยุบรวมมา)
 function exMoeMonthsDefault(){ return Math.min(EX_MMO_MAX, Math.max(1, 12-EX.hosp[0].bs.mo)); }   // ค่าเริ่มต้น = ถึงสิ้นปีงบ
 function exMoeMonths(){ const v=+EXST.mmo; return (v>=1&&v<=EX_MMO_MAX)?v:exMoeMonthsDefault(); }
 function exMoeTargetLab(){ return tLab(addMo(EX.hosp[0].bs.t, exMoeMonths())); }
@@ -1928,9 +1928,15 @@ function exSimPath(h, inj, sc){
   // → ทั้งครึ่งขวาของตารางประเมิน ณ เดือนเดียวกันหมด (ค่าเริ่มต้น = สิ้นปีงบ ผลจึงเท่าเดิม)
   // ⚠️ horMo (ช่วงจำลอง ext) กับ tgtMo (เดือนเป้า) แยกกันโดยตั้งใจ — จำลองถึงเดือนที่ไกลกว่าเสมอ
   //    แต่ endRisk ยังหมายถึง "ปลายช่วงจำลอง" เท่าเดิม ไม่ใช่เดือนเป้า
-  const horMo=(12-bs.mo)+(+EXST.ext||0);
-  const tgtMo=exMoeMonths();
-  const months=Math.max(horMo,tgtMo);
+  // ⭐ 11 ส.ค. 69 (รอบ 2): รวม dropdown "ช่วงจำลอง (ext)" เข้ากับ "เดือนเป้า" เป็นตัวเลือกเดียว
+  //    ตามที่เจ้าของงานสั่ง โดย **คงการคุมสิ้นปีงบไว้เป็นพื้นเสมอ** (เจ้าของงานเคาะ)
+  //    → Solver ยังบังคับ 2 จุดเหมือนเดิม: ① เดือนที่เลือก (sepRisk) ② สิ้นปีงบ (endRisk)
+  //    ⛔ ห้ามเปลี่ยนเป็นเช็คจุดเดียวตามเดือนที่เลือก — วัดแล้วเงินสนับสนุนหายไป 10–21 ลบ.
+  //       และ รพ. หลุดจากรายชื่อ 3–4 แห่ง (เกาะคา/ดอยเต่า เหลือ 0) เพราะปัญหาของเขาอยู่ที่สิ้นปีงบ
+  //       ไม่ใช่เดือนที่เลือก = โมเดลมองโลกสวยขึ้น ซึ่งเป็นทิศที่ห้าม
+  const fyMo=12-bs.mo;              // สิ้นปีงบ = พื้นที่ต้องคุมเสมอ (แทน horMo เดิมที่ผูกกับ ext)
+  const tgtMo=exMoeMonths();        // เดือนเป้าจากตัวกรองเดียวที่เหลืออยู่
+  const months=Math.max(fyMo,tgtMo);
   let sc0=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
   let r=anc(sc0.risk);
   let sepRisk=(tgtMo<=0?r:null), endRisk=r, cashOut=st.ccn<=0?0:null;
@@ -1965,7 +1971,7 @@ function exSimPath(h, inj, sc){
     r=anc(sc.risk);
     if(k===tgtMo){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // เดือนเป้าที่เลือกในตัวกรอง (เดือนเดียว ไม่ใช่ "ก.ย. แรกที่เจอ")
     if(st.ccn<=0 && cashOut==null) cashOut=k;
-    if(k<=horMo) endRisk=r;   // endRisk = ปลายช่วงจำลอง (ext) เท่านั้น — ถ้าเดือนเป้าไกลกว่า ห้ามให้เลื่อนตาม
+    if(k<=fyMo) endRisk=r;   // endRisk = ระดับ ณ "สิ้นปีงบ" (พื้นที่คุมเสมอ) — ถ้าเดือนเป้าไกลกว่า ห้ามเลื่อนตาม
   }
   return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:moeMoV,moeAccMo:exMoeAccMo(h),
           stretchMo,apStretch,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
@@ -2361,7 +2367,10 @@ function exRiskSrcLab(){
   return `คะแนนตั้งต้นแบบผสม — ทางการที่ รพ. รายงาน ${c.rep||0} แห่ง · คำนวณจากงบทดลอง ${c.gl||0} แห่ง`;
 }
 function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }   // สิ้นปีงบ (ก.ย.) — ใช้เฉพาะที่หมายถึง "สิ้นปีงบ" จริง ๆ
-function exHorLab(){ return (+EXST.ext||0)>0 ? tLab(addMo(exSepT(), +EXST.ext)) : tLab(exSepT()); }
+// ⭐ 11 ส.ค. 69 (รอบ 2): เลิกใช้ EXST.ext — dropdown "ช่วงจำลอง" ถูกรวมเข้ากับ "เดือนเป้า" แล้ว
+// exHorLab() จึงหมายถึง "สิ้นปีงบ" ล้วน ๆ = จุดที่ Solver คุมเป็นพื้นเสมอ (endRisk)
+// ⛔ ห้ามอ่านค่า EXST.ext ที่ไหนอีก (ค่าเก่าที่ค้างใน localStorage ถูกเมินโดยตั้งใจ ดู exDefaultState)
+function exHorLab(){ return tLab(exSepT()); }
 // ── ป้ายเดือนเป้าที่ใช้ตัดสินระดับวิกฤต + เงินสนับสนุน (เจ้าของงานสั่ง 11 ส.ค. 69) ──────────────
 // = เดือนที่เลือกในตัวกรอง 🗓️ ตัวเดียวกับคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" (exMoeTargetLab)
 // ⛔ ห้ามกลับไปใช้ tLab(exSepT()) กับคอลัมน์/แผงที่ประเมิน "ณ เดือนเป้า" — จะตรึงกลับเป็น ก.ย. เสมอ
@@ -2374,7 +2383,25 @@ function exSepLab(){ return exMoeTargetLab(); }
 //    ถ้าเลือกเดือนเป้าที่ "เร็วกว่า" สิ้นปีงบ เงินที่คำนวณได้จะยังถูกคุมด้วยสิ้นปีงบด้วย
 //    (เห็นได้จากระดับหลังช่วย ณ เดือนเป้าที่ดีเกินเป้า เช่น เป้า 6 แต่ได้ 3) — ป้ายต้องบอกทั้งสองจุด
 //    ไม่งั้นผู้ใช้อ่านว่า "เงินก้อนนี้เพื่อ ส.ค. เท่านั้น" ซึ่งไม่จริง
-function exGoalLab(){ const a=exSepLab(), b=exHorLab(); return a===b?a:a+' (คุมถึงปลายช่วงจำลอง '+b+' ด้วย)'; }
+function exGoalLab(){ const a=exSepLab(), b=exHorLab(); return a===b?a:a+' (คุมถึงสิ้นปีงบ '+b+' ด้วย)'; }
+// ── ตัวเลือกเดือนเป้า: ใช้ร่วมกัน 2 ที่ (แถบควบคุมด้านบน + เหนือตารางผลจำลอง) ────────────────
+// เจ้าของงานสั่ง 11 ส.ค. 69 ให้ "ช่วงจำลอง" กับ "เดือนเป้า" เป็นตัวเลือกเดียวเชื่อมกัน
+// → ผูกกับ EXST.mmo ตัวเดียว เปลี่ยนที่ไหนก็ตามอีกที่ต้องขยับตาม (sync ใน exSet)
+// ⚠️ ต้องสร้าง option จากฟังก์ชันเดียว ห้ามเขียนซ้ำสองที่ ไม่งั้นป้ายสองที่หลุดออกจากกันเงียบ ๆ
+function exMmoOptions(){
+  return Array.from({length:EX_MMO_MAX},(_,i)=>i+1)
+    .map(k=>`<option value="${k}" ${exMoeMonths()===k?'selected':''}>${tLab(addMo(EX.hosp[0].bs.t,k))} (${k} เดือน)${k===exMoeMonthsDefault()?' — สิ้นปีงบ':''}</option>`)
+    .join('');
+}
+const EX_MMO_TITLE=('เดือนเป้าที่ใช้ตัดสินทั้งครึ่งขวาของตารางผลจำลอง (เจ้าของงานสั่ง 11 ส.ค. 69) — เลือกแล้วขยับพร้อมกันหมด:\n'
+  +'• เงินสดคงเหลือหลังภาระ MOE + ส่วนขาดสภาพคล่อง (กรณีรายรับไม่เป็นไปตามแผนขั้นรุนแรงสุด ไม่มีรายรับเข้าเลย)\n'
+  +'• ระดับวิกฤต ก่อนช่วย/หลังช่วย ณ เดือนนั้น\n'
+  +'• เงินที่ต้องสนับสนุนทั้ง 6 เกณฑ์ + ยอดรวม (Solver เดินแบบจำลองถึงเดือนนั้น)\n'
+  +'⚓ ไม่ว่าเลือกเดือนไหน ระบบยัง "คุมระดับ ณ สิ้นปีงบ" ให้ไม่เกินเป้าเสมอ (เป็นพื้นตายตัว)\n'
+  +'   จึงเป็นไปได้ที่เลือกเดือนเร็วกว่าสิ้นปีงบแล้วระดับหลังช่วยดีเกินเป้า — เพราะเงินถูกกำหนดโดยสิ้นปีงบ\n'
+  +'   ⛔ ถ้าตัดการคุมสิ้นปีงบออก เงินสนับสนุนจะหายไป 10–21 ลบ. และ รพ. หลุดจากรายชื่อ 3–4 แห่ง (วัดแล้ว 11 ส.ค. 69)\n'
+  +'ตัวเลือกนี้เป็นตัวเดียวกับที่อยู่ในแถบควบคุมด้านบน — เปลี่ยนที่ไหนก็ตามอีกที่ขยับตาม')
+  .replace(/"/g,'&quot;').split(String.fromCharCode(10)).join('&#10;');
 // ── Render หลักของแท็บ ──
 async function renderExec(){
   document.getElementById('right').innerHTML='<div class="hint-empty">กำลังโหลดข้อมูลผู้บริหาร...</div>';
@@ -2395,18 +2422,16 @@ async function renderExec(){
     </div>
     <div class="panel">
       <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — ประเมินผล ณ <span id="exHorLab2">${exGoalLab()}</span> ด้วยโมเดล MOE</h3>
-      <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + ${exRiskSrcLab()}</div>
+      <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนรายเดือน (run-rate) ตลอดช่วงที่จำลอง</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + ${exRiskSrcLab()}</div>
       <div class="exctl" style="margin-top:10px">
         <span class="seg" style="display:inline-flex">
           <button id="exC67" class="${EXST.crisis==='67'?'on':''}" onclick="exSet('crisis','67')">🚨 วิกฤต 6-7</button>
           <button id="exCall" class="${EXST.crisis==='all'?'on':''}" onclick="exSet('crisis','all')">ทุกระดับ</button>
         </span>
         <span class="filt-grp" title="กรองประเภทโรงพยาบาลที่จะแสดงในตาราง">${['รพศ.','รพท.','รพช.'].map(t=>`<label><input type="checkbox" ${EXST.types[t]?'checked':''} onchange="exSetType('${t}',this.checked)"> ${t}</label>`).join('')}</span>
-        <label>ช่วงจำลอง:
-          <select onchange="exSet('ext',+this.value)">
-            <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${fyLab} (สิ้นปีงบ)</option>
-            ${[3,6,12].map(x=>`<option value="${x}" ${+EXST.ext===x?'selected':''}>+${x} เดือน (${tLab(addMo(exSepT(),x))})</option>`).join('')}
-          </select></label>
+        <label title="${EX_MMO_TITLE}">🗓️ ประเมิน/ตัดสินผล ณ เดือน:
+          <select id="exMmoTop" onchange="exSet('mmo',+this.value)">${exMmoOptions()}</select></label>
+        <span class="tgt-note">ตัวเดียวกับที่อยู่เหนือตารางผลจำลอง · คุมถึง<b>สิ้นปีงบ ${fyLab}</b> เป็นพื้นเสมอ</span>
         <button type="button" class="no-print ovbulkbtn" style="margin-left:auto" onclick="window.print()" title="เปิดกล่องพิมพ์ของเบราว์เซอร์ → เลือก 'Save as PDF' เพื่อบันทึกเป็นไฟล์รายงาน">🖨️ บันทึก PDF / พิมพ์</button>
       </div>
       <div class="tgt-title" style="margin-top:12px">🎯 ตั้งเป้าระดับวิกฤตไม่เกิน ภายใน <b id="exHorLab3">${exGoalLab()}</b> (ใช้กับ <span id="exTgtCount">${exRows().length}</span> แห่งที่เลือก) — กดเลขระดับที่ต้องการ · เปลี่ยนเดือนได้ที่ <b>🗓️ ประเมิน/ตัดสินผล ณ เดือน</b> เหนือตารางผลจำลอง</div>
@@ -2429,6 +2454,10 @@ function exSet(k,v){
   exSave(); exRender();
   const el=document.getElementById('exHorLab2'); if(el) el.textContent=exGoalLab();
   const el3=document.getElementById('exHorLab3'); if(el3) el3.textContent=exGoalLab();
+  // 🗓️ เดือนเป้ามี dropdown 2 ที่ (แถบควบคุมบน + เหนือตารางผลจำลอง) ผูก EXST.mmo ตัวเดียวกัน
+  // ตัวล่างอยู่ใน #exResBox จึงถูกวาดใหม่เอง ส่วนตัวบนอยู่นอก exRender ต้อง sync ค่าให้เอง
+  // ⚠️ ถ้าไม่ sync จะเห็นสอง dropdown โชว์เดือนคนละเดือนทั้งที่เป็นค่าเดียวกัน
+  const mt=document.getElementById('exMmoTop'); if(mt) mt.value=String(exMoeMonths());
 }
 function exSetType(t,on){ EXST.types[t]=on; exSave(); exRender(); }
 function exSetMoePct(g,v){
@@ -3096,7 +3125,7 @@ function exRender(){
   if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
     // ⚠️ hub ต้องอยู่ใน sig ด้วย (เพิ่ม 6 ส.ค. 69) — hub เปลี่ยน → shares เปลี่ยน → sepRisk ของ
     //    รพช. hub (ซึ่งเป็นลูกหนี้ด้วย) เปลี่ยน → เงินคืนที่ต้องใช้เปลี่ยน · ถ้าไม่ใส่จะได้ผลเก่าค้าง
-    const sig=JSON.stringify({s:EXST.tj.scope,ext:EXST.ext,adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct(),hub:[...EXTJHUB].sort().join(','),xfer:exXferList(),arPct:exArPct(),arOvr:EXST.arOvr});
+    const sig=JSON.stringify({s:EXST.tj.scope,mmo:exMoeMonths(),adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct(),hub:[...EXTJHUB].sort().join(','),xfer:exXferList(),arPct:exArPct(),arOvr:EXST.arOvr});
     if(_refundCache.sig===sig && _refundCache.refund) EXTJ.refund=_refundCache.refund;
     else { exTjSolveRefunds(); _refundCache={sig, refund:EXTJ.refund}; }
   }
@@ -3184,7 +3213,7 @@ function exRender(){
   const nOvr=Object.values(EXST.ovr||{}).reduce((s,o)=>s+Object.keys(o||{}).length,0);
   const nRevOff=EXROWS_SEGS.filter(({p,g})=>exRevOff(exKey(p,g))).length;
   document.getElementById('exRevBox').innerHTML=`
-    <h3 style="margin:0 0 6px">📈 ประมาณการรายรับกองทุน ${left} เดือนที่เหลือ (${tLab(addMo(EX.period,1))}–${sepLab})</h3>
+    <h3 style="margin:0 0 6px">📈 ประมาณการรายรับกองทุน ${Math.max(left,exMoeMonths())} เดือนข้างหน้า (${tLab(addMo(EX.period,1))}–${exMoeMonths()>=left?exSepLab():exHorLab()})${exMoeMonths()>left?` <span class="tgt-note" style="font-size:11.5px;font-weight:400">· ยาวกว่าสิ้นปีงบเพราะเลือกเดือนเป้า ${exSepLab()}</span>`:''}</h3>
     <div class="tgt-row" style="border-top:none;padding-top:0">รวมรายรับจำลอง: <b>${fmtM(revTot)}/เดือน</b> − MOE <b>${fmtM(moeTot)}</b>${exXmoeOn()?` − นอกนิยาม <b>${fmtM(xmoeTot)}</b>`:''} → กระแสเงินสดสุทธิ <b style="color:${revTot-moeTot-(exXmoeOn()?xmoeTot:0)<0?'var(--red)':'var(--green)'}">${sgnM(revTot-moeTot-(exXmoeOn()?xmoeTot:0))}/เดือน</b>${nAdj||nOvr?` <span class="tgt-note">· ปรับแล้ว ${nAdj} แถว${nOvr?` + ราย รพ. ${nOvr} จุด`:''}</span>`:''}${nRevOff?` <span class="tgt-note">· ปิดไว้ ${nRevOff} รายการ (ไม่นับรวม)</span>`:''}</div>
     <div class="fld" style="margin:10px 0 4px"><label>⚡ ปรับทุกกองทุนพร้อมกัน: <b id="exAllLab">${(allv>0?'+':'')+allv}%</b> <span class="tgt-note">(ค่าที่บังคับล่าสุด — ${left} เดือนที่เหลือเทียบค่าเฉลี่ย)</span></label>
       <div class="exctl" style="gap:6px;flex-wrap:wrap">
@@ -3490,7 +3519,7 @@ function exRender(){
         }).join('');
       })()}
       <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<span class="tgt-note">–</span>')}</td>
-      <td><span class="badge brkbadge${brkOpen?' on':''}" style="background:${riskColor(r1.sepRisk)}" title="คลิกดูเกณฑ์ทั้ง 7 คะแนน ก่อน/หลังช่วย ณ ${sepLab} — เลือกดูระดับเป้าอื่นได้" onclick="exBrkToggle('${hc}')">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${(+EXST.ext||0)>0?` <span class="tgt-note">→ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
+      <td><span class="badge brkbadge${brkOpen?' on':''}" style="background:${riskColor(r1.sepRisk)}" title="คลิกดูเกณฑ์ทั้ง 7 คะแนน ก่อน/หลังช่วย ณ ${sepLab} — เลือกดูระดับเป้าอื่นได้" onclick="exBrkToggle('${hc}')">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${exMoeMonths()!==exMoeMonthsDefault()?` <span class="tgt-note" title="ระดับ ณ สิ้นปีงบ (${horLab}) หลังช่วย — Solver คุมจุดนี้เป็นพื้นเสมอ ไม่ว่าจะเลือกเดือนเป้าเป็นเดือนไหน&#10;ถ้าเลขนี้แตะเป้าพอดีขณะที่ระดับ ณ เดือนเป้าดีเกินเป้า = เงินก้อนนี้ถูกกำหนดโดยสิ้นปีงบ ไม่ใช่เดือนที่เลือก">→ สิ้นปีงบ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
     </tr>`;
     const brkRow=brkOpen?`<tr class="ovsub"><td colspan="${EX_NCOL}">${exBrkHtml(x,sepLab)}</td></tr>`:'';
@@ -3600,10 +3629,9 @@ function exRender(){
           ${exProvs().map(p=>`<option value="${p}" ${EXST.prov===p?'selected':''}>${p}</option>`).join('')}
         </select></label>
       ${EXST.prov!=='all'?`<button type="button" class="ovbulkbtn" onclick="exSet('prov','all')">↺ ทุกจังหวัด</button> <span class="tgt-note">แสดงเฉพาะ ${EXST.prov} (${rows.length} แห่ง)</span>`:''}
-      <label title="เดือนเป้าที่ใช้ตัดสินทั้งครึ่งขวาของตาราง (เจ้าของงานสั่ง 11 ส.ค. 69) — เลือกแล้วขยับพร้อมกันหมด:&#10;• เงินสดคงเหลือหลังภาระ MOE + ส่วนขาดสภาพคล่อง (กรณีรายรับไม่เป็นไปตามแผนขั้นรุนแรงสุด ไม่มีรายรับเข้าเลย)&#10;• ระดับวิกฤต ก่อนช่วย/หลังช่วย ณ เดือนนั้น&#10;• เงินที่ต้องสนับสนุนทั้ง 6 เกณฑ์ + ยอดรวม (Solver เดินแบบจำลองถึงเดือนนั้น)&#10;แยกจาก 'ช่วงจำลอง' ด้านบนโดยตั้งใจ — ช่วงจำลองคือ &quot;ปลายทางที่จำลองถึง&quot; ส่วนตัวนี้คือ &quot;เดือนที่ใช้ตัดสิน&quot; (จำกัด ${EX_MMO_MAX} เดือน ยาวกว่านั้นตัวเลขบวมจนอ่านไม่ได้)">🗓️ ประเมิน/ตัดสินผล ณ เดือน:
-        <select onchange="exSet('mmo',+this.value)">
-          ${Array.from({length:EX_MMO_MAX},(_,i)=>i+1).map(k=>`<option value="${k}" ${exMoeMonths()===k?'selected':''}>${tLab(addMo(EX.hosp[0].bs.t,k))} (${k} เดือน)${k===exMoeMonthsDefault()?' — สิ้นปีงบ':''}</option>`).join('')}
-        </select></label>
+      <label title="${EX_MMO_TITLE}">🗓️ ประเมิน/ตัดสินผล ณ เดือน:
+        <select id="exMmoBot" onchange="exSet('mmo',+this.value)">${exMmoOptions()}</select></label>
+      <span class="tgt-note">ตัวเดียวกับในแถบควบคุมด้านบน · ⚓ คุมถึงสิ้นปีงบ ${exHorLab()} เป็นพื้นเสมอ</span>
     </div>
     <div class="note" style="margin:0 0 8px">💧 <b>คอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" กับ "ส่วนขาดสภาพคล่อง(MOE)" ประเมินกรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลย)</b> ซึ่งไม่ได้เกิดจริง — <b>ไม่ใช่คำของบ</b>
       · ถ้านับรายรับตามแบบจำลอง <b>ไม่มี รพ. ไหนเงินสดหมดเลย</b> แม้จำลองยาว 15 เดือน (มีเพียง 5 แห่งที่กระแสเงินสดต่อเดือนติดลบ และแห่งที่แย่สุดยังอยู่ได้ 49 เดือน)

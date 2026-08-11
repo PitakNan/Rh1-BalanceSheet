@@ -15,9 +15,10 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const A=new Function(code+`;return {fmtM,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
-  exNetAfterDebt,exSolveCrit,NEEDC:EX_NEEDC,STEP:SV_STEP,
+  exNetAfterDebt,exSolveCrit,exSolveFor,NEEDC:EX_NEEDC,STEP:SV_STEP,
   SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
+const raw2=fs.readFileSync(SRC,'utf8');   // ซอร์สทั้งไฟล์ — ใช้ตรวจว่า EXST.ext ไม่มีคนอ่านเหลืออยู่จริง
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=(ext,mmo)=>({mmo,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext,tgt:6,
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
@@ -309,20 +310,40 @@ console.log('━━ tooltip หัวคอลัมน์ (เรนเดอ�
 }
 console.log();
 
-// ── ⭐ หัวใจของการแก้ข้อ 2: คอลัมน์ทดสอบความทนทานต้อง "ไม่" ขยับตาม dropdown ช่วงจำลอง ──
-// เดิมผูกกับ EXST.ext ทำให้เลือก +12 เดือนแล้วตัวเลขบวมเป็นหมื่นล้าน อ่านเป็นเม็ดเงินจริงไม่ได้
-console.log('━━ แยกจากช่วงจำลอง (EXST.ext) ━━');
+// ── ⭐ 11 ส.ค. 69 (รอบ 2): dropdown "ช่วงจำลอง" ถูกยุบรวมเป็นตัวเลือกเดียวกับเดือนเป้า ──────
+// เดิมข้อนี้ตรวจว่า "เปลี่ยน ext แล้วคอลัมน์สภาพคล่องต้องไม่ขยับ" — สมมติฐานนั้นหมดไปแล้ว
+// ตอนนี้ต้องตรวจให้แรงกว่าเดิม: **EXST.ext ต้องไม่มีผลกับอะไรเลย** (ถูกเมินทั้งหมด)
+// และต้องยังคง "คุมสิ้นปีงบเป็นพื้น" ไว้ — ถ้าหลุด เงินสนับสนุนจะลดลงเองเงียบ ๆ (มองโลกสวย)
+console.log('━━ ยุบรวมช่วงจำลอง: EXST.ext ต้องไม่มีผลกับอะไรเลย ━━');
+const sumNeedNow=()=>{ A.exRender(); return j.hosp.reduce((s,h)=>s+(A.exSolveFor(h,6)||0),0); };
 const totFor=()=>{ A.exRender(); return j.hosp.reduce((s,h)=>{const r0=A.exSimPath(h,0);return s+A.exTopUp({h,r0});},0); };
-A.setEXST(ST(0,3));  const base=totFor(), baseLab=A.exMoeTargetLab();
+A.setEXST(ST(0,3)); const base=totFor(), baseLab=A.exMoeTargetLab(), baseNeed=sumNeedNow();
 let drift=0;
-for(const ext of [3,6,12]){
+for(const ext of [3,6,12,-1]){
   A.setEXST(ST(ext,3));
-  const v=totFor();
-  const same=Math.abs(v-base)<1 && A.exMoeTargetLab()===baseLab;
+  const v=totFor(), n=sumNeedNow();
+  const same=Math.abs(v-base)<1 && A.exMoeTargetLab()===baseLab && Math.abs(n-baseNeed)<1;
   if(!same) drift++;
-  console.log(`  ${same?'✅':'❌'} ext=${String(ext).padStart(2)} → ส่วนที่ขาดรวม ${(v/1e6).toFixed(1)} ลบ. · เดือนเป้า ${A.exMoeTargetLab()}${same?'  (ไม่ขยับ ถูกต้อง)':'  ← ยังผูกกันอยู่!'}`);
+  console.log(`  ${same?'✅':'❌'} ext=${String(ext).padStart(2)} → ส่วนที่ขาด ${(v/1e6).toFixed(1)} ลบ. · เงินสนับสนุน ${(n/1e6).toFixed(2)} ลบ.${same?'  (ไม่ขยับ ถูกต้อง)':'  ← ยังอ่าน ext อยู่!'}`);
 }
-chk(drift===0, 'เปลี่ยนช่วงจำลองแล้วคอลัมน์ประเมินสภาพคล่องไม่ขยับ');
+chk(drift===0, 'EXST.ext ไม่มีผลกับตัวเลขใดเลย (ยุบรวมเข้ากับเดือนเป้าแล้ว)');
+chk(!/exSet\('ext'/.test(raw2) && !/EXST\.ext\|\|0/.test(raw2), 'ไม่มีโค้ดที่อ่าน/เขียน EXST.ext เหลืออยู่ (นอกจากคอมเมนต์)');
+// dropdown เดือนเป้าต้องมี 2 ที่ ผูก mmo ตัวเดียวกัน + สร้าง option จากฟังก์ชันเดียว
+chk(/id="exMmoTop"/.test(raw2) && /id="exMmoBot"/.test(raw2), 'มี dropdown เดือนเป้า 2 ที่ (แถบควบคุมบน + เหนือตารางผลจำลอง)');
+chk((raw2.match(/exSet\('mmo',\+this\.value\)/g)||[]).length===2 && (raw2.match(/\$\{exMmoOptions\(\)\}/g)||[]).length===2,
+    'ทั้งสองที่ผูก EXST.mmo ตัวเดียวกัน และสร้างตัวเลือกจาก exMmoOptions() ฟังก์ชันเดียว');
+chk(/exMmoTop'\);\s*if\(mt\)\s*mt\.value/.test(raw2.replace(/\n/g,' ')), 'exSet sync ค่า dropdown ตัวบนให้ตรงกับตัวล่างทุกครั้ง');
+// ⚓ กติกาที่เจ้าของงานเคาะ: เลือกเดือนไหนก็ต้องคุมระดับ ณ สิ้นปีงบเสมอ
+// ยอดที่ยันไว้ = ค่าที่วัดได้ก่อนยุบรวม (งวด 256910 · เป้า ≤6 · ทุกระดับ · arPct 100) ต้องไม่ขยับเลย
+console.log('━━ ⚓ คุมสิ้นปีงบเป็นพื้น: ยอดต้องเท่าก่อนยุบรวมเป๊ะ ━━');
+for(const [mmo,want] of [[1,84.30],[2,79.90],[3,177.05],[6,191.05],[13,195.60]]){
+  A.setEXST(ST(0,mmo));
+  const got=sumNeedNow()/1e6;
+  chk(Math.abs(got-want)<0.02, `เดือนเป้า ${String(mmo).padStart(2)} ด. (${A.exMoeTargetLab()}) → เงินสนับสนุนรวม ${got.toFixed(2)} ลบ. (ยันไว้ ${want.toFixed(2)})`);
+}
+// ระดับ ณ สิ้นปีงบ (endRisk) ต้องนิ่งทุกเดือนเป้า = พื้นไม่เลื่อนตามเดือนที่เลือก
+const endOf=mmo=>{ A.setEXST(ST(0,mmo)); A.exRender(); return j.hosp.map(h=>A.exSimPath(h,0).endRisk).join(','); };
+chk(endOf(1)===endOf(6) && endOf(6)===endOf(13), 'ระดับ ณ สิ้นปีงบ (endRisk) เท่ากันทุกเดือนเป้า — พื้นไม่เลื่อนตาม');
 // เพดาน EX_MMO_MAX เดือน — ค่าเกินต้องตกกลับเป็นค่าเริ่มต้น ไม่ใช่ยอมรับ
 A.setEXST(ST(0,99)); A.exRender();
 chk(A.exMoeMonths()<=A.EXMAX, `ค่าเกินเพดานถูกจำกัด (mmo=99 → ${A.exMoeMonths()} เดือน · เพดาน ${A.EXMAX})`);
