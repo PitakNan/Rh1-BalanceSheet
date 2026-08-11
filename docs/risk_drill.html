@@ -187,6 +187,14 @@ table.wltbl.ex-sticky th:nth-child(2){left:0;z-index:5;background:var(--th-bg);b
 :root{--exneed:rgba(99,160,255,.10)}
 table.wltbl th.exneed{background-color:var(--th-bg);background-image:linear-gradient(var(--exneed),var(--exneed))}
 table.wltbl td.exneed{background-image:linear-gradient(var(--exneed),var(--exneed))}
+/* 📂 แผงยุบ/ขยายในแท็บผู้บริหาร (12 ส.ค. 69) — เนื้อในยังเรนเดอร์อยู่ แค่ซ่อนด้วย CSS */
+.exsec-h{display:flex;align-items:flex-start;gap:8px;cursor:pointer;user-select:none;border-radius:8px;margin:-4px -6px 0;padding:4px 6px}
+.exsec-h:hover{background:var(--hover)}
+.exsec-ar{color:var(--blue);font-size:13px;line-height:1.5;flex-shrink:0}
+.exsec-t{flex:1;min-width:0}
+.exsec-t h3{margin-bottom:0!important}
+.exsec-b{display:none;margin-top:6px}
+.exsec.on .exsec-b{display:block}
 table.wltbl td.ndcell{cursor:pointer}
 table.wltbl td.ndcell:hover{outline:1px solid var(--blue);outline-offset:-1px}
 .ndgrp{display:block;font-size:9.5px;font-weight:700;color:var(--blue);letter-spacing:.2px}
@@ -562,6 +570,10 @@ table.wltbl.ex-sticky.ex-wide th:nth-child(1){left:0;z-index:5;background:var(--
 @media(max-width:640px){.lin-card p,.lin-card ul{font-size:12px}}
 @media print{
   header,.left,#menuBtn{display:none!important}
+  /* 📂 แผงที่ยุบไว้ต้องกางออกตอนพิมพ์/บันทึก PDF ไม่งั้นรายงานจะขาดตาราง (12 ส.ค. 69) */
+  .exsec-b{display:block!important}
+  .exsec-ar{display:none!important}
+  .exsec-h{background:none!important;margin:0!important;padding:0!important}
   .main{display:block!important;overflow:visible!important;height:auto!important}
   .right{overflow:visible!important;height:auto!important}
   .dwrap{max-width:100%!important;padding:0!important;gap:10px!important}
@@ -1587,12 +1599,15 @@ function exDefaultState(){
           // seas: ใส่ปัจจัยฤดูกาลปลายปีงบ (NI ปิดบัญชี + หนี้สินโตเร็วขึ้น) จากข้อมูลจริงปี 67+68
           seas:true,
           // provSort: ลำดับของตารางสรุปรายจังหวัด (คลิกหัวคอลัมน์) — คนละตัวกับ EXSORT ของตารางผลจำลอง
+          // sect: สถานะยุบ/ขยายของแผงในแท็บนี้ (12 ส.ค. 69) — ว่าง = ใช้ค่าเริ่มต้นของแต่ละแผง
+          //   ยุบทุกแผง ยกเว้น 'sim' (ตารางผลจำลอง) ที่กางไว้ · ⚠️ คนละตัวกับ open ที่เป็นตารางย่อยข้างใน
+          sect:{},
           provSort:{col:'prov',dir:1}};
 }
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exMergeState(s){
   if(!s) return;
-  EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},xfer:Array.isArray(s.xfer)?s.xfer:[],arOvr:{...(s.arOvr||{})}};
+  EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},sect:{...(s.sect||{})},xfer:Array.isArray(s.xfer)?s.xfer:[],arOvr:{...(s.arOvr||{})}};
 }
 function exLoad(){
   EXST=exDefaultState(); EX_CARRY=null;
@@ -2247,6 +2262,31 @@ function exNeedPop(hc, k){
   el.style.display='flex';
 }
 function exNeedClose(){ const el=document.getElementById('exNeedOverlay'); if(el) el.style.display='none'; }
+// ══ 📂 ยุบ/ขยายแผงในแท็บผู้บริหาร (เจ้าของงานสั่ง 12 ส.ค. 69) ══════════════════════════════
+// ทุกแผงยุบเป็นค่าเริ่มต้น ยกเว้นตารางผลจำลอง (แผงทำงานหลัก) — จำสถานะไว้ใน EXST.sect
+// ⚠️ ห้ามใช้คีย์ EXST.open ซ้ำ — คีย์นั้นเป็นของตารางย่อยข้างในแผง MOE/รายรับ (ยุบ/กางรายหมวด)
+// วิธีทำ: หลังใส่ innerHTML แล้ว ตัดที่ </h3> แรก → ส่วนหัวเป็นตัวกด ส่วนที่เหลือเป็นเนื้อที่ยุบได้
+// ⚠️ toggle ด้วยการสลับคลาสตรง ๆ **ไม่เรียก exRender** เพราะตารางผลจำลองมี Solver 13 ตัว/แถว
+//    ถ้าเรนเดอร์ใหม่ทุกครั้งที่กดยุบ/ขยาย จะหน่วงเป็นร้อย ms โดยไม่จำเป็น
+function exSecOn(k, defOpen){ const m=EXST&&EXST.sect; return (m&&m[k]!=null)?!!m[k]:!!defOpen; }
+function exSecWrap(boxId, k, defOpen){
+  const box=document.getElementById(boxId); if(!box) return;
+  const html=box.innerHTML, i=html.indexOf('</h3>');
+  if(i<0||html.indexOf('exsec-h')>=0) return;      // ไม่มีหัวข้อ หรือห่อไว้แล้ว
+  const on=exSecOn(k,defOpen);
+  box.innerHTML=`<div class="exsec${on?' on':''}" id="exsec-${k}">`
+    +`<div class="exsec-h" onclick="exSecToggle('${k}')" title="กดเพื่อ${on?'ยุบ':'ขยาย'}แผงนี้">`
+    +`<span class="exsec-ar">${on?'▾':'▸'}</span><div class="exsec-t">${html.slice(0,i+5)}</div></div>`
+    +`<div class="exsec-b">${html.slice(i+5)}</div></div>`;
+}
+function exSecToggle(k){
+  const el=document.getElementById('exsec-'+k); if(!el) return;
+  const on=!el.classList.contains('on');
+  el.classList.toggle('on',on);
+  const ar=el.querySelector('.exsec-ar'); if(ar) ar.textContent=on?'▾':'▸';
+  const hd=el.querySelector('.exsec-h'); if(hd) hd.title='กดเพื่อ'+(on?'ยุบ':'ขยาย')+'แผงนี้';
+  EXST.sect=EXST.sect||{}; EXST.sect[k]=on; exSave();
+}
 // ── ลูกหนี้: ปรับ % รวมทั้งเขต / กำหนดเองรายแห่ง / ล้างค่าที่กำหนดเอง ──
 function exSetArPct(v){ const n=Math.max(0,Math.min(100,Math.round(+v||0))); EXST.arPct=n; exSave(); exRender(); }
 function exArEdit(hc){ if(EXAR[hc]) delete EXAR[hc]; else EXAR[hc]=1; exRender(); }
@@ -3768,7 +3808,7 @@ function exRender(){
     ['need','เงินสนับสนุนที่ต้องใช้ (รวม)'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${sepLab}${sepLab!==horLab?` และที่ปลายช่วงจำลอง ${horLab}`:''})<span class="sp"></span>
-      <span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end">
+      <span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end" onclick="event.stopPropagation()">
       <span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span>
       ${(()=>{
         // 🪤 เจ้าของงานถาม 11 ส.ค. 69: "ทำไมตัวเลขที่เติมมากกว่าตัวเลขที่ต้องการ"
@@ -3950,6 +3990,17 @@ function exRender(){
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
       <div class="tgt-row tgt-note"><b>ที่มา:</b> ระดับตอนนี้ = คะแนนงวด ${EX.periodLabel} — ${exRiskSrcLab()} (badge เดียวกับหน้าหลัก) · MOE = นิยามกองเศรษฐกิจสุขภาพ (ดูรายบัญชีใน panel MOE) · เงินสนับสนุน = ผล Solver หาค่าต่ำสุดที่ทำให้ระดับ ณ ${horLab} ≤ ${EXST.tgt} และเงินสดไม่หมดระหว่างทาง (ปรับเองรายแห่งได้ในปุ่ม "ปรับรายแห่ง")</div>
     </div>`;
+  // ── 📂 ยุบ/ขยายทุกแผงในแท็บนี้ (เจ้าของงานสั่ง 12 ส.ค. 69) ───────────────────────────
+  // ค่าเริ่มต้น: ยุบทุกแผง **ยกเว้น** ตารางผลจำลองที่เป็นตารางทำงานหลัก → กางไว้
+  // ⚠️ ต้องเรียกหลังใส่ innerHTML ครบทุกกล่องแล้ว (exRenderProvTj ถูกเรียกไปก่อนหน้าในฟังก์ชันนี้)
+  // ⚠️ เนื้อในยังถูกเรนเดอร์ปกติแม้ยุบอยู่ (ซ่อนด้วย CSS) — จงใจ เพื่อให้ยอดรวม/ชุดตรวจ/Export
+  //    ที่อ่านจาก DOM ยังทำงานเหมือนเดิม และกดขยายแล้วเห็นทันทีไม่ต้องรอเรนเดอร์ใหม่
+  exSecWrap('exMoeBox','moe',false);
+  exSecWrap('exRevBox','rev',false);
+  exSecWrap('exTjBox','tj',false);
+  // ⚠️ ไม่ห่อ exProvTjBox — แผงสรุปรายจังหวัดใช้ <details> + exKeepOpen('provtj') ยุบได้อยู่แล้ว
+  //    และค่าเริ่มต้นเป็น "ยุบ" ตามที่ต้องการ (EXST.open.provtj ไม่ได้ตั้งไว้) · ห่อซ้ำจะได้ 2 ชั้น
+  exSecWrap('exResBox','sim',true);
   // ป็อปอัปโยกเงินเปิดค้างอยู่ → วาดใหม่ให้ตัวเลขเพดาน/รายการสดเสมอ
   { const hc=Object.keys(EXXF)[0], ov=document.getElementById('exXfOverlay');
     if(hc && ov && ov.style.display!=='none') exXfOpen(hc); }
