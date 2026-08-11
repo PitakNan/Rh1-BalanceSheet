@@ -187,6 +187,8 @@ table.wltbl.ex-sticky th:nth-child(2){left:0;z-index:5;background:var(--th-bg);b
 :root{--exneed:rgba(99,160,255,.10)}
 table.wltbl th.exneed{background-color:var(--th-bg);background-image:linear-gradient(var(--exneed),var(--exneed))}
 table.wltbl td.exneed{background-image:linear-gradient(var(--exneed),var(--exneed))}
+table.wltbl td.ndcell{cursor:pointer}
+table.wltbl td.ndcell:hover{outline:1px solid var(--blue);outline-offset:-1px}
 .ndgrp{display:block;font-size:9.5px;font-weight:700;color:var(--blue);letter-spacing:.2px}
 .thsub{font-size:10px;font-weight:600;opacity:.75}
 table.wltbl tr.click{cursor:pointer}
@@ -1945,7 +1947,11 @@ function exSimPath(h, inj, sc){
   let sc0=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
   let r=anc(sc0.risk);
   let sepRisk=(tgtMo<=0?r:null), endRisk=r, cashOut=st.ccn<=0?0:null;
-  let sepBreak=(tgtMo<=0?{...sc0,ni:st.ni,mo:st.mo}:null);   // เกณฑ์ย่อย (cr/qr/cash/nwc/ni/li/st/su) ณ เดือนเป้า — ใช้กางแผงเจาะเกณฑ์ 7 คะแนน (exBrkHtml)
+  // sepBreak = เกณฑ์ย่อย (cr/qr/cash/nwc/ni/li/st/su) ณ เดือนเป้า — ใช้กางแผงเจาะเกณฑ์ 7 คะแนน (exBrkHtml)
+  // ⭐ 11 ส.ค. 69: แนบ "ตัวเลขดิบ" ที่ใช้คำนวณมาด้วย (ca/cl/qn/cn/owed) เพื่อให้ป็อปอัปพิสูจน์ที่มา
+  //    ของเงินก้อนได้ทีละบรรทัด — ถ้ามีแต่ค่า ratio จะกางสมการย้อนกลับไม่ได้
+  const brk=(sc,niV,moV)=>({...sc,ni:niV,mo:moV,ca:st.cca,cl:st.ccl,qn:st.cqn,cn:st.ccn,owed:owedAdd});
+  let sepBreak=(tgtMo<=0?brk(sc0,st.ni,st.mo):null);
   for(let k=1;k<=months;k++){
     if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;
     st.ni+=niM;
@@ -1974,7 +1980,7 @@ function exSimPath(h, inj, sc){
     if(clGrow) st.ccl=Math.max(1, st.ccl+(seas&&isYE?clYEV:clMoV));
     const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
     r=anc(sc.risk);
-    if(k===tgtMo){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // เดือนเป้าที่เลือกในตัวกรอง (เดือนเดียว ไม่ใช่ "ก.ย. แรกที่เจอ")
+    if(k===tgtMo){ sepRisk=r; sepBreak=brk(sc,st.ni,st.mo); }   // เดือนเป้าที่เลือกในตัวกรอง (เดือนเดียว ไม่ใช่ "ก.ย. แรกที่เจอ")
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     if(k<=fyMo) endRisk=r;   // endRisk = ระดับ ณ "สิ้นปีงบ" (พื้นที่คุมเสมอ) — ถ้าเดือนเป้าไกลกว่า ห้ามเลื่อนตาม
   }
@@ -2119,6 +2125,128 @@ function exXfOpen(hc){
   el.style.display='flex';
 }
 function exXfClose(){ EXXF={}; const el=document.getElementById('exXfOverlay'); if(el) el.style.display='none'; }
+// ══ 🔍 ป็อปอัป "ที่มาของตัวเลข" ของ 6 คอลัมน์เกณฑ์ (เจ้าของงานสั่ง 11 ส.ค. 69) ═══════════════
+// เจ้าของงานขอ "พิสูจน์ว่าหลักการมีที่มาที่ไป และเป็นไปตามหลักการคำนวณ Risk Score" +
+// สงสัยว่าเงินที่ใช้หลังเคลียร์หนี้ **น้อยเกินไป** → ป็อปอัปนี้ต้องกางให้ตรวจได้ทีละบรรทัด
+// โดยเฉพาะ 2 จุดที่ทำให้ตัวเลขดู "น้อย" กว่าที่คาด ซึ่งต้องเห็นชัด ๆ ไม่ใช่ซ่อนไว้:
+//   ① เงินก้อนรับรู้เป็น "รายได้เงินอุดหนุนจากหน่วยงานภาครัฐ" (CFO กำหนด 27 ก.ค. 69) →
+//      บาทเดียวดัน CA/สินทรัพย์เร็ว/เงินสด/NWC/NI ขึ้นพร้อมกัน จึงถูกกว่าการแก้แยกทีละตัว
+//   ② เงินก้อนทำให้ "ไม่ต้องค้างจ่าย" → หนี้สินหมุนเวียน ณ เดือนเป้า **ลดลง** ด้วย
+//      ตัวส่วนของ CR/QR/Cash จึงเล็กลง = ใช้เงินน้อยกว่าสูตรตรงที่คิดบนตัวส่วนเดิม
+// ผังบัญชีอ้างจากสูตรทางการกองเศรษฐกิจสุขภาพ (RISK_EXEC_MODEL.md หัวข้อ 1)
+const EX_NEED_DEF={
+  cash:{n:'Cash ratio', f:'เงินสด+เทียบเท่า (1003X) ÷ หนี้สินหมุนเวียน (1001Y)', th:0.80, thL:'≥ 0.80',
+        num:b=>b.cn, den:b=>b.cl, numL:'เงินสด+เทียบเท่า (1003X)', denL:'หนี้สินหมุนเวียน (1001Y)', val:b=>b.cash, grp:'LI'},
+  qr:  {n:'Quick ratio (QR)', f:'สินทรัพย์เร็ว (1002X) ÷ หนี้สินหมุนเวียน (1001Y)', th:1.00, thL:'≥ 1.00',
+        num:b=>b.qn, den:b=>b.cl, numL:'สินทรัพย์เร็ว ไม่รวมสินค้าคงเหลือ (1002X)', denL:'หนี้สินหมุนเวียน (1001Y)', val:b=>b.qr, grp:'LI'},
+  cr:  {n:'Current ratio (CR)', f:'สินทรัพย์หมุนเวียน (1001X) ÷ หนี้สินหมุนเวียน (1001Y)', th:1.50, thL:'≥ 1.50',
+        num:b=>b.ca, den:b=>b.cl, numL:'สินทรัพย์หมุนเวียน (1001X)', denL:'หนี้สินหมุนเวียน (1001Y)', val:b=>b.cr, grp:'LI'},
+  nwc: {n:'NWC (ทุนหมุนเวียนสุทธิ)', f:'สินทรัพย์หมุนเวียน (1001X) − หนี้สินหมุนเวียน (1001Y)', th:0, thL:'≥ 0',
+        num:b=>b.ca, den:b=>b.cl, numL:'สินทรัพย์หมุนเวียน (1001X)', denL:'หนี้สินหมุนเวียน (1001Y)', val:b=>b.nwc, diff:1, grp:'ST'},
+  ni:  {n:'NI (กำไร/ขาดทุนสุทธิสะสม)', f:'รายได้รวม (3006Y) − ค่าใช้จ่ายรวม (3010X) สะสมในปีงบ', th:0, thL:'≥ 0',
+        val:b=>b.ni, only:1, grp:'ST'},
+  su:  {n:'SU (อัตราความอยู่รอด)', f:'4-quadrant จาก NWC เทียบ NI — คิดได้ 0–2 คะแนน', thL:'ลดลง 1 คะแนน', su:1, grp:'SU'},
+};
+function exNeedPop(hc, k){
+  const h=EX.hosp.find(p=>p.hcode===hc), c=EX_NEEDC.find(x=>x.k===k), D=EX_NEED_DEF[k];
+  if(!h||!c||!D) return;
+  const r0=exSimPath(h,0), b0=r0.sepBreak;
+  const v=exSolveCrit(h,c,r0), dni=exSolveCritNi(h,c,r0);
+  // ทางที่ใช้พิสูจน์: ถ้าเติมเงินได้ใช้เงินก้อน ถ้าไม่ได้ใช้ทางทำกำไร (เพื่อให้มีตัวเลข "หลัง" ให้ตรวจเสมอ)
+  const useM=(v!=null&&v>0), rV=useM?exSimPath(h,v):(dni>0?exSimPath(h,0,{dni}):null), bV=rV?rV.sepBreak:null;
+  const R=x=>x==null?'–':x.toFixed(2), lab=exSepLab();
+  const base=scoreOf(h.bs.ca,h.bs.cl,h.bs.qn,h.bs.cn,h.bs.ni,h.bs.mo);
+  const rowsHtml=(()=>{
+    const cells=(b)=>EX_CRIT.map(cc=>b?`<td class="${cc.ok(b)?'brk-ok':'brk-no'}">${cc.f(cc.v(b))} ${cc.ok(b)?'✓':'✗'}</td>`:'<td>–</td>').join('');
+    return `<tr><th>เกณฑ์</th>${EX_CRIT.map(cc=>`<th>${cc.n}</th>`).join('')}<th>SU</th><th>รวมคะแนน</th></tr>
+      <tr><td class="l">ณ ${lab} <b>ก่อนช่วย</b></td>${cells(b0)}<td class="${b0&&b0.su===0?'brk-ok':'brk-no'}">${b0?b0.su:'–'} คะแนน</td><td><b>${b0?b0.li+b0.st+b0.su:'–'}</b></td></tr>
+      <tr><td class="l">ณ ${lab} <b>หลัง${useM?'เติม '+fmtM(v):'ทำกำไร +'+fmtM(dni)+'/ด.'}</b></td>${cells(bV)}<td class="${bV&&bV.su===0?'brk-ok':'brk-no'}">${bV?bV.su:'–'} คะแนน</td><td><b>${bV?bV.li+bV.st+bV.su:'–'}</b></td></tr>`;
+  })();
+  // ── ③ สมการย้อนกลับของเกณฑ์ที่เลือก: สูตรตรง vs Solver แล้วอธิบายส่วนต่าง ──
+  const proof=(()=>{
+    if(!b0) return '<div class="note">งวดนี้ไม่มีค่าดิบงบดุล จำลองไม่ได้</div>';
+    if(D.su){
+      const s0=exSuMonths(b0), sV=bV?exSuMonths(bV):null;
+      return `<div class="note" style="line-height:1.8">SU ไม่ใช่ผ่าน/ไม่ผ่าน แต่คิดจาก <b>4 quadrant</b> ของ NWC เทียบ NI:
+        <br>• NWC ≥ 0 และ NI ≥ 0 → <b>SU = 0</b> (ปลอดภัย) &nbsp;• NWC &lt; 0 และ NI &lt; 0 → <b>SU = 2</b> (แย่สุด)
+        <br>• NWC ≥ 0 แต่ NI &lt; 0 → s = NWC ÷ (|NI|/เดือน) → s&lt;3 : 2 · s&lt;6 : 1 · s≥6 : 0
+        <br>• NWC &lt; 0 แต่ NI ≥ 0 → r = (−NWC) ÷ (NI/เดือน) → r&lt;3 : 0 · r&lt;6 : 1 · r≥6 : 2
+        <br><b>ก่อนช่วย:</b> NWC ${fmtM(b0.nwc)} · NI ${fmtM(b0.ni)} (${b0.mo} เดือน) → <b>SU ${b0.su}</b>${s0&&s0.v!=null&&isFinite(s0.v)?` · ${s0.lbl} ≈ ${s0.v.toFixed(1)} ด.`:''}
+        ${bV?`<br><b>หลัง${useM?'เติมเงิน':'ทำกำไร'}:</b> NWC ${fmtM(bV.nwc)} · NI ${fmtM(bV.ni)} → <b>SU ${bV.su}</b>${sV&&sV.v!=null&&isFinite(sV.v)?` · ${sV.lbl} ≈ ${sV.v.toFixed(1)} ด.`:''}`:''}
+        <br><br>🧮 <b>เงินที่ต้องใช้ คิด 2 ทางแล้วเทียบกัน</b> — SU ไม่มีเกณฑ์ตัวเลขเดียวจึงเทียบกับ "ทางที่ทำให้ออกจาก quadrant แย่สุด"
+        <br>ก) <b>สูตรตรง</b> = ดันทั้ง NWC และ NI ให้ถึง 0 พร้อมกัน = ค่าที่มากกว่าระหว่าง (หนี้สินหมุนเวียน − สินทรัพย์หมุนเวียน) ${fmtM(Math.max(0,b0.cl-b0.ca))} กับ (0 − NI) ${fmtM(Math.max(0,-b0.ni))} = <b>${fmtM(Math.max(0,b0.cl-b0.ca,-b0.ni))}</b>
+        <br>ข) <b>Solver เดินแบบจำลองจริง</b> (ค่าที่แสดงในตาราง): <b style="color:var(--blue)">${v==null?'เงินก้อนไม่พอ':fmtM(v)}</b>
+        ${v!=null&&v>0?`<br>➜ ${Math.abs(Math.max(0,b0.cl-b0.ca,-b0.ni)-v)<=SV_STEP?`ตรงกันในระดับขั้นการค้นหา ${fmtM(SV_STEP)}`:`ต่างกัน ${fmtM(Math.abs(Math.max(0,b0.cl-b0.ca,-b0.ni)-v))} เพราะ SU อาจลดลงได้ก่อนที่ทั้งสองตัวจะถึง 0 (ผ่านเงื่อนไขจำนวนเดือน s/r ≥ 3 หรือ ≥ 6)`}`:''}</div>`;
+    }
+    const n0=D.only?null:D.num(b0), d0=D.only?null:D.den(b0);
+    // สูตรตรง = คิดบน "ตัวส่วนเดิม" (ยังไม่นับผลที่เงินก้อนทำให้ไม่ต้องค้างจ่าย)
+    const direct=D.only?-b0.ni:(D.diff?d0-n0:D.th*d0-n0);
+    const nV=bV&&!D.only?D.num(bV):null, dV=bV&&!D.only?D.den(bV):null;
+    const gap=(v!=null&&v>0)?direct-v:null;
+    return `<table class="acctbl brktbl" style="width:100%">
+      <tr><th class="l">รายการ</th><th>ณ ${lab} ก่อนช่วย</th><th>ณ ${lab} หลัง${useM?'เติมเงิน':'ทำกำไร'}</th></tr>
+      ${D.only?`<tr><td class="l">${D.f}</td><td>${fmtM(b0.ni)}</td><td>${bV?fmtM(bV.ni):'–'}</td></tr>`
+        :`<tr><td class="l">${D.numL} <span class="tgt-note">(ตัวเศษ)</span></td><td>${fmtM(n0)}</td><td>${nV!=null?fmtM(nV):'–'}</td></tr>
+          <tr><td class="l">${D.denL} <span class="tgt-note">(ตัวส่วน)</span></td><td>${fmtM(d0)}</td><td>${dV!=null?`${fmtM(dV)}${Math.abs(dV-d0)>1?` <span class="brk-ok">(ลด ${fmtM(d0-dV)})</span>`:''}`:'–'}</td></tr>`}
+      <tr><td class="l"><b>${D.n}</b> <span class="tgt-note">เกณฑ์ ${D.thL}</span></td>
+        <td class="brk-no"><b>${D.only||D.diff?fmtM(D.val(b0)):R(D.val(b0))}</b> ✗</td>
+        <td class="${bV&&c.ok(bV,b0)?'brk-ok':'brk-no'}"><b>${bV?(D.only||D.diff?fmtM(D.val(bV)):R(D.val(bV))):'–'}</b> ${bV&&c.ok(bV,b0)?'✓ ผ่าน':'✗'}</td></tr>
+      <tr><td class="l">คะแนนของเกณฑ์นี้</td><td class="brk-no">1 คะแนน</td><td class="${bV&&c.ok(bV,b0)?'brk-ok':'brk-no'}">${bV&&c.ok(bV,b0)?'0 คะแนน':'1 คะแนน'}</td></tr>
+    </table>
+    <div class="note" style="margin-top:8px;line-height:1.85">🧮 <b>เงินที่ต้องใช้ คิด 2 ทางแล้วเทียบกัน</b>
+      <br>ก) <b>สูตรตรง</b> (สมมติตัวส่วนไม่เปลี่ยน): ${D.only?`0 − NI = 0 − (${fmtM(b0.ni)}) = <b>${fmtM(direct)}</b>`
+        :(D.diff?`หนี้สินหมุนเวียน − สินทรัพย์หมุนเวียน = ${fmtM(d0)} − ${fmtM(n0)} = <b>${fmtM(direct)}</b>`
+                :`(${D.th.toFixed(2)} × ${fmtM(d0)}) − ${fmtM(n0)} = <b>${fmtM(direct)}</b>`)}
+      <br>ข) <b>Solver เดินแบบจำลองจริง</b> (ค่าที่แสดงในตาราง): <b style="color:var(--blue)">${v==null?'เงินก้อนไม่พอ':fmtM(v)}</b>
+      ${(()=>{
+        // ⚠️ อธิบายส่วนต่าง "ตามข้อมูลจริงเท่านั้น" — ห้าม hardcode เหตุผลไว้ล่วงหน้า
+        //    (บั๊กที่เจอตอนทดสอบ: เขียนว่า "หนี้สินหมุนเวียนลดลง" ทั้งที่ตัวเลขไม่ขยับเลย และ
+        //     ส่วนต่างจริงมาจากการปัดขั้นละ SV_STEP ของ binary search)
+        if(gap==null||Math.abs(gap)<=1) return '';
+        if(Math.abs(gap)<=SV_STEP) return `<br>➜ ต่างกัน ${fmtM(Math.abs(gap))} = <b>การปัดขั้นของ Solver</b> ซึ่งค้นหาเป็นขั้นละ ${fmtM(SV_STEP)} (ปัดขึ้นให้ผ่านเกณฑ์แน่นอน) — ไม่ใช่ความต่างเชิงหลักการ`;
+        const clMoved=(!D.only&&dV!=null&&Math.abs(dV-d0)>1);
+        const why=[];
+        if(clMoved) why.push(`<b>ตัวส่วนเปลี่ยน</b> — หนี้สินหมุนเวียน ณ ${lab} ${dV<d0?'ลด':'เพิ่ม'}จาก ${fmtM(d0)} เป็น ${fmtM(dV)}${
+          dV<d0?' เพราะเงินก้อนทำให้ไม่ต้องค้างจ่าย (ตัวส่วนเล็กลง จึงใช้เงินน้อยกว่าสูตรตรง)':' เพราะหนี้สินหมุนเวียนเดินตาม run-rate/ค้างจ่ายระหว่างทาง (ตัวส่วนโตขึ้น จึงต้องใช้เงินมากกว่าสูตรตรง)'}${
+          b0.owed>0||(bV&&bV.owed>0)?` · ค่าใช้จ่ายที่ค้างจ่ายเพราะเงินสดไม่พอ ${fmtM(b0.owed)} → ${fmtM(bV?bV.owed:0)}`:''}`);
+        why.push(`<b>เดินต่ออีก ${exMoeMonths()} เดือนถึง ${lab}</b> — สูตรตรงคิดที่จุดเดียว แต่แบบจำลองนับกำไร/ขาดทุนและกระแสเงินสดของทุกเดือนระหว่างทางด้วย${
+          gap<0?' (ช่วงนี้ยังขาดทุนต่อ จึงต้องเติมมากกว่าสูตรตรง)':' (ช่วงนี้มีเงินเข้า จึงเติมน้อยกว่าสูตรตรงได้)'}`);
+        return `<br>➜ <b>ต่างกัน ${fmtM(Math.abs(gap))}</b> — Solver ใช้<b>${gap>0?'น้อยกว่า':'มากกว่า'}</b>สูตรตรง เพราะ:`
+          +why.map((w,i)=>`<br>&nbsp;&nbsp;${['①','②'][i]} ${w}`).join('');
+      })()}
+      ${v==null?`<br>➜ เงินก้อนแก้ไม่ได้${k==='ni'?' เพราะ <b>NI สะสมรีเซ็ตทุก 1 ต.ค.</b> เงินที่เติมปีงบนี้จึงไม่อยู่ใน NI ของปีงบถัดไป':''} → ทางที่ทำได้คือ <b>ทำกำไรเพิ่ม ${dni>0?fmtM(dni)+'/เดือน':'(ยังไม่พอแม้ทำกำไร)'}</b>`:''}
+    </div>`;
+  })();
+  const rawV=bV?bV.li+bV.st+bV.su:null, raw0=b0?b0.li+b0.st+b0.su:null;
+  const lvV=rV?rV.sepRisk:null;
+  let el=document.getElementById('exNeedOverlay');
+  if(!el){ el=document.createElement('div'); el.id='exNeedOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
+  el.onclick=exNeedClose;
+  el.innerHTML=`<div class="nip-modal" style="max-width:860px" onclick="event.stopPropagation()">
+    <div class="nip-head" style="display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0"><h3>🔍 ที่มาของตัวเลข — เกณฑ์ ${D.n}</h3>
+        <div class="note">${h.name} (${h.prov} · ${h.type}) · ประเมิน ณ <b>${lab}</b> · สูตรทางการกองเศรษฐกิจสุขภาพฯ กลุ่ม ${D.grp}</div></div>
+      <button type="button" class="tgt-apply" style="margin:0;flex-shrink:0" onclick="exNeedClose()">✕ ปิด</button>
+    </div>
+    <div class="nip-body" style="display:block">
+      <div class="tgt-row" style="font-weight:600">① เกณฑ์และสูตร</div>
+      <div class="note">${D.n} = ${D.f} · <b>ผ่านเมื่อ ${D.thL}</b>${D.su?'':' — ไม่ผ่านคิด 1 คะแนน'}</div>
+      <div class="tgt-row" style="font-weight:600;margin-top:10px">② สมการย้อนกลับ — ทำไมต้องใช้เท่านี้</div>
+      ${proof}
+      <div class="tgt-row" style="font-weight:600;margin-top:12px">③ ผลต่อคะแนน Risk Score ทั้ง 7 (เกณฑ์อื่นขยับด้วย เพราะเงินก้อนเดียวดันหลายตัวพร้อมกัน)</div>
+      <div class="acctbl-wrap" style="max-height:none"><table class="acctbl brktbl" style="width:100%">${rowsHtml}</table></div>
+      <div class="note" style="margin-top:8px;line-height:1.85">④ <b>จากคะแนนเป็นระดับวิกฤต (anchor)</b> — ระบบไม่ใช้คะแนนจำลองดิบ แต่ยึดคะแนนงวดล่าสุดเป็นจุดตั้งต้นแล้วบวกส่วนต่าง
+        <br>ระดับ = คะแนนงวด ${EX.periodLabel} (<b>${h.risk!=null?h.risk:'–'}</b>) + (คะแนนจำลอง ${rawV!=null?rawV:'–'} − คะแนนฐานจากงบทดลอง ${base?base.risk:'–'}) = <b>${lvV!=null?lvV:'–'}</b>
+        ${raw0!=null&&rawV!=null?`<br>ก่อนช่วยคะแนนจำลอง ${raw0} → หลัง ${rawV} = <b>ลดลง ${raw0-rawV} คะแนน</b> · ระดับ ${r0.sepRisk!=null?r0.sepRisk:'–'} → <b>${lvV!=null?lvV:'–'}</b>${lvV!=null&&r0.sepRisk===lvV?' <span class="tgt-warn">(คะแนนลดแต่ยังไม่พอเปลี่ยนระดับ)</span>':''}`:''}</div>
+      <div class="note" style="margin-top:8px;line-height:1.85">⚠️ <b>2 ข้อที่ทำให้ตัวเลข "ดูน้อย" — ต้องรู้ก่อนใช้ตัดสินใจ</b>
+        <br>① เงินสนับสนุนถูกรับรู้เป็น <b>รายได้เงินอุดหนุนจากหน่วยงานภาครัฐ</b> ตามผัง MOPH (CFO กำหนด 27 ก.ค. 69) จึงดัน<b>สินทรัพย์หมุนเวียน · สินทรัพย์เร็ว · เงินสด · NWC · NI ขึ้นพร้อมกันเท่ากันหมด</b> — บาทเดียวทำงานหลายทาง จึงถูกกว่าการแก้แยกทีละเกณฑ์ · ถ้าเงินก้อนนั้น<b>ไม่</b>รับรู้เป็นรายได้ (เช่น เป็นเงินยืม/เงินลงทุน) NI จะไม่ขยับ ตัวเลขที่ต้องใช้จะสูงกว่านี้
+        <br>② คิดบนสมมติฐาน <b>เก็บลูกหนี้ตามจ่ายได้ ${exArPct()}%</b> — ลดค่านี้ที่ตัวควบคุม 📥 เหนือตาราง แล้วเงินที่ต้องใช้จะเพิ่มขึ้นทันที
+        <br>③ ⛔ <b>ห้ามบวก 6 คอลัมน์รวมกัน</b> — เงินก้อนเดียวแก้ได้หลายเกณฑ์ ยอดจริงคือคอลัมน์ "เงินสนับสนุนที่ต้องใช้ (รวม)"</div>
+    </div>
+  </div>`;
+  el.style.display='flex';
+}
+function exNeedClose(){ const el=document.getElementById('exNeedOverlay'); if(el) el.style.display='none'; }
 // ── ลูกหนี้: ปรับ % รวมทั้งเขต / กำหนดเองรายแห่ง / ล้างค่าที่กำหนดเอง ──
 function exSetArPct(v){ const n=Math.max(0,Math.min(100,Math.round(+v||0))); EXST.arPct=n; exSave(); exRender(); }
 function exArEdit(hc){ if(EXAR[hc]) delete EXAR[hc]; else EXAR[hc]=1; exRender(); }
@@ -3567,7 +3695,8 @@ function exRender(){
         return EX_NEEDC.map((c,i)=>{
           const v=vs[i];
           // ผ่านอยู่แล้ว ณ เดือนเป้า — ไม่ต้องทำอะไร
-          if(v===0) return `<td class="exneed"><span style="color:var(--green)" title="${c.k==='su'?'SU เป็น 0 คะแนนอยู่แล้ว = ดีสุด ลดต่ออีกไม่ได้':'เกณฑ์นี้ผ่านอยู่แล้ว ณ '+sepLab+' — ไม่ต้องเติมเงินและไม่ต้องทำกำไรเพิ่ม'}">${c.k==='su'&&b0&&b0.su===0?'✓ SU 0':'✓ ผ่าน'}</span></td>`;
+          const pop=` onclick="exNeedPop('${hc}','${c.k}')" title="กดดูที่มาของตัวเลข — สมการย้อนกลับตามสูตร Risk Score ทางการ"`;
+          if(v===0) return `<td class="exneed ndcell"${pop}><span style="color:var(--green)" title="${c.k==='su'?'SU เป็น 0 คะแนนอยู่แล้ว = ดีสุด ลดต่ออีกไม่ได้':'เกณฑ์นี้ผ่านอยู่แล้ว ณ '+sepLab+' — ไม่ต้องเติมเงินและไม่ต้องทำกำไรเพิ่ม'}">${c.k==='su'&&b0&&b0.su===0?'✓ SU 0':'✓ ผ่าน'}</span></td>`;
           const dni=exSolveCritNi(h,c,r0);
           const flip=(b0&&b1&&!c.ok(b0,b0)&&c.ok(b1,b0));
           // ⚠️ badge ระดับต้องบอกด้วยว่ามาจาก "ทางไหน" — ช่องที่เงินก้อนแก้ไม่ได้ ระดับที่แสดงมาจาก
@@ -3581,13 +3710,13 @@ function exRender(){
           // ── ① เงินก้อนแก้ไม่ได้ → ยกทางทำกำไรขึ้นเป็นคำตอบหลัก พร้อมระดับของทางนั้น ──
           if(v==null){
             const lvD=dni>0?exCritLevel(h,c,null,dni):null;
-            return `<td class="exneed"><span class="tgt-warn" title="เกณฑ์นี้เติมเงินก้อนเท่าไหร่ก็ไม่ผ่าน ณ ${sepLab}&#10;${c.n==='NI'?'สาเหตุ: NI สะสมรีเซ็ตทุก 1 ต.ค. เงินก้อนที่เติมปีงบนี้จึงไม่มีผลกับ NI ของปีงบถัดไป':'ต้องแก้ผลดำเนินงานหรือลดหนี้สินหมุนเวียนร่วมด้วย'}&#10;👉 บรรทัดล่าง = ทางที่ทำได้จริง">เงินก้อนไม่พอ</span>${
+            return `<td class="exneed ndcell"${pop}><span class="tgt-warn" title="เกณฑ์นี้เติมเงินก้อนเท่าไหร่ก็ไม่ผ่าน ณ ${sepLab}&#10;${c.n==='NI'?'สาเหตุ: NI สะสมรีเซ็ตทุก 1 ต.ค. เงินก้อนที่เติมปีงบนี้จึงไม่มีผลกับ NI ของปีงบถัดไป':'ต้องแก้ผลดำเนินงานหรือลดหนี้สินหมุนเวียนร่วมด้วย'}&#10;👉 บรรทัดล่าง = ทางที่ทำได้จริง">เงินก้อนไม่พอ</span>${
               dni==null?`<span class="cellsub warn" title="ทั้งเงินก้อนและกำไรรายเดือนก็ยังไม่พอทำให้เกณฑ์นี้ผ่าน ณ ${sepLab}">กำไรก็ไม่พอ</span>`
                 :`<span class="cellsub" title="${niTit}">ทำกำไร +${fmtM(dni)}/ด.</span><span class="cellsub">→ ${lvBadge(lvD,'ทำกำไรเพิ่ม '+fmtM(dni)+'/เดือน')}${tag(lvD)}</span>`}</td>`;
           }
           // ── ② เติมเงินได้ → เงินก้อน + ระดับที่จะได้ + ทางทำกำไรทดแทน ──
           const lvM=exCritLevel(h,c,v,null);
-          return `<td class="exneed"><span${v===mx?' style="font-weight:700"':''}>${fmtM(v)}</span>${
+          return `<td class="exneed ndcell"${pop}><span${v===mx?' style="font-weight:700"':''}>${fmtM(v)}</span>${
             v===mx?' <span class="tgt-note" style="font-size:10px;color:var(--blue)">ตัวคุม</span>':''}<span class="cellsub">→ ${lvBadge(lvM,'เติมเงินก้อน '+fmtM(v))}${tag(lvM)}</span>${
             dni>0?`<span class="cellsub" title="${niTit}">หรือกำไร +${fmtM(dni)}/ด.</span>`:''}</td>`;
         }).join('');

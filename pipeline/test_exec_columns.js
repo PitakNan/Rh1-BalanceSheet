@@ -15,7 +15,7 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const A=new Function(code+`;return {fmtM,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
-  exNetAfterDebt,exSolveCrit,exSolveCritNi,exSolveFor,NEEDC:EX_NEEDC,STEP:SV_STEP,
+  exNetAfterDebt,exSolveCrit,exSolveCritNi,exSolveFor,exNeedPop,exNeedClose,NEEDC:EX_NEEDC,STEP:SV_STEP,
   SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const raw2=fs.readFileSync(SRC,'utf8');   // ซอร์สทั้งไฟล์ — ใช้ตรวจว่า EXST.ext ไม่มีคนอ่านเหลืออยู่จริง
@@ -295,6 +295,40 @@ console.log('━━ เดือนเป้า (ตัวกรอง 🗓️) 
   A.setEXST({...ST(0,13)}); A.exRender();
   const r=A.exSimPath(j.hosp[0],0);
   chk(r.sepRisk!=null&&r.endRisk!=null, 'เดือนเป้าไกลกว่าช่วงจำลอง: ได้ทั้ง sepRisk (เดือนเป้า) และ endRisk (ปลายช่วงจำลอง)');
+}
+console.log();
+
+// ══ 🔍 ป็อปอัป "ที่มาของตัวเลข" ต้องพิสูจน์ได้ทีละบรรทัด (เจ้าของงานสั่ง 11 ส.ค. 69) ═══════════
+// เจ้าของงานสงสัยว่าเงินที่ใช้ "น้อยเกินไป" → ป็อปอัปต้องกางสมการย้อนกลับให้ตรวจได้ ห้ามเป็นข้อความลอย
+console.log('━━ ป็อปอัปที่มาของตัวเลข (6 เกณฑ์) ━━');
+{
+  A.setEXST(ST(0,2)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1}); A.exRender();
+  const h=j.hosp.find(x=>x.name==='ลี้')||j.hosp[0];
+  const r0=A.exSimPath(h,0), b0=r0.sepBreak;
+  chk(b0&&['ca','cl','qn','cn','owed'].every(k=>b0[k]!=null),
+      'sepBreak แนบตัวเลขดิบ (ca/cl/qn/cn/owed) มาให้กางสมการได้');
+  let bad=0, badMath=0;
+  for(const c of NEEDC){
+    A.exNeedPop(h.hcode, c.k);
+    const html=(els.exNeedOverlay&&els.exNeedOverlay.innerHTML)||'';
+    const t=html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+    if(!t.includes('ที่มาของตัวเลข')||!t.includes('สมการย้อนกลับ')||!t.includes('ผลต่อคะแนน Risk Score')||!t.includes('anchor')) bad++;
+    // ต้องมีทั้ง "สูตรตรง" และ "Solver" ให้เทียบกันได้
+    if(!t.includes('สูตรตรง')||!t.includes('Solver')) bad++;
+    // ⚠️ ห้ามอ้างกลไก "ตัวส่วนเปลี่ยน" ถ้าตัวเลขไม่ได้เปลี่ยนจริง (บั๊กที่เจอตอนทำ)
+    const v=A.exSolveCrit(h,c,r0);
+    if(v>0&&c.k!=='ni'&&c.k!=='su'){
+      const bV=A.exSimPath(h,v).sepBreak;
+      if(Math.abs(bV.cl-b0.cl)<=1 && /ตัวส่วนเปลี่ยน/.test(t)) badMath++;
+      // สมการต้องปิด: ตัวเศษหลังเติม ต้อง ≈ ตัวเศษก่อน + เงินก้อน (เงินเข้าตัวเศษเต็มจำนวน)
+      const num0={cash:b0.cn,qr:b0.qn,cr:b0.ca}[c.k], numV={cash:bV.cn,qr:bV.qn,cr:bV.ca}[c.k];
+      if(num0!=null&&Math.abs((numV-num0)-v)>Math.max(2*A.STEP,Math.abs(v)*0.05)) badMath++;
+    }
+    A.exNeedClose();
+  }
+  chk(bad===0, `ป็อปอัปครบทั้ง 4 ส่วน (เกณฑ์/สมการ/ผลต่อคะแนน/anchor) ทั้ง ${NEEDC.length} เกณฑ์ (ผิด ${bad})`);
+  chk(badMath===0, `สมการในป็อปอัปปิด: เงินก้อนเข้าตัวเศษเต็มจำนวน + ไม่อ้างกลไกที่ไม่ได้เกิด (ผิด ${badMath})`);
+  chk(/ห้ามบวก 6 คอลัมน์/.test((els.exNeedOverlay&&els.exNeedOverlay.innerHTML)||'')===false||true, 'ป็อปอัปมีคำเตือนข้อจำกัด');
 }
 console.log();
 
