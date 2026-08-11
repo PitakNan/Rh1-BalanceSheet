@@ -43,22 +43,30 @@ for(const h of j.hosp){
 console.log(`  ตรวจ ${chk} สถานการณ์ · ติดลบ ${neg}`, neg===0?'✅':'⚠️');
 
 console.log('\n════ 2) identity ที่ต้องผ่านเสมอ ════');
-let d2=0,d4=0,d5=0,ok6=true,mono=true;
+let d2=0,d4=0,d5=0,ok6=true,mono=true; const d4cl=[];
 for(const h of j.hosp){
   d2=Math.max(d2,Math.abs(A.exNiMo(h)-h.bs.ni/h.bs.mo));
   const v=A.exSolveFor(h,6); if(v==null||v<=0) continue;
   const b0=A.exSimPath(h,0).sepBreak,b1=A.exSimPath(h,v).sepBreak; if(!b0||!b1) continue;
-  d4=Math.max(d4,Math.abs((b1.cr-b0.cr)-v/h.bs.cl),Math.abs((b1.qr-b0.qr)-v/h.bs.cl),Math.abs((b1.cash-b0.cash)-v/h.bs.cl));
+  // ⚠️ ตัวหารต้องเป็น CL ณ เดือนที่วัดคะแนน (ก.ย.) ไม่ใช่ CL ตั้งต้นของงวด — ดูคำอธิบายที่ผลลัพธ์
+  const r0=A.exSimPath(h,0), r1=A.exSimPath(h,v), clS=r1.clEnd;
+  if(Math.abs(r0.clEnd-r1.clEnd)>1) d4cl.push(h.name);   // เส้นทาง CL ต้องเหมือนกันสองรอบ (เงินอุดหนุนไม่แตะ CL)
+  d4=Math.max(d4,Math.abs((b1.cr-b0.cr)-v/clS),Math.abs((b1.qr-b0.qr)-v/clS),Math.abs((b1.cash-b0.cash)-v/clS));
   d5=Math.max(d5,Math.abs((b1.nwc-b0.nwc)-v),Math.abs((b1.ni-b0.ni)-v));
   const s=A.exSimPath(h,v).sepRisk; if(s!=null&&s>6) ok6=false;
   let prev=null; for(const L of [7,6,5,4,3,2,1,0]){const n=A.exSolveFor(h,L);
     if(n!=null&&prev!=null&&n<prev-1) mono=false; if(n!=null) prev=n;}
 }
 console.log('  ข้อ 2 |NI จำลอง − GL run-rate| =',M(d2), d2<1e5?'✅':'⚠️');
-// ⚠️ ข้อ 4 เป็นเอกลักษณ์ที่จริงเฉพาะตอน "ไม่มีแห่งไหนเงินสดชนพื้น" — พอเติมเงินแล้วบางแห่ง
-//    เลิกค้างเจ้าหนี้ (owedAdd ลด) ตัวส่วน cl ของสองรอบก็ไม่เท่ากันอีก ค่าจึงเบนออกโดยธรรมชาติ
-//    ยิ่งโมเดลเข้มขึ้น (ฤดูกาลปลายปีงบ) ยิ่งเบนมากขึ้น: 256909 = 7.71e-3 · 256910 = 5.16e-2
-console.log('  ข้อ 4 |Δratio − inj/cl| =',d4.toExponential(2), d4<1e-9?'✅':'⚠️');
+// 🐞 ข้อ 4 เคยขึ้น ⚠️ ค้างมานาน (256909 = 7.71e-3 · 256910 = 5.16e-2) แล้วถูกมองข้ามว่า
+//    "เป็นธรรมชาติของโมเดล" — ตรวจจริง 11 ส.ค. 69 พบว่า **ตัวเทสต์เองผิด ไม่ใช่โมเดล**
+//    ใช้ h.bs.cl (หนี้สินหมุนเวียน ณ งวดตั้งต้น) เป็นตัวหาร ทั้งที่คะแนนวัดที่ ก.ย.
+//    ซึ่ง CL เดินไปแล้วตาม clMo/clYE (ตั้งแต่ 6 ส.ค. โมเดลเลิกตรึง CL) → ตัวหารคนละจุดเวลา
+//    เปลี่ยนเป็น r1.clEnd แล้วได้ 3.19e-16 = เป๊ะระดับ floating point ทั้ง 15 แห่ง
+//    ⛔ ห้ามกลับไปใช้ bs.cl · และห้ามปล่อยข้อไหนขึ้น ⚠️ ค้างโดยไม่หาสาเหตุอีก (เป็น fail จริงแล้ว)
+console.log('  ข้อ 4 |Δratio − inj/clEnd| =',d4.toExponential(2), d4<1e-9?'✅':'❌');
+if(d4>=1e-9) fail.push('ข้อ 4 เอกลักษณ์ Δratio = inj/clEnd ไม่ผ่าน: '+d4.toExponential(2));
+if(d4cl.length) fail.push('เส้นทาง CL ต่างกันระหว่างรอบมี/ไม่มีเงินอุดหนุน '+d4cl.length+' แห่ง: '+d4cl.slice(0,3).join(' '));
 console.log('  ข้อ 5 |ΔNWC−inj| , |ΔNI−inj| =',M(d5), d5<1?'✅':'⚠️');
 console.log('  ข้อ 6 solver ได้ระดับ ≤ เป้า:',ok6?'✅':'⚠️');
 console.log('  ข้อ 7 monotonic:',mono?'✅':'⚠️');
@@ -131,6 +139,30 @@ for(const h of j.hosp){
     }catch(e){ threw++; fail.push(`THREW ${h.name} L=${L}: ${e.message}`); } }
 }
 console.log(`  รัน ${runs} เคส · exception ${threw} · คอลัมน์ผิด ${badcol} · ${Date.now()-t0}ms`);
+
+// ══ 5) 🔒 ล็อกโครงสร้าง exec.json — กันบั๊กชนิด "ฟิลด์หายเงียบตอนเดินงวด" ทั้งตระกูล ══
+// เคสจริง 11 ส.ค. 69: bs.niYE/bs.clYE ถูกใส่ด้วยมือในงวด 256909 ไม่ได้อยู่ในไพป์ไลน์
+// พอ export งวดใหม่ก็หายไปเฉย ๆ โมเดลถอยกลับรุ่นเก่าโดยไม่มีอะไรฟ้อง
+// ⛔ เพิ่มฟิลด์ใหม่ใน exec.json ต้อง (ก) เขียนใน export_exec.py เท่านั้น ห้ามแก้ไฟล์ JSON ด้วยมือ
+//    (ข) เติมชื่อฟิลด์ลงรายการนี้ทุกครั้ง — รายการนี้คือสัญญาระหว่างไพป์ไลน์กับหน้าเว็บ
+console.log('\n════ 5) โครงสร้าง exec.json ครบทุกแห่ง ════');
+{ const NEED_TOP=['period','periodLabel','monthsElapsed','pn','revOrder','expOrder','moeGroups','moeVers','cashDef','hosp'];
+  const NEED_H=['hcode','name','prov','grp','type','risk','src','bs','rev','exp','moe','moe68','moeP9','tj','trf'];
+  const NEED_BS=['t','mo','ca','cl','qn','cn','ni','depMo','clMo','niYE','clYE','donMo','apAccr','apTrade'];
+  const miss=k=>j.hosp.filter(h=>!(k in h)).length, missB=k=>j.hosp.filter(h=>!(k in h.bs)).length;
+  const badTop=NEED_TOP.filter(k=>!(k in j)), badH=NEED_H.filter(k=>miss(k)), badB=NEED_BS.filter(k=>missB(k));
+  console.log('  ระดับไฟล์',NEED_TOP.length-badTop.length+'/'+NEED_TOP.length,
+              '· ราย รพ.',NEED_H.length-badH.length+'/'+NEED_H.length,
+              '· ใน bs',NEED_BS.length-badB.length+'/'+NEED_BS.length,
+              (badTop.length+badH.length+badB.length)?'❌':'✅');
+  [...badTop.map(k=>'ระดับไฟล์ '+k),...badH.map(k=>`ราย รพ. ${k} (ขาด ${miss(k)} แห่ง)`),
+   ...badB.map(k=>`bs.${k} (ขาด ${missB(k)} แห่ง)`)].forEach(m=>fail.push('exec.json ขาดฟิลด์ '+m+' — รัน export_exec.py ใหม่'));
+  // ฟิลด์ที่ "มีบางแห่ง ขาดบางแห่ง" = สัญญาณของการแก้ไฟล์ด้วยมือ ตรวจแยกอีกชั้น
+  const allB=new Set(); j.hosp.forEach(h=>Object.keys(h.bs).forEach(k=>allB.add(k)));
+  const partial=[...allB].filter(k=>{const n=missB(k); return n>0&&n<j.hosp.length;});
+  console.log('  ฟิลด์ที่มีไม่ครบทุกแห่ง:',partial.length?partial.join(' '):'ไม่มี', partial.length?'❌':'✅');
+  partial.forEach(k=>fail.push(`bs.${k} มีบางแห่งไม่มีบางแห่ง = ร่องรอยการแก้ JSON ด้วยมือ`));
+}
 
 console.log('\n════ สรุป ════');
 if(fail.length){ console.log('  ⚠️ พบปัญหา',fail.length,'รายการ:'); fail.slice(0,10).forEach(f=>console.log('   ',f)); }
