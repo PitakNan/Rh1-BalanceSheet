@@ -60,15 +60,38 @@ def main():
             if tid: tid_new[tid] = tid_new.get(tid, 0) + n
         print("  งวดในไฟล์:", {k: f"{v:,}" for k, v in sorted(tid_new.items())})
 
+        # 1.1) นับแถว Dr=Cr=NULL ต่อ time_id ในไฟล์ใหม่ (จาก PDate เดียวกับข้างบน)
+        #      พบ 11 ส.ค. 69: D5317.mdb งวดปัจจุบันแถมคอลัมน์เทียบ "ก.ย. ปีงบก่อน" มาด้วย
+        #      แต่ HFO ส่งมาเป็น Dr/Cr=NULL ทั้งคอลัมน์ (จำนวนแถวเท่าเดิม ไม่ใช่แถวน้อยลง)
+        #      → การ์ดข้อ 2 (เช็คแค่จำนวนแถวรวม) จับไม่ได้ ต้องเช็คสัดส่วน NULL เพิ่ม
+        ac.execute("SELECT PDate, COUNT(*) FROM [DataIn] WHERE Dr IS NULL AND Cr IS NULL GROUP BY PDate")
+        null_new = {}
+        for pdate, n in ac.fetchall():
+            tid = compute_timeid(pdate)
+            if tid: null_new[tid] = null_new.get(tid, 0) + n
+
         # 2) เทียบกับที่มีใน MySQL — เตือนถ้างวดใหม่เล็กกว่าเดิมมาก (>10%)
+        #    หรือสัดส่วน NULL ของ Dr/Cr เพิ่มขึ้นผิดปกติเทียบกับของเดิม (แม้จำนวนแถวเท่ากัน)
+        NULL_RATIO_JUMP = 0.15   # สัดส่วน NULL ใหม่ต้องไม่เกินของเดิม + 15 จุด
+        NULL_RATIO_MIN = 0.05    # ต่ำกว่านี้ถือว่าเป็น NULL ปกติที่มีอยู่แล้ว ไม่ต้องเตือน
         blocked = []
         for tid, n_new in sorted(tid_new.items()):
             cur.execute("SELECT COUNT(*) FROM balance_sheet WHERE time_id=%s", (tid,))
             n_old = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM balance_sheet WHERE time_id=%s AND dr IS NULL AND cr IS NULL", (tid,))
+            null_old = cur.fetchone()[0]
+
             mark = ""
             if n_old and n_new < n_old * 0.9:
                 mark = "  ⛔ ใหม่เล็กกว่าเดิม >10% — ข้ามงวดนี้ (ตรวจไฟล์ก่อน)"
                 blocked.append(tid)
+            else:
+                ratio_new = null_new.get(tid, 0) / n_new if n_new else 0.0
+                ratio_old = null_old / n_old if n_old else 0.0
+                if n_old and ratio_new > NULL_RATIO_MIN and ratio_new - ratio_old > NULL_RATIO_JUMP:
+                    mark = (f"  🔒 NULL Dr/Cr {ratio_new:.0%} (เดิม {ratio_old:.0%}) — ข้ามงวดนี้ "
+                             f"(ต้นทางส่งข้อมูลว่างผิดปกติ ตรวจก่อน — ดู pipeline/fix_sep_months.py)")
+                    blocked.append(tid)
             print(f"  {tid}: เดิม {n_old:,} → ใหม่ {n_new:,}{mark}")
 
         # 3) replace ทีละงวด
