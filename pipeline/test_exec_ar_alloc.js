@@ -16,8 +16,11 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
+// setARCACHE = ล้าง _arAllocCache — จำเป็นเพราะแคชนั้นผูก sig ไว้กับ arPct เพียงตัวเดียว ไม่ผูกกับ EX
+// ถ้าสลับชุดข้อมูล (เคสสมมติข้อ ②′) โดย arPct เท่าเดิม จะได้ map เก่ามาแบบเงียบ ๆ แล้วเทสต์ผ่านหลอก ๆ
 const A=new Function(code+`;return {exRender,exArIn,exArRaw,exArCut,exArPct,exArPctEff,exPayIn,exArAlloc,
-  setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
+  setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},
+  setARCACHE:v=>{_arAllocCache=v}};`)();
 const j=JSON.parse(fs.readFileSync(process.env.RD_JSON||'D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=o=>({mmo:3,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext:0,tgt:6,moeVer:'69',payPct:50,
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},tj:{mode:'off',scope:'crisis'},
@@ -95,7 +98,36 @@ ratios.forEach(x=>console.log(`     ${x.p.padEnd(11)} ลูกหนี้ ${M(
 const free=ratios.filter(x=>!x.cap&&x.r!=null).map(x=>x.r);
 const spread=Math.max(...free)-Math.min(...free);
 chk(spread<0.001, `จังหวัดที่ไม่ติดเพดานได้อัตราส่วนเท่ากันหมด (ต่างกัน ${spread.toFixed(5)})`);
-chk(ratios.some(x=>x.cap), 'มีอย่างน้อย 1 จังหวัดติดเพดาน (พิสูจน์ว่าเพดานทำงานจริง)');
+console.log(`     ℹ️ ติดเพดานตามข้อมูลจริง ${ratios.filter(x=>x.cap).length} จังหวัด`);
+
+// ══ ②′ เพดานต้องทำงาน — พิสูจน์ด้วยเคสสมมติ ไม่พึ่งว่าข้อมูลงวดนั้นบังเอิญมีจังหวัดที่ติด ══
+// 🪤 เดิมยันไว้ว่า "ต้องมีอย่างน้อย 1 จังหวัดติดเพดาน" ซึ่งเป็นคุณสมบัติของ*ข้อมูล* ไม่ใช่ของ*โค้ด*
+//    งวด 256910 ทุกจังหวัดได้อัตราส่วน ลูกหนี้:เจ้าหนี้ = 0.928 เท่ากันหมด จึงไม่มีใครติดเพดานเลย
+//    → ข้อนี้ตกทั้งที่โค้ดไม่ได้พัง และแย่กว่านั้นคือ "ตรรกะเพดานจะไม่ถูกทดสอบเงียบ ๆ" ในงวดที่ไม่มีใครติด
+//    แก้เป็นสร้างสถานการณ์เอง: หั่นลูกหนี้จังหวัดหนึ่งเหลือ 1% แล้วจังหวัดนั้นต้องติดเพดานแน่นอน (11 ส.ค. 69)
+console.log('\n━━ ②′ เพดานทำงานจริง (เคสสมมติ — ไม่พึ่งข้อมูลงวด) ━━');
+{
+  const pv=provs.find(p=>RAW[p].pay>0&&RAW[p].ar>0);
+  const j2=JSON.parse(JSON.stringify(j));
+  j2.hosp.forEach(h=>{ if(h.prov===pv&&h.tj) h.tj.arIn=(h.tj.arIn||0)*0.01; });
+  const R2={}; j2.hosp.forEach(h=>{ const p=R2[h.prov]||(R2[h.prov]={pay:0,ar:0,hs:[]});
+    p.pay+=(h.tj&&h.tj.payIn)||0; p.ar+=(h.tj&&h.tj.arIn)||0; p.hs.push(h); });
+  const pv2=Object.keys(R2);
+  const PAY2=pv2.reduce((s,p)=>s+R2[p].pay,0), AR2=pv2.reduce((s,p)=>s+R2[p].ar,0);
+  A.setARCACHE({sig:null,map:null});    // ⚠️ ต้องล้าง ไม่งั้นได้ map ของข้อมูลจริงมาใช้ (sig ผูกแค่ arPct)
+  A.setEX(j2); use({arPct:62});
+  const sum2=p=>R2[p].hs.reduce((s,h)=>s+A.exArIn(h),0);
+  const keep2=AR2*0.62;
+  const cap2=pv2.filter(p=>R2[p].ar < keep2*(R2[p].pay/PAY2)-1);
+  chk(cap2.includes(pv), `หั่นลูกหนี้ ${pv} เหลือ 1% (${M(R2[pv].ar)}) แล้วติดเพดานจริง — ติดเพดาน: ${cap2.join(', ')||'ไม่มี'}`);
+  chk(near(sum2(pv), R2[pv].ar, 1), `${pv} ได้ไม่เกินลูกหนี้ดิบของตัวเอง ${M(R2[pv].ar)} (ได้ ${M(sum2(pv))})`);
+  const free2=pv2.filter(p=>!cap2.includes(p)&&R2[p].pay>0).map(p=>sum2(p)/R2[p].pay);
+  const sp2=Math.max(...free2)-Math.min(...free2);
+  chk(sp2<0.001, `จังหวัดที่เหลือ ${free2.length} จังหวัดยังได้อัตราส่วนเท่ากัน (ต่างกัน ${sp2.toFixed(5)})`);
+  const tot2=j2.hosp.reduce((s,h)=>s+A.exArIn(h),0);
+  chk(tot2<=Math.min(AR2*0.62,PAY2)+1, `ยอดรวมไม่ทะลุเพดานทั้งเขต ${M(Math.min(AR2*0.62,PAY2))} (ได้ ${M(tot2)})`);
+  A.setARCACHE({sig:null,map:null}); A.setEX(j);   // คืนข้อมูลจริง + ล้างแคชให้ข้อถัดไป
+}
 
 // ══ ③ ราย รพ. แบ่งตามสัดส่วนลูกหนี้ดิบในจังหวัด ══
 console.log('\n━━ ③ แบ่งต่อให้ รพ. ตามสัดส่วนลูกหนี้ดิบในจังหวัด ━━');

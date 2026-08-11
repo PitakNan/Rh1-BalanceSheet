@@ -9,6 +9,7 @@ const fs=require('fs'),path=require('path');
 const dir=path.join(__dirname,'..','docs','data','risk','h');
 const files=fs.readdirSync(dir).filter(f=>f.endsWith('.json'));
 const dist=r=>[0,1,2,3,4,5,6,7].map(L=>L+'×'+(r[L]||0)).join(' ');
+const histUp=[];   // จำนวนแห่งที่ "แย่ลง" จริงในช่วง ด.9→ด.12 (3 เดือน) ของแต่ละปีงบ — ใช้ตั้งเกณฑ์ข้างล่าง
 for(const fy of [2567,2568]){
   const d9={},d12={}; let n=0, up=0, down=0, same=0, to0=0, clUp=0, clDn=0, clSame=0, clSum9=0, clSum12=0;
   for(const f of files){
@@ -31,6 +32,7 @@ for(const fy of [2567,2568]){
   console.log('  → หนี้สินหมุนเวียนรวม: '+(clSum9/1e9).toFixed(2)+'B (ด.9) → '+(clSum12/1e9).toFixed(2)+'B (ด.12)  = '+(((clSum12/clSum9-1)*100)).toFixed(1)+'%');
   console.log('     รายแห่ง: โตขึ้น '+clUp+' · ลดลง '+clDn+' · เท่าเดิม '+clSame+'  ⚠️ โมเดลตรึง CL ไว้คงที่ 103/103');
   console.log('');
+  histUp.push(up);
 }
 
 
@@ -59,8 +61,16 @@ ex.hosp.forEach(h=>{ const r=A.exSimPath(h,0);
   if(r.sepRisk<h.risk) down++; else if(r.sepRisk>h.risk) up++; else same++;
   if(r.sepRisk===0) z++; });
 console.log('  ดีขึ้น '+down+' · แย่ลง '+up+' · เท่าเดิม '+same+' · ระดับ 0 = '+z+' แห่ง');
-chk(up>0, `ต้องมี รพ. ที่ "แย่ลง" ณ ก.ย. ด้วย (ได้ ${up} แห่ง) — ของจริงปี 67/68 แย่ลง 33 และ 65 แห่ง`);
-chk(up>=10, `จำนวนที่แย่ลงต้องอยู่ในระดับที่สมจริง ≥10 แห่ง (ได้ ${up})`);
+chk(up>0, `ต้องมี รพ. ที่ "แย่ลง" ณ ก.ย. ด้วย (ได้ ${up} แห่ง) — ของจริงปี 67/68 แย่ลง ${histUp.join(' และ ')} แห่ง`);
+// ⚠️ เกณฑ์ต้องผันตาม "จำนวนเดือนที่เหลือให้พยากรณ์" ไม่ใช่เลข 10 ตายตัว (แก้ 11 ส.ค. 69)
+//    ของจริงปี 67/68 วัดจาก ด.9→ด.12 = 3 เดือน แต่โมเดลพยากรณ์จาก ด.<monthsElapsed> → ด.12
+//    งวด 256909 เหลือ 3 เดือน (เท่าฐานประวัติ) · งวด 256910 เหลือแค่ 2 เดือน จึงคาดว่าน้อยลงตามสัดส่วน
+//    สูตร: 20% ของอัตราประวัติที่ปรับตามช่วงเวลาแล้ว — ที่ 3 เดือนให้ค่า ≈10 พอดี (เท่าเกณฑ์เดิมเป๊ะ)
+//    ⛔ ห้ามลดเกณฑ์นี้เพื่อให้ผ่าน — ถ้าตก แปลว่าโมเดลมองโลกสวยกว่าประวัติจริง ต้องไปแก้ที่โมเดล
+const horizon=Math.max(1,12-(ex.monthsElapsed||9));
+const histMean=histUp.reduce((s,v)=>s+v,0)/(histUp.length||1);
+const floorUp=Math.round(histMean*(horizon/3)*0.2);
+chk(up>=floorUp, `จำนวนที่แย่ลงต้องสมจริง ≥${floorUp} แห่ง (ได้ ${up}) — ประวัติเฉลี่ย ${histMean.toFixed(0)} แห่ง/3 เดือน · งวดนี้เหลือ ${horizon} เดือน`);
 chk(z<=45, `ระดับ 0 ต้องไม่บวมเกินจริง ≤45 แห่ง (ได้ ${z}) — ของจริง ณ ด.12 ปี67=17 ปี68=11 แห่ง`);
 // ตัวเลือกฤดูกาลต้องมีผลจริง (กันโดนปิดโดยไม่ตั้งใจแล้วเงียบ)
 A.setEXST(mkST({seas:false,clGrow:false}));

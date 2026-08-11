@@ -225,7 +225,8 @@ console.log('━━ 10) ลูกหนี้ปรับลดได้ (เจ
   const totAr=()=>j.hosp.reduce((s,h)=>s+A.exArIn(h),0);
   const totShort=()=>j.hosp.reduce((s,h)=>s+A.exTopUp({h,r0:A.exSimPath(h,0)}),0);
   const ar0=totAr(), sh0=totShort();
-  chk(Math.abs(ar0-499.33e6)<1e6, `ค่าเริ่มต้น 100% = ลูกหนี้เต็มจำนวน ${fmtM(ar0)}`);
+  // ⚠️ ผูกกับงวดข้อมูล — งวด 256909 เดิม 499.33M · งวด 256910 (11 ส.ค. 69) = 489.54M
+  chk(Math.abs(ar0-489.54e6)<1e6, `ค่าเริ่มต้น 100% = ลูกหนี้เต็มจำนวน ${fmtM(ar0)} (ยันไว้กับงวด 256910)`);
   A.exSetArPct(60);
   chk(Math.abs(totAr()-ar0*0.6)<1e3, `ปรับ % รวมทั้งเขตเป็น 60% → ลูกหนี้ ${fmtM(totAr())}`);
   chk(totShort()>sh0, `เก็บได้น้อยลง → ส่วนขาดสภาพคล่องเพิ่มตามจริง (${fmtM(sh0)} → ${fmtM(totShort())})`);

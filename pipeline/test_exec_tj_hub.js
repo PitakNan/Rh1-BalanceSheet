@@ -244,7 +244,10 @@ console.log('━━ 12) %จ่ายหนี้การค้า: ยืน�
     `ยืดหนี้ 100%→0%: เงินสดปลายงวด +${fmtM(dCash)} และเจ้าหนี้ +${fmtM(dCl)} โตเท่ากันเป๊ะ (ผลต่าง ${(dCash-dCl).toFixed(2)} บาท)`);
   // NWC ต้องเท่าเดิมเป๊ะ = เหตุผลที่เงินสนับสนุนไม่ขยับ
   if(a.sepBreak&&b.sepBreak){
-    chk(a.sepBreak.nwc===b.sepBreak.nwc, `NWC ณ ก.ย. เท่าเดิมทุกบาท (${a.sepBreak.nwc} = ${b.sepBreak.nwc})`);
+    // เทียบด้วย tolerance 1 บาท ไม่ใช่ === : ลำดับการบวกเลขทศนิยมต่างกันเล็กน้อยระหว่างสองโหมด
+    // ทำให้เกิดเศษระดับ 1e-8 บาท (เจองวด 256910: -20849123.200000003 vs -20849123.199999996)
+    // เจตนาของข้อนี้คือ "NWC ไม่ขยับอย่างมีนัยสำคัญ" ไม่ใช่ความเท่ากันของ float — 11 ส.ค. 69
+    chk(Math.abs(a.sepBreak.nwc-b.sepBreak.nwc)<1, `NWC ณ ก.ย. เท่าเดิม (${a.sepBreak.nwc.toFixed(2)} vs ${b.sepBreak.nwc.toFixed(2)} — ต่าง ${Math.abs(a.sepBreak.nwc-b.sepBreak.nwc).toExponential(1)} บาท)`);
     chk(a.sepBreak.ni===b.sepBreak.ni, `NI สะสม ณ ก.ย. เท่าเดิม (เกณฑ์คงค้าง) (${a.sepBreak.ni})`);
     chk(b.sepBreak.cash>a.sepBreak.cash, `Cash ratio ดีขึ้นเล็กน้อยจริง (${a.sepBreak.cash.toFixed(3)} → ${b.sepBreak.cash.toFixed(3)}) — กลไกไม่ได้ตายด้าน`);
   }
