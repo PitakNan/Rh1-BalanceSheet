@@ -126,12 +126,14 @@ console.log('\n━━ ชิป 💧 อธิบายส่วนที่เ�
     const ovs=j.hosp.map(h=>{ const need0=needBefore[h.hcode]||0; return A.exXferIn(h)-need0; }).filter(v=>v>1);
     const nOv=ovs.length, xsWant=ovs.reduce((a,v)=>a+v,0);
     const nR=+m[2], tail=m[4].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
-    chk(/เติมเกิน/.test(tail) && tail.includes('กันชน'),
+    chk(/เติมเกิน/.test(tail) && /กติกาข้อ ③/.test(tail),
         `ชิปบอกส่วนที่เติมเกิน + ที่มา (ได้ "${tail.slice(0,95)}")`);
+    // ⛔ ศัพท์: ห้ามคำว่า "กันชน" ในข้อความที่ผู้ใช้เห็น (เจ้าของงานสั่ง 29 ก.ค. 69 · หัวข้อ 3.6)
+    chk(!/กันชน/.test(tail), 'ไม่ใช้คำว่า "กันชน" ในชิป (ใช้ "เติมเกินความต้องการ" ตามกติกาข้อ ③)');
     chk(tail.includes(String(A.EXTRA/1e3)+'K') && tail.includes(nOv+' แห่ง') && tail.includes(M(xsWant)),
-        `ระบุยอดเกิน ${M(xsWant)} = กันชน ${A.EXTRA/1e3}K × ${nOv} แห่งที่เติมครบ (ผู้รับทั้งหมด ${nR} แห่ง)`);
+        `ระบุยอดเกิน ${M(xsWant)} = เติมเกิน ${A.EXTRA/1e3}K × ${nOv} แห่งที่เติมครบ (ผู้รับทั้งหมด ${nR} แห่ง)`);
     chk(Math.abs(xsWant-nOv*A.EXTRA)<=Math.max(1,nOv),
-        `ยอดเกินรวม = กันชน × แห่งที่เติมครบ พอดี (${M(xsWant)} vs ${M(nOv*A.EXTRA)}) — ยืนยันว่าส่วนเกินมาจากกติกา ③ จริง`);
+        `ยอดเกินรวม = ${A.EXTRA/1e3}K × แห่งที่เติมครบ พอดี (${M(xsWant)} vs ${M(nOv*A.EXTRA)}) — ยืนยันว่าส่วนเกินมาจากกติกา ③ จริง`);
     chk(!/ยอดขาดเปลี่ยนหลังทำแผน/.test(tail),
         'แผนที่เพิ่งจัดสรรใหม่ ต้องไม่ขึ้นคำเตือน "ยอดขาดเปลี่ยนหลังทำแผน"');
   }
