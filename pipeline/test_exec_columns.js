@@ -15,7 +15,7 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const A=new Function(code+`;return {fmtM,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
-  exNetAfterDebt,exSolveCrit,exSolveFor,NEEDC:EX_NEEDC,STEP:SV_STEP,
+  exNetAfterDebt,exSolveCrit,exSolveCritNi,exSolveFor,NEEDC:EX_NEEDC,STEP:SV_STEP,
   SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const raw2=fs.readFileSync(SRC,'utf8');   // ซอร์สทั้งไฟล์ — ใช้ตรวจว่า EXST.ext ไม่มีคนอ่านเหลืออยู่จริง
@@ -110,7 +110,7 @@ for(const mmo of [1,3,6,13]){
   chk(main.length===j.hosp.length, `แถวหลักครบ ${main.length}/${j.hosp.length}`);
 
   let badCol=0,badLeft=0,badTop=0,badRed=0,badSub=0,nRed=0,nTop=0;
-  let badNet=0,badNI=0,badNeed=0,badNeedMin=0,nNeedPos=0,nNeedFail=0;
+  let badNet=0,badNI=0,badNeed=0,badNeedMin=0,nNeedPos=0,nNeedFail=0,badLv=0,badNi=0,nNiAlt=0;
   const iNeed0=ths.findIndex(t=>t.includes(norm('ต้องใช้ให้ผ่าน')));
   for(const h of j.hosp){
     const r=main.find(x=>x.includes('<b>'+h.name+'</b>')); if(!r){badCol++;continue;}
@@ -139,11 +139,38 @@ for(const mmo of [1,3,6,13]){
     for(let ci=0;ci<NEEDC.length;ci++){
       const c=NEEDC[ci], v=A.exSolveCrit(h,c,r0), cell=txt(tds[iNeed0+ci][1]);
       const b0=r0.sepBreak;
-      if(v==null){ nNeedFail++; if(!cell.includes('เงินก้อนไม่พอ')) badNeed++; continue; }
+      // ⭐ 11 ส.ค. 69 (รอบ 3): แต่ละช่องต้องตอบ 3 อย่าง — เงินก้อน · ระดับที่จะได้ · ทางทำกำไรทดแทน
+      const dni=A.exSolveCritNi(h,c,r0);
+      if(v==null){
+        nNeedFail++;
+        if(!cell.includes('เงินก้อนไม่พอ')) badNeed++;
+        // เงินแก้ไม่ได้ → ต้องยกทางทำกำไรขึ้นเป็นคำตอบหลัก + ระดับของทางนั้น (ห้ามปล่อยให้ตีบ)
+        if(dni==null){ if(!cell.includes('กำไรก็ไม่พอ')) badNeed++; }
+        else {
+          if(!cell.includes('ทำกำไร +'+fmtM(dni))) badNeed++;
+          const lvD=A.exSimPath(h,0,{dni}).sepRisk;
+          if(lvD!=null && !new RegExp('→ *'+lvD+'(?!\d)').test(cell)) badNeed++;
+          nNiAlt++;
+        }
+        continue;
+      }
       if(!(v>0)){ if(!cell.startsWith('✓')) badNeed++;
                   if(b0&&!c.ok(b0,b0)&&!(c.k==='su'&&b0.su===0)) badNeed++;   // บอกว่าผ่านแล้วต้องผ่านจริง
+                  if(dni!==0) badNeed++;                                       // ผ่านแล้วต้องไม่ต้องทำกำไรเพิ่ม
                   continue; }
       if(!cell.startsWith(fmtM(v))) badNeed++;
+      // ระดับที่จะได้ = เดินแบบจำลองด้วยเงินก้อนของช่องนั้นจริง
+      const lvM=A.exSimPath(h,v).sepRisk;
+      if(lvM!=null && !new RegExp('→ *'+lvM+'(?!\d)').test(cell)) badLv++;
+      if(lvM!=null && lvM===r0.sepRisk && !cell.includes('ไม่ขยับ')) badLv++;   // ระดับไม่ขยับต้องบอก
+      // ทางทำกำไรทดแทน: ต้องมีเลข และต้องทำให้เกณฑ์ผ่านจริงที่ยอดนั้น + ไม่ผ่านถ้าน้อยกว่า 1 step
+      if(dni>0){
+        if(!cell.includes('กำไร +'+fmtM(dni))) badNi++;
+        const bAt=A.exSimPath(h,0,{dni}).sepBreak, bLo=A.exSimPath(h,0,{dni:Math.max(0,dni-A.STEP)}).sepBreak;
+        if(!(bAt&&c.ok(bAt,b0))) badNi++;
+        if(bLo&&c.ok(bLo,b0)) badNi++;
+        nNiAlt++;
+      }
       // ผ่านที่ยอดนี้ และไม่ผ่านที่ยอดน้อยกว่านี้ 1 step = เป็นค่าต่ำสุดจริง
       const bAt=A.exSimPath(h,v).sepBreak, bLo=A.exSimPath(h,Math.max(0,v-A.STEP)).sepBreak;
       if(!(bAt&&c.ok(bAt,b0))) badNeed++;
@@ -173,6 +200,8 @@ for(const mmo of [1,3,6,13]){
   chk(badNI===0, `คอลัมน์ NI มีบรรทัดค่าเฉลี่ยจริงย้อนหลังครบทุกแห่ง (ผิด ${badNI})`);
   chk(badNeed===0, `เงินที่ต้องใช้รายเกณฑ์: เซลล์ตรงกับ Solver + ผ่านจริงที่ยอดนั้น (ผิด ${badNeed}) · ต้องเติมเงิน ${nNeedPos} ช่อง · เงินก้อนไม่พอ ${nNeedFail} ช่อง`);
   chk(badNeedMin===0, `เงินที่ต้องใช้รายเกณฑ์เป็นค่าต่ำสุดจริง (ลดลง 1 step แล้วไม่ผ่าน) — ผิด ${badNeedMin}`);
+  chk(badLv===0, `ทุกช่องบอก "ระดับที่จะได้" ตรงกับผลจำลองด้วยเงินก้อนของช่องนั้น + บอกเมื่อระดับไม่ขยับ (ผิด ${badLv})`);
+  chk(badNi===0, `ทางเลือก "ทำกำไร/เดือน" ตรงกับ Solver + ผ่านจริงและเป็นค่าต่ำสุด (ผิด ${badNi} · มีทางเลือก ${nNiAlt} ช่อง)`);
   // colspan ต้องเท่าหัวตารางเสมอ
   A.setEXOPEN({[j.hosp[0].hcode]:true}); A.setEXBRK({[j.hosp[1].hcode]:6}); A.exRender();
   const cs=[...els.exResBox.innerHTML.matchAll(/<tr class="ovsub"><td colspan="(\d+)"/g)].map(m=>+m[1]);
