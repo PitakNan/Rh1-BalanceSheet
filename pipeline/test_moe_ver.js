@@ -143,7 +143,9 @@ for(const [ver,pct,lab] of [['69',100,'MOE.Ver69'],['68',100,'MOE.Ver68'],['69p'
   const nTh=((rows[0]||'').match(/<th\b/g)||[]).length;
   const main=rows.filter(r=>r.includes('class="ovtgl"'));
   const badTd=main.filter(r=>(r.match(/<td\b/g)||[]).length!==nTh).length;
-  chk(!err && nTh===14+(A.SHOW_TJAR?1:0)-(A.SHOW_GIVE?0:1) && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
+  // ฐาน 20 คอลัมน์ (+ ลูกหนี้ถ้าเปิด) — ชุดใหม่ 11 ส.ค. 69 รวม 6 คอลัมน์ "เงินที่ต้องสนับสนุนรายเกณฑ์"
+  // และตัด "เงินที่ยกให้" ออก · จำนวนคอลัมน์ที่ถูกต้องตรวจละเอียดใน test_exec_columns.js
+  chk(!err && nTh===20+(A.SHOW_TJAR?1:0) && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
       && html.includes(`value="${ver}" selected`) && moeBox.includes(lab),
       `โหมด ${lab}: เรนเดอร์ครบ ${main.length} แถว × ${nTh} คอลัมน์ · dropdown ค้างค่าถูก · ไม่มี undefined/NaN`,
       err||(badTd?`td ไม่ครบ ${badTd} แถว`:''));
@@ -152,7 +154,11 @@ for(const [ver,pct,lab] of [['69',100,'MOE.Ver69'],['68',100,'MOE.Ver68'],['69p'
   const shown=(main.find(r=>r.includes('<b>'+h0.name+'</b>'))||'').match(/<td[^>]*>([\s\S]*?)<\/td>/g)||[];
   const want=A.exMoeMo(h0);
   const fmt=A.fmtM;   // ดึงจากหน้าเว็บ ห้ามลอกสูตรมาไว้ที่นี่ (ทศนิยมเปลี่ยนแล้วเทสต์จะฟ้องผิดเอง)
-  chk((shown[3]||'').includes(fmt(want)), `  └ คอลัมน์ MOE/เดือน ของ ${h0.name} = ${fmt(want)} (เงินสดจ่ายจริงของโหมดนี้)`);
+  // ⚠️ หาคอลัมน์จากหัวตารางจริง ห้ามผูกเลขดัชนี (แก้ 11 ส.ค. 69 — คอลัมน์ MOE ย้ายไปอยู่หลังลูกหนี้)
+  const iMoe=[...(rows[0]||'').matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)]
+    .map(m=>m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,''))
+    .findIndex(t=>t.includes('MOE/เดือน'));
+  chk(iMoe>=0 && (shown[iMoe]||'').includes(fmt(want)), `  └ คอลัมน์ MOE/เดือน ของ ${h0.name} = ${fmt(want)} (เงินสดจ่ายจริงของโหมดนี้)`);
 }
 
 console.log('\n━━ สรุป ━━');

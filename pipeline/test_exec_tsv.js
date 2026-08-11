@@ -23,20 +23,24 @@ const chk=(ok,m)=>{ console.log(`  ${ok?'✅':'❌'} ${m}`); if(!ok) fail.push(m
 // อ่านเลขจากบนจอ (fmtM: 12.3M / 456K / 1.23B) และจาก TSV (หน่วยล้านบาท 2 ตำแหน่ง)
 const scr=s=>{ const t=String(s).replace(/,/g,'').trim(); if(!t||t==='–'||t==='-'||t==='—') return null;
   // 🪤 ต้องรับเครื่องหมายนำหน้าครบ: + (บวก) · − (ลบ อักขระ U+2212 ไม่ใช่ hyphen) · "ขาด"
-  const m=t.match(/^(ขาด\s*)?([+−-]?)([\d.]+)\s*([BMK]?)/); if(!m) return null;
+  // "ติดลบ" = คำนำหน้าของคอลัมน์ "เงินสด+เทียบเท่าหลังจัดการหนี้สิน" (เพิ่ม 11 ส.ค. 69)
+  const m=t.match(/^(ขาด\s*|ติดลบ\s*)?([+−-]?)([\d.]+)\s*([BMK]?)/); if(!m) return null;
   const sign=(m[1]||m[2]==='-'||m[2]==='−')?-1:1;
   return parseFloat(m[3])*({B:1e9,M:1e6,K:1e3,'':1}[m[4]])*sign; };
 const tsvN=s=>{ const t=String(s).trim(); if(!t||t==='-'||t==='ไม่พอ') return null;
   const v=parseFloat(t.replace(/,/g,'')); return isNaN(v)?null:v*1e6; };
 const cellMain=c=>c.replace(/<span class="cellsub[\s\S]*?<\/span>/g,'').replace(/<button[\s\S]*?<\/button>/g,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 
-// จับคู่ ดัชนีคอลัมน์บนจอ ↔ ชื่อคอลัมน์ใน TSV
+// จับคู่ คอลัมน์บนจอ ↔ ชื่อคอลัมน์ใน TSV
+// ⚠️ ฝั่งจอใช้ "ชื่อหัวคอลัมน์" ไม่ใช่เลขดัชนี (แก้ 11 ส.ค. 69) — ตอนเรียงคอลัมน์ใหม่ตามคำสั่งเจ้าของงาน
+//    ดัชนีคงที่ทำให้เทสต์จับคู่ผิดคอลัมน์แล้วฟ้อง 21 ข้อทั้งที่ค่าบนจอกับ TSV ตรงกันอยู่
 const PAIRS=[
-  [6,'เจ้าหนี้ OP-UC นอก CUP ในจังหวัด 2101020199.202(ลบ.)'],
-  [7,'ลูกหนี้ UC-OP นอก CUP ในจังหวัด 1102050101.203+1102050194.204(ลบ.)'],
-  [5,'เงินสด+เทียบเท่า(ลบ.)'],
-  [3,'MOE กองเศรษฐฯ/เดือน(ลบ. · เงินสดจ่ายจริง)'],
-  [4,'NIจำลอง/เดือน(ลบ.)'],
+  ['เจ้าหนี้','เจ้าหนี้ OP-UC นอก CUP ในจังหวัด 2101020199.202(ลบ.)'],
+  ['ลูกหนี้','ลูกหนี้ UC-OP นอก CUP ในจังหวัด 1102050101.203+1102050194.204(ลบ.)'],
+  ['เงินสด+เทียบเท่า','เงินสด+เทียบเท่า(ลบ.)'],
+  ['หลังจัดการหนี้สิน','เงินสด+เทียบเท่า หลังจัดการหนี้สิน(ลบ. · เงินสด−เจ้าหนี้+ลูกหนี้±โยกช่วย)'],
+  ['MOE/เดือน','MOE กองเศรษฐฯ/เดือน(ลบ. · เงินสดจ่ายจริง)'],
+  ['NI/เดือน','NIจำลอง/เดือน(ลบ.)'],
 ];
 for(const st of [{},{arPct:62},{arPct:62,tj:{mode:'forgive',scope:'all'}},{crisis:'67',arPct:62}]){
   A.setEXST(ST(st)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1}); A.exRender();
@@ -53,9 +57,14 @@ for(const st of [{},{arPct:62},{arPct:62,tj:{mode:'forgive',scope:'all'}},{crisi
   const nameCol=head.indexOf('โรงพยาบาล');
   const orderBad=body.filter((r,i)=>r[nameCol]!==rows[i].name).length;
   chk(orderBad===0, `ลำดับ รพ. ตรงกันทุกแถว (ต่าง ${orderBad})`);
+  // ดัชนีคอลัมน์บนจอ อ่านจากหัวตารางจริง (ดูหมายเหตุที่ PAIRS)
+  const sths=[...res.match(/<tr>[\s\S]*?<\/tr>/)[0].matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)]
+    .map(m=>m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,''));
   // เทียบค่าทีละเซลล์
-  for(const [ti,hname] of PAIRS){
+  for(const [scrLab,hname] of PAIRS){
+    const ti=sths.findIndex(t=>t.includes(scrLab.replace(/\s+/g,'')));
     const ci=head.indexOf(hname);
+    if(ti<0){ chk(false, `หาคอลัมน์ "${scrLab}" บนจอไม่เจอ`); continue; }
     if(ci<0){ chk(false, `หาคอลัมน์ "${hname.slice(0,40)}" ใน TSV ไม่เจอ`); continue; }
     let bad=0, ex='';
     body.forEach((r,i)=>{

@@ -28,9 +28,13 @@ for(const st of [{}, {arPct:62}, {crisis:'67'}, {crisis:'67',arPct:62}, {prov:'�
   A.setEXST(ST(st)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1}); A.exRender();
   const res=els['exResBox'].innerHTML, prov=els['exProvTjBox'].innerHTML;
   // ── แถวข้อมูลของตารางผลจำลอง: <tr> ที่ขึ้นต้นด้วย <td>จังหวัด</td><td><b>ชื่อ รพ.</b>
+  // ⚠️ ดัชนีคอลัมน์อ่านจากหัวตารางจริง ห้าม hardcode (แก้ 11 ส.ค. 69 — เรียงคอลัมน์ใหม่แล้วเทสต์จับผิดคอลัมน์)
+  const sths=[...res.match(/<tr>[\s\S]*?<\/tr>/)[0].matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)]
+    .map(m=>m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,''));
+  const iPay=sths.findIndex(t=>t.includes('เจ้าหนี้')), iAr=sths.findIndex(t=>t.includes('ลูกหนี้'));
   const simRows=[...res.matchAll(/<tr>\s*<td>([^<]*)<\/td>\s*<td[^>]*><b>([^<]+)<\/b>[\s\S]*?<\/tr>/g)].map(m=>{
     const tds=[...m[0].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x=>x[1]);
-    return {prov:m[1], name:m[2], pay:num(cell(tds[6])), ar:num(cell(tds[7]))};
+    return {prov:m[1], name:m[2], pay:num(cell(tds[iPay])), ar:num(cell(tds[iAr]))};
   }).filter(r=>r.prov);
   // ── แถวของตารางสรุปรายจังหวัด
   const pRows=[...prov.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>{

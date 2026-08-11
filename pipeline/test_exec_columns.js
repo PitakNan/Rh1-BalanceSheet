@@ -15,6 +15,7 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const A=new Function(code+`;return {fmtM,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
+  exNetAfterDebt,exSolveCrit,NEEDC:EX_NEEDC,STEP:SV_STEP,
   SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
@@ -49,8 +50,12 @@ for(const f of ['index.html','explorer.html']){
 }
 console.log();
 console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (${A.SHOW_TJAR?'เปิดคอลัมน์ลูกหนี้':'ซ่อนคอลัมน์ลูกหนี้'})\n`);
-const TJOFF=(A.SHOW_TJAR?1:0);
-const NCOL=14+(A.SHOW_TJAR?1:0)-(A.SHOW_GIVE?0:1);   // ฐาน 14 + ลูกหนี้(ถ้าเปิด) − เงินที่ยกให้(ถ้าปิด)   // คอลัมน์ลูกหนี้แทรกอยู่ต่อจากเจ้าหนี้ (ถัดจาก index 6) เมื่อเปิด — ดัชนีคอลัมน์หลังจากนี้ต้องขยับตาม
+// ── ⚠️ เลิกผูกดัชนีคอลัมน์เป็นเลขคงที่ (11 ส.ค. 69) ──────────────────────────────────
+// ของเดิมใช้ tds[7+TJOFF] ฯลฯ พอเรียงคอลัมน์ใหม่ตามคำสั่งเจ้าของงาน เทสต์ฟ้อง 23 ข้อทั้งที่หน้าเว็บถูก
+// ตอนนี้อ่านหัวตารางจริงแล้วหาตำแหน่งจากชื่อคอลัมน์ → ย้ายคอลัมน์อีกกี่ครั้งก็ไม่ต้องแก้เลขในเทสต์
+// ฐาน 20 = จังหวัด·ชื่อ·ระดับ·เงินสด·เจ้าหนี้·สุทธิ·MOE·NI·คงเหลือ·ส่วนขาด·ระดับก่อน·[6 เกณฑ์]·รวม·ระดับหลัง·ปุ่ม
+const NCOL=20+(A.SHOW_TJAR?1:0);
+const NEEDC=A.NEEDC;
 
 for(const mmo of [1,3,6,13]){
   const ext=0;
@@ -65,10 +70,30 @@ for(const mmo of [1,3,6,13]){
   // หัวคอลัมน์ตัดบรรทัดด้วย <br> — เทียบแบบตัดช่องว่างทิ้งทั้งหมด จะได้ไม่พังเวลาย้ายตำแหน่งตัดบรรทัด
   const norm=s=>s.replace(/<br\s*\/?>/g,' ').replace(/\s+/g,'');
   const headTxt=norm(head), inHead=s=>headTxt.includes(norm(s));
+  // ดัชนีคอลัมน์อ่านจากหัวตารางจริง (ดูเหตุผลที่ NCOL ด้านบน)
+  const ths=[...head.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m=>norm(m[1].replace(/<[^>]+>/g,' ')));
+  const iOf=s=>ths.findIndex(t=>t.includes(norm(s)));
+  const iPay=iOf('เจ้าหนี้'), iNet=iOf('หลังจัดการหนี้สิน'), iNI=iOf('NI/เดือน'),
+        iLeft=iOf('คงเหลือหลังภาระMOE'), iTopC=iOf('ส่วนขาด');
   chk(nTh===NCOL, `หัวตาราง ${NCOL} ช่อง (ได้ ${nTh})`);
+  chk([iPay,iNet,iNI,iLeft,iTopC].every(i=>i>=0), `หาตำแหน่งคอลัมน์หลักจากหัวตารางได้ครบ (เจ้าหนี้ ${iPay} · สุทธิ ${iNet} · NI ${iNI} · คงเหลือ ${iLeft} · ส่วนขาด ${iTopC})`);
+  // ── ลำดับคอลัมน์ต้องอ่านเป็นสายเลขคณิตซ้าย→ขวา (เจ้าของงานสั่ง 11 ส.ค. 69) ──
+  //    เงินสด → −เจ้าหนี้ → +ลูกหนี้ → =สุทธิ → −MOE → NI → คงเหลือ → ส่วนขาด → ระดับก่อน → 6 เกณฑ์ → รวม → ระดับหลัง
+  const order=['เงินสด+เทียบเท่า','เจ้าหนี้',...(A.SHOW_TJAR?['ลูกหนี้']:[]),'หลังจัดการหนี้สิน','MOE/เดือน','NI/เดือน',
+               'คงเหลือหลังภาระMOE','ส่วนขาด','ก่อนช่วย',...NEEDC.map(c=>c.n+norm(c.th)),'รวม(Solver)','หลังช่วย'];
+  const pos=order.map(s=>iOf(s));
+  chk(pos.every((v,i)=>v>=0&&(i===0||v>pos[i-1])), `ลำดับคอลัมน์ถูกทั้งแถว (${pos.join('<')})`);
+  // 6 คอลัมน์เงินที่ต้องสนับสนุนรายเกณฑ์ + แถบสีกลุ่ม
+  const nNeedTh=(head.match(/class="exsortth[^"]*exneed"/g)||[]).length;
+  chk(nNeedTh===NEEDC.length, `หัวตารางมีคอลัมน์เกณฑ์ครบ ${NEEDC.length} ช่อง พร้อมคลาสแถบสี exneed (ได้ ${nNeedTh})`);
+  chk(NEEDC.map(c=>c.n).join(',')==='Cash,QR,CR,NWC,NI,SU', `เรียงเกณฑ์ตามที่สั่ง Cash|QR|CR|NWC|NI|SU (ได้ ${NEEDC.map(c=>c.n).join('|')})`);
+  chk(inHead('ต้องใช้ให้ผ่าน'), 'หัวคอลัมน์ทุกช่องในกลุ่มมีป้าย "ต้องใช้ให้ผ่าน" (ใช้แทนหัวตาราง 2 ชั้นที่ทำให้ sticky พัง)');
+  chk(/ห้ามบวก 6 คอลัมน์รวมกัน|ห้ามบวก 6 คอลัมน์/.test(html), 'มีคำเตือนห้ามบวก 6 คอลัมน์รวมกันในหน้า');
+  chk(!inHead('เงินที่ยกให้'), 'ตัดคอลัมน์ "เงินที่ยกให้" ออกจากตารางแล้ว (11 ส.ค. 69)');
   chk(headTxt.includes('เงินที่ยกให้'.replace(/\s/g,''))===A.SHOW_GIVE, A.SHOW_GIVE?'มีคอลัมน์เงินที่ยกให้':'ไม่มีคอลัมน์เงินที่ยกให้ (ปิดไว้ — ตรวจแล้วไม่ถูกคิดซ้ำ)');
   chk(inHead('ลูกหนี้')===A.SHOW_TJAR, A.SHOW_TJAR?'มีคอลัมน์ลูกหนี้ในหัวตาราง':'ไม่มีคอลัมน์ลูกหนี้ในหัวตาราง');
-  chk(inHead('เงินสดคงเหลือหลังภาระ MOE ถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนประเมิน "${A.exMoeTargetLab()}"`);
+  // หัวคอลัมน์เปลี่ยนเป็น "เงินสด+เทียบเท่าคงเหลือหลังภาระ MOE ถึง …" (เจ้าของงานสั่ง 11 ส.ค. 69)
+  chk(inHead('คงเหลือหลังภาระ MOE ถึง '+A.exMoeTargetLab()), `หัวคอลัมน์ระบุเดือนประเมิน "${A.exMoeTargetLab()}"`);
   chk(inHead('ส่วนขาดสภาพคล่อง'), 'มีคอลัมน์ส่วนขาดสภาพคล่อง');
   chk(/กรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด \(ไม่มีรายรับเข้าเลย\)/.test(html)&&/ไม่ใช่คำของบ/.test(html), 'กล่องเหนือตารางระบุสมมติฐาน + ไม่ใช่คำของบ');
   // สำนวนเดิม "รายรับหยุด/หยุดสนิท" เลิกใช้แล้ว (5 ส.ค. 69) — กันหลุดกลับมาในข้อความที่ผู้ใช้เห็น
@@ -79,6 +104,8 @@ for(const mmo of [1,3,6,13]){
   chk(main.length===j.hosp.length, `แถวหลักครบ ${main.length}/${j.hosp.length}`);
 
   let badCol=0,badLeft=0,badTop=0,badRed=0,badSub=0,nRed=0,nTop=0;
+  let badNet=0,badNI=0,badNeed=0,badNeedMin=0,nNeedPos=0,nNeedFail=0;
+  const iNeed0=ths.findIndex(t=>t.includes(norm('ต้องใช้ให้ผ่าน')));
   for(const h of j.hosp){
     const r=main.find(x=>x.includes('<b>'+h.name+'</b>')); if(!r){badCol++;continue;}
     const tds=[...r.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)];
@@ -92,7 +119,31 @@ for(const mmo of [1,3,6,13]){
     if(Math.abs(A.exMoeLeft(x)-expLeft)>1) badLeft++;
     if(Math.abs(A.exTopUp(x)-expTop)>1) badTop++;
     if(A.exHorMonths(h)!==months) badLeft++;
-    const cLeft=txt(tds[7+TJOFF][1]), cTop=txt(tds[8+TJOFF][1]), cPay=tds[6][0];
+    const cLeft=txt(tds[iLeft][1]), cTop=txt(tds[iTopC][1]), cPay=tds[iPay][0];
+    // 🆕 คอลัมน์สุทธิหลังจัดการหนี้สิน = ตัวกลางของ exMoeLeft — ต้องตรงกับ 3 คอลัมน์ทางซ้ายเป๊ะ
+    const expNet=h.bs.cn-pay+arIn;
+    if(Math.abs(A.exNetAfterDebt(h)-expNet)>1) badNet++;
+    const cNet=txt(tds[iNet][1]);
+    if(expNet<0 ? !cNet.startsWith('ติดลบ '+fmtM(-expNet)) : !cNet.startsWith(fmtM(expNet))) badNet++;
+    if(Math.abs((A.exMoeLeft(x)+ (r0.moeMo||0)*months) - expNet)>1) badNet++;   // สายเลขต้องต่อกัน: สุทธิ − MOE×เดือน = คงเหลือ
+    // 🆕 NI 2 บรรทัด: ตัวใหญ่ = จำลอง · บรรทัดเล็ก = เฉลี่ยจริงย้อนหลัง
+    const cNI=txt(tds[iNI][1]);
+    if(!cNI.includes('เฉลี่ยจริง '+(h.bs.mo>0?h.bs.mo:12)+' ด.')) badNI++;
+    // 🆕 6 คอลัมน์เงินที่ต้องใช้รายเกณฑ์ — ตรวจ "ผลลัพธ์ของ Solver ผ่านจริง + น้อยที่สุด"
+    for(let ci=0;ci<NEEDC.length;ci++){
+      const c=NEEDC[ci], v=A.exSolveCrit(h,c,r0), cell=txt(tds[iNeed0+ci][1]);
+      const b0=r0.sepBreak;
+      if(v==null){ nNeedFail++; if(!cell.includes('เงินก้อนไม่พอ')) badNeed++; continue; }
+      if(!(v>0)){ if(!cell.startsWith('✓')) badNeed++;
+                  if(b0&&!c.ok(b0,b0)&&!(c.k==='su'&&b0.su===0)) badNeed++;   // บอกว่าผ่านแล้วต้องผ่านจริง
+                  continue; }
+      if(!cell.startsWith(fmtM(v))) badNeed++;
+      // ผ่านที่ยอดนี้ และไม่ผ่านที่ยอดน้อยกว่านี้ 1 step = เป็นค่าต่ำสุดจริง
+      const bAt=A.exSimPath(h,v).sepBreak, bLo=A.exSimPath(h,Math.max(0,v-A.STEP)).sepBreak;
+      if(!(bAt&&c.ok(bAt,b0))) badNeed++;
+      if(bLo&&c.ok(bLo,b0)) badNeedMin++;
+      nNeedPos++;
+    }
     // เซลล์ต้องแสดงตัวเลขตรงกับสูตร
     if(expLeft<0 ? !cLeft.startsWith('ขาด '+fmtM(-expLeft)) : !cLeft.startsWith(fmtM(expLeft))) badLeft++;
     if(expTop>0){ nTop++; if(!cTop.startsWith(fmtM(expTop))) badTop++; }
@@ -112,6 +163,10 @@ for(const mmo of [1,3,6,13]){
   chk(badTop===0, `ส่วนขาดสภาพคล่อง = ส่วนที่ติดลบ ทุกแห่ง (ผิด ${badTop}) · เปราะ ${nTop} แห่ง`);
   chk(badRed===0, `เจ้าหนี้ไฮไลต์แดง+บอกส่วนขาดถูกต้อง (ผิด ${badRed}) · แดง ${nRed} แห่ง`);
   chk(badSub===0, `ทั้ง 2 บรรทัดในเซลล์ติดป้ายสมมติฐานครบ (ผิด ${badSub})`);
+  chk(badNet===0, `คอลัมน์สุทธิหลังจัดการหนี้สิน = เงินสด−เจ้าหนี้+ลูกหนี้ และต่อกับคอลัมน์คงเหลือ (ผิด ${badNet})`);
+  chk(badNI===0, `คอลัมน์ NI มีบรรทัดค่าเฉลี่ยจริงย้อนหลังครบทุกแห่ง (ผิด ${badNI})`);
+  chk(badNeed===0, `เงินที่ต้องใช้รายเกณฑ์: เซลล์ตรงกับ Solver + ผ่านจริงที่ยอดนั้น (ผิด ${badNeed}) · ต้องเติมเงิน ${nNeedPos} ช่อง · เงินก้อนไม่พอ ${nNeedFail} ช่อง`);
+  chk(badNeedMin===0, `เงินที่ต้องใช้รายเกณฑ์เป็นค่าต่ำสุดจริง (ลดลง 1 step แล้วไม่ผ่าน) — ผิด ${badNeedMin}`);
   // colspan ต้องเท่าหัวตารางเสมอ
   A.setEXOPEN({[j.hosp[0].hcode]:true}); A.setEXBRK({[j.hosp[1].hcode]:6}); A.exRender();
   const cs=[...els.exResBox.innerHTML.matchAll(/<tr class="ovsub"><td colspan="(\d+)"/g)].map(m=>+m[1]);
@@ -190,7 +245,12 @@ console.log('━━ สาขาเตือน "เงินสดติดล�
   A.exRender();
   const row=[...els.exResBox.innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>m[0])
     .find(x=>x.includes('<b>'+t.name+'</b>'));
-  const td=[...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)][7+TJOFF][1];
+  // ดัชนีคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" อ่านจากหัวตารางจริง (ห้าม hardcode — ดูหมายเหตุที่ NCOL)
+  const hd0=[...els.exResBox.innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)][0][0];
+  const iL=[...hd0.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)]
+    .map(m=>m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,''))
+    .findIndex(t=>t.includes('คงเหลือหลังภาระMOE'));
+  const td=[...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)][iL][1];
   const plain=td.replace(/<[^>]*>/g,'');
   chk(/cellsub warn/.test(td), 'ใช้สไตล์เตือน (สีแดง) เมื่อแบบจำลองบอกว่าเงินสดติดลบ');
   chk(/ปกติ: เงินสดติดลบ [ก-ฮ]/.test(plain), `ระบุเดือนที่เงินสดติดลบ (${(plain.match(/เงินสดติดลบ \S+/)||[])[0]||'—'})`);

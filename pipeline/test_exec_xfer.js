@@ -210,7 +210,11 @@ console.log('━━ 9) ข้อความในเซลล์สั้นล
   A.exRender();
   const rows=[...els.exResBox.innerHTML.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(m=>m[0]).filter(r=>r.includes('class="ovtgl"'));
   const tds=[...rows[0].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)];
-  const cell=tds[8][1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  // ⚠️ หาคอลัมน์จากหัวตารางจริง ห้ามผูกเลขดัชนี (แก้ 11 ส.ค. 69 — เรียงคอลัมน์ใหม่แล้วเลขเลื่อน)
+  const iLeft=[...els.exResBox.innerHTML.match(/<tr>[\s\S]*?<\/tr>/)[0].matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)]
+    .map(m=>m[1].replace(/<[^>]+>/g,' ').replace(/\s+/g,''))
+    .findIndex(t=>t.includes('คงเหลือหลังภาระMOE'));
+  const cell=tds[iLeft][1].replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   chk(!/กรณีรายรับไม่เป็นไปตามแผน ·/.test(cell), 'เลิกใช้ข้อความยาว "กรณีรายรับไม่เป็นไปตามแผน ·" ในเซลล์แล้ว');
   chk(/สมมติไม่มีรายรับ/.test(cell), 'ใช้ป้ายสั้น "สมมติไม่มีรายรับ" แทน');
   chk(/ปกติ: เงินสด(ไม่)?ติดลบ/.test(cell), 'บรรทัดล่างใช้ป้ายสั้น "ปกติ:" แต่ยังบอกผลชัด');
