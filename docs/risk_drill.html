@@ -1922,11 +1922,19 @@ function exSimPath(h, inj, sc){
   const niM=exNiMo(h), depMo=bs.depMo, donMo=bs.donMo||0;
   const base=scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo).risk;
   const anc=v=>Math.max(0,Math.min(7,(h.risk!=null?h.risk:0)+(v-base)));
-  const months=(12-bs.mo)+(+EXST.ext||0);
+  // ── เดือนที่ใช้ "ตัดสินระดับวิกฤต" = เดือนที่เลือกในตัวกรอง 🗓️ (เจ้าของงานสั่ง 11 ส.ค. 69) ──────
+  // เดิมตรึงไว้ที่สิ้นปีงบ (ก.ย.) เสมอ → คอลัมน์ระดับ/เงินสนับสนุนไม่ขยับตามตัวกรองที่ผู้ใช้เลือก
+  // ตอนนี้ผูกกับ exMoeMonths() ตัวเดียวกับคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE / ส่วนขาด"
+  // → ทั้งครึ่งขวาของตารางประเมิน ณ เดือนเดียวกันหมด (ค่าเริ่มต้น = สิ้นปีงบ ผลจึงเท่าเดิม)
+  // ⚠️ horMo (ช่วงจำลอง ext) กับ tgtMo (เดือนเป้า) แยกกันโดยตั้งใจ — จำลองถึงเดือนที่ไกลกว่าเสมอ
+  //    แต่ endRisk ยังหมายถึง "ปลายช่วงจำลอง" เท่าเดิม ไม่ใช่เดือนเป้า
+  const horMo=(12-bs.mo)+(+EXST.ext||0);
+  const tgtMo=exMoeMonths();
+  const months=Math.max(horMo,tgtMo);
   let sc0=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
   let r=anc(sc0.risk);
-  let sepRisk=(bs.mo===12?r:null), endRisk=r, cashOut=st.ccn<=0?0:null;
-  let sepBreak=(bs.mo===12?{...sc0,ni:st.ni,mo:st.mo}:null);   // เกณฑ์ย่อย (cr/qr/cash/nwc/ni/li/st/su) ณ เดือน ก.ย. — ใช้กางแผงเจาะเกณฑ์ 7 คะแนน (exBrkHtml)
+  let sepRisk=(tgtMo<=0?r:null), endRisk=r, cashOut=st.ccn<=0?0:null;
+  let sepBreak=(tgtMo<=0?{...sc0,ni:st.ni,mo:st.mo}:null);   // เกณฑ์ย่อย (cr/qr/cash/nwc/ni/li/st/su) ณ เดือนเป้า — ใช้กางแผงเจาะเกณฑ์ 7 คะแนน (exBrkHtml)
   for(let k=1;k<=months;k++){
     if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;
     st.ni+=niM;
@@ -1955,9 +1963,9 @@ function exSimPath(h, inj, sc){
     if(clGrow) st.ccl=Math.max(1, st.ccl+(seas&&isYE?clYEV:clMoV));
     const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
     r=anc(sc.risk);
-    if(st.mo===12 && sepRisk==null){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // ก.ย. แรกเท่านั้น (horizon ขยายอาจผ่าน ก.ย. สองรอบ)
+    if(k===tgtMo){ sepRisk=r; sepBreak={...sc,ni:st.ni,mo:st.mo}; }   // เดือนเป้าที่เลือกในตัวกรอง (เดือนเดียว ไม่ใช่ "ก.ย. แรกที่เจอ")
     if(st.ccn<=0 && cashOut==null) cashOut=k;
-    endRisk=r;
+    if(k<=horMo) endRisk=r;   // endRisk = ปลายช่วงจำลอง (ext) เท่านั้น — ถ้าเดือนเป้าไกลกว่า ห้ามให้เลื่อนตาม
   }
   return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:moeMoV,moeAccMo:exMoeAccMo(h),
           stretchMo,apStretch,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
@@ -2059,7 +2067,7 @@ function exXfOpen(hc){
         <div class="note">${h.prov} · ${h.type} — ยกเงินสดส่วนที่เหลือหลังภาระ MOE ไปช่วย รพ. ที่ขาด (ข้ามจังหวัดได้)</div></div>
       <button type="button" class="tgt-apply" style="margin:0;flex-shrink:0" onclick="exXfClose()">✕ ปิด</button>
     </div>
-    <div class="nip-body" style="display:block">${exXfHtml({h,r0:exSimPath(h,0)}, tLab(exSepT()))}</div>
+    <div class="nip-body" style="display:block">${exXfHtml({h,r0:exSimPath(h,0)}, exSepLab())}</div>
   </div>`;
   el.style.display='flex';
 }
@@ -2352,8 +2360,21 @@ function exRiskSrcLab(){
   if(c.rep===n) return 'Risk Score ทางการที่ รพ. รายงาน';
   return `คะแนนตั้งต้นแบบผสม — ทางการที่ รพ. รายงาน ${c.rep||0} แห่ง · คำนวณจากงบทดลอง ${c.gl||0} แห่ง`;
 }
-function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }
+function exSepT(){ return Math.floor(EX.hosp[0].bs.t/100)*100+12; }   // สิ้นปีงบ (ก.ย.) — ใช้เฉพาะที่หมายถึง "สิ้นปีงบ" จริง ๆ
 function exHorLab(){ return (+EXST.ext||0)>0 ? tLab(addMo(exSepT(), +EXST.ext)) : tLab(exSepT()); }
+// ── ป้ายเดือนเป้าที่ใช้ตัดสินระดับวิกฤต + เงินสนับสนุน (เจ้าของงานสั่ง 11 ส.ค. 69) ──────────────
+// = เดือนที่เลือกในตัวกรอง 🗓️ ตัวเดียวกับคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" (exMoeTargetLab)
+// ⛔ ห้ามกลับไปใช้ tLab(exSepT()) กับคอลัมน์/แผงที่ประเมิน "ณ เดือนเป้า" — จะตรึงกลับเป็น ก.ย. เสมอ
+//    แล้วป้ายจะขัดกับตัวเลขทันทีที่ผู้ใช้เลือกเดือนอื่น (ตัวเลขขยับแต่ป้ายไม่ขยับ)
+function exSepLab(){ return exMoeTargetLab(); }
+// ป้ายหัวข้อ/เป้า: เดือนเป้าเป็นตัวตั้ง + บอกช่วงจำลองต่อท้ายเมื่อขยาย horizon ออกไปไกลกว่า
+// ⚠️ ห้ามใช้ exHorLab() เดี่ยว ๆ กับหัวข้อ/แถบตั้งเป้า — Solver ตัดสินที่ "เดือนเป้า" เป็นหลัก
+//    (ของเดิม exSet เขียนทับ 2 span นี้ด้วย exHorLab() ทำให้ป้ายเพี้ยนทันทีที่กดตัวกรองใด ๆ)
+// ⚠️ Solver บังคับ 2 จุดเสมอ: ระดับ ณ "เดือนเป้า" และระดับ ณ "ปลายช่วงจำลอง" (endRisk)
+//    ถ้าเลือกเดือนเป้าที่ "เร็วกว่า" สิ้นปีงบ เงินที่คำนวณได้จะยังถูกคุมด้วยสิ้นปีงบด้วย
+//    (เห็นได้จากระดับหลังช่วย ณ เดือนเป้าที่ดีเกินเป้า เช่น เป้า 6 แต่ได้ 3) — ป้ายต้องบอกทั้งสองจุด
+//    ไม่งั้นผู้ใช้อ่านว่า "เงินก้อนนี้เพื่อ ส.ค. เท่านั้น" ซึ่งไม่จริง
+function exGoalLab(){ const a=exSepLab(), b=exHorLab(); return a===b?a:a+' (คุมถึงปลายช่วงจำลอง '+b+' ด้วย)'; }
 // ── Render หลักของแท็บ ──
 async function renderExec(){
   document.getElementById('right').innerHTML='<div class="hint-empty">กำลังโหลดข้อมูลผู้บริหาร...</div>';
@@ -2363,16 +2384,17 @@ async function renderExec(){
     exLoad();
   }
   if(!location.hash.startsWith('#exec')) return;
-  const sepLab=tLab(exSepT());
+  // sepLab = เดือนเป้าที่เลือกในตัวกรอง (ขยับได้) · fyLab = สิ้นปีงบจริง ๆ (ใช้กับ dropdown ช่วงจำลองเท่านั้น)
+  const sepLab=exSepLab(), fyLab=tLab(exSepT());
   document.getElementById('right').innerHTML=`
   <div class="dwrap" style="max-width:1200px">
     ${exCarryHtml()}
     <div class="print-head">
-      <div style="font-size:16px;font-weight:800">รายงานแนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง ${sepLab} (โมเดล MOE)</div>
+      <div style="font-size:16px;font-weight:800">รายงานแนวทางสำหรับผู้บริหาร — ประเมินผล ณ ${exGoalLab()} (โมเดล MOE)</div>
       <div style="font-size:11px;color:#555">เขตสุขภาพที่ 1 · งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} · พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH')}</div>
     </div>
     <div class="panel">
-      <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — จำลองอยู่รอดถึง <span id="exHorLab2">${sepLab}</span> ด้วยโมเดล MOE</h3>
+      <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — ประเมินผล ณ <span id="exHorLab2">${exGoalLab()}</span> ด้วยโมเดล MOE</h3>
       <div class="note">ต่างจากหน้าจำลองเดิม: ไม่ใช้ NI เฉลี่ยลากต่อ แต่คำนวณ <b>ค่าใช้จ่ายจำเป็นต่อเดือน (MOE) ตามนิยามกองเศรษฐกิจสุขภาพ</b> เทียบ <b>ประมาณการรายรับกองทุนช่วง ${12-EX.monthsElapsed} เดือนที่เหลือ</b> — ปรับ % รายรับจากค่าเฉลี่ยได้เพราะเงินเหมาจ่าย/จ่ายล่วงหน้าเข้ามาเป็นก้อนตอนต้นปี · คำตอบสุดท้ายคือ <b>เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่ เพื่อให้ทุก รพ. อยู่รอดและวิกฤตไม่เกินเป้า</b> · <b>ที่มา:</b> งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} + ${exRiskSrcLab()}</div>
       <div class="exctl" style="margin-top:10px">
         <span class="seg" style="display:inline-flex">
@@ -2382,12 +2404,12 @@ async function renderExec(){
         <span class="filt-grp" title="กรองประเภทโรงพยาบาลที่จะแสดงในตาราง">${['รพศ.','รพท.','รพช.'].map(t=>`<label><input type="checkbox" ${EXST.types[t]?'checked':''} onchange="exSetType('${t}',this.checked)"> ${t}</label>`).join('')}</span>
         <label>ช่วงจำลอง:
           <select onchange="exSet('ext',+this.value)">
-            <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${sepLab} (สิ้นปีงบ)</option>
+            <option value="0" ${!+EXST.ext?'selected':''}>ถึง ${fyLab} (สิ้นปีงบ)</option>
             ${[3,6,12].map(x=>`<option value="${x}" ${+EXST.ext===x?'selected':''}>+${x} เดือน (${tLab(addMo(exSepT(),x))})</option>`).join('')}
           </select></label>
         <button type="button" class="no-print ovbulkbtn" style="margin-left:auto" onclick="window.print()" title="เปิดกล่องพิมพ์ของเบราว์เซอร์ → เลือก 'Save as PDF' เพื่อบันทึกเป็นไฟล์รายงาน">🖨️ บันทึก PDF / พิมพ์</button>
       </div>
-      <div class="tgt-title" style="margin-top:12px">🎯 ตั้งเป้าระดับวิกฤตไม่เกิน ภายใน <b id="exHorLab3">${exHorLab()}</b> (ใช้กับ <span id="exTgtCount">${exRows().length}</span> แห่งที่เลือก) — กดเลขระดับที่ต้องการ</div>
+      <div class="tgt-title" style="margin-top:12px">🎯 ตั้งเป้าระดับวิกฤตไม่เกิน ภายใน <b id="exHorLab3">${exGoalLab()}</b> (ใช้กับ <span id="exTgtCount">${exRows().length}</span> แห่งที่เลือก) — กดเลขระดับที่ต้องการ · เปลี่ยนเดือนได้ที่ <b>🗓️ ประเมิน/ตัดสินผล ณ เดือน</b> เหนือตารางผลจำลอง</div>
       <div class="tgt-legend">เลข 0-6 = ต้องทำกำไร/เติมเงินก้อนเท่าไหร่ถึงจะลดลงถึงเป้าภายในกำหนด · เลข 7 = ไม่จำกัดระดับวิกฤต (7 คือระดับสูงสุดอยู่แล้ว) ดูเฉพาะเงินสนับสนุนขั้นต่ำกันเงินสดหมดเท่านั้น</div>
       <div class="lvlbtns" id="exLvlBtns">${[0,1,2,3,4,5,6,7].map(L=>`<button type="button" class="lvlbtn${EXST.tgt===L?' on':''}" data-l="${L}" style="background:${riskColor(L)}" onclick="exSet('tgt',${L})">${L}</button>`).join('')}</div>
     </div>
@@ -2405,8 +2427,8 @@ function exSet(k,v){
   if(k==='crisis'){document.getElementById('exC67').classList.toggle('on',v==='67');document.getElementById('exCall').classList.toggle('on',v==='all');}
   if(k==='tgt'){document.querySelectorAll('#exLvlBtns .lvlbtn').forEach(b=>b.classList.toggle('on', +b.dataset.l===v));}
   exSave(); exRender();
-  const el=document.getElementById('exHorLab2'); if(el) el.textContent=exHorLab();
-  const el3=document.getElementById('exHorLab3'); if(el3) el3.textContent=exHorLab();
+  const el=document.getElementById('exHorLab2'); if(el) el.textContent=exGoalLab();
+  const el3=document.getElementById('exHorLab3'); if(el3) el3.textContent=exGoalLab();
 }
 function exSetType(t,on){ EXST.types[t]=on; exSave(); exRender(); }
 function exSetMoePct(g,v){
@@ -2661,7 +2683,7 @@ function exExportProvXlsx(){
 let EXPROVCAP=[];
 function exProvCapOpen(i){
   const it=EXPROVCAP[i]; if(!it) return;
-  const p=it.p, sepLab=tLab(exSepT());
+  const p=it.p, sepLab=exSepLab();
   let el=document.getElementById('exProvCapOverlay');
   if(!el){ el=document.createElement('div'); el.id='exProvCapOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
   el.onclick=exProvCapClose;
@@ -2978,12 +3000,12 @@ function exRenderProvTj(items){
        ...xfProvs.flatMap(pv=>XFP[pv].map(z=>[pv,z.gn,z.gp||'',z.rn,z.cross?'ข้ามจังหวัด':'',MBn(z.a),Math.round(z.a)])),
        ...(xfN?[['รวม','','','','',MBn(xfTot),Math.round(xfTot)]]:[])]},
     {name:'รายแห่ง-ยกให้ได้', widths:[14,28,10,14,20,16],
-     rows:[['จังหวัด','โรงพยาบาล','ประเภท','ระดับ ณ '+tLab(exSepT()),'เงินสดคงเหลือหลังภาระ MOE(ลบ.)','ยกให้ได้(ลบ.)'],
+     rows:[['จังหวัด','โรงพยาบาล','ประเภท','ระดับ ณ '+exSepLab(),'เงินสดคงเหลือหลังภาระ MOE(ลบ.)','ยกให้ได้(ลบ.)'],
        ...provs.flatMap(pv=>P[pv].give.slice().sort((a,b)=>b.cap-a.cap)
          .map(g=>[pv,g.name,g.type||'',g.risk==null?'':g.risk,MBn(g.left),MBn(g.cap)])),
        ['รวม','','','','',MBn(T.cap)]]},
     {name:'รายแห่ง-ยังขาด', widths:[14,28,10,14,16],
-     rows:[['จังหวัด','โรงพยาบาล','ประเภท','ระดับ ณ '+tLab(exSepT()),'ยังขาด(ลบ.)'],
+     rows:[['จังหวัด','โรงพยาบาล','ประเภท','ระดับ ณ '+exSepLab(),'ยังขาด(ลบ.)'],
        ...provs.flatMap(pv=>P[pv].need.slice().sort((a,b)=>b.up-a.up)
          .map(z=>[pv,z.name,z.type||'',z.risk==null?'':z.risk,MBn(z.up)])),
        ['รวม','','','',MBn(T.short)]]},
@@ -3080,7 +3102,7 @@ function exRender(){
   }
   const rows=exRows();
   const mo=EX.monthsElapsed, left=12-mo;
-  const horLab=exHorLab(), sepLab=tLab(exSepT());
+  const horLab=exHorLab(), sepLab=exSepLab();
   const tgtCountEl=document.getElementById('exTgtCount'); if(tgtCountEl) tgtCountEl.textContent=rows.length;
   // ── MOE panel (นิยามทางการกองเศรษฐกิจสุขภาพ) ──
   const moeAgg={};
@@ -3324,7 +3346,7 @@ function exRender(){
     cashbal:cashTitle+'\n\nบรรทัดล่าง "พอจ่าย MOE X เดือน" = เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็น (MOE) ได้กี่เดือน\n= เงินสด ÷ MOE/เดือน · ไม่ใช่เพดาน ค่าจริงเกินได้\n⚠️ เตือนเมื่อน้อยกว่า 3 เดือน (เกณฑ์ขั้นต่ำตามหลักอัตราความอยู่รอด SU ของ Risk Score)\n= ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับที่จะเข้ามาระหว่างทาง',
     tjpay:'เจ้าหนี้ค่ารักษา OP-UC นอก CUP ในจังหวัด (บัญชี 2101020199.202) — ยอดที่ รพ.นี้บันทึกว่าค้างจ่ายให้ รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพช. ค้าง รพศ./รพท.)\nครอบคลุมผู้ป่วยนอก UC ที่ไปรับบริการนอก CUP ทุกกรณี — ทั้ง OP Refer (ส่งต่อ) และ OP Anywhere (30 บาทรักษาทุกที่) ไม่ใช่เฉพาะกรณีส่งต่อ\n🔴 แดง = เงินสด+เทียบเท่าไม่พอจ่ายเจ้าหนี้ก้อนนี้ พร้อมบอกส่วนที่ขาด\nเป็นหนี้สินหมุนเวียน ยิ่งมากยิ่งกดสภาพคล่อง (CR/QR) · เป็นฐานของ Option ตามจ่าย/ยกหนี้ด้านบน',
     tjar:'ลูกหนี้ค่ารักษา UC-OP นอก CUP ในจังหวัด (บัญชี 1102050101.203 + 1102050194.204) — ยอดที่ รพ.นี้บันทึกว่าควรได้รับจาก รพ.อื่นในจังหวัดเดียวกัน (ส่วนใหญ่คือ รพศ./รพท. รอรับจาก รพช.)\n⚠️ สองฝั่งบันทึกแยกเล่ม ยอดเจ้าหนี้กับลูกหนี้จึงไม่เท่ากัน — ดูรายละเอียดที่ตาราง Option ตามจ่าย\n⚠️ ลูกหนี้รวมทั้งเขต ('+fmtM(exTjGapAll().ar)+') มากกว่าเจ้าหนี้รวม ('+fmtM(exTjGapAll().pay)+') อยู่ '+fmtM(exTjGapAll().gap)+' — คู่หนี้บางส่วนจึงน่าจะเป็นหน่วยบริการที่ไม่อยู่ในชุด 103 แห่งนี้ (รพ.รัฐสังกัดกรมอื่น เช่น กรมการแพทย์/กรมสุขภาพจิต · นอกเขต · เอกชนคู่สัญญา) ยอดส่วนนี้เกลี่ยกันเองในเขตไม่ได้ · ⚠️ ยังไม่ได้ยืนยันกับตารางเคลียร์ริ่ง สสจ./เขต\n🟢 นับเป็นเงินที่คาดว่าจะได้รับ บวกเข้าคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" ทางขวา\n📥 ยอดนี้ผ่านการเกลี่ยจากตัวควบคุม "ลูกหนี้ที่เก็บได้ '+exArPct()+'%" แล้ว — เกลี่ย 3 ชั้น: ทั้งเขต → จังหวัด (ตามสัดส่วนเจ้าหนี้ ไม่เกินลูกหนี้ดิบที่มีจริง) → ราย รพ. (ตามสัดส่วนลูกหนี้ดิบในจังหวัด)\n⚠️ จึงไม่ใช่การตัด '+exArPct()+'% เท่ากันทุกแห่ง — % ที่แต่ละแห่งโดนตัดจริงต่างกัน ดูบรรทัดเล็กใต้ยอด',
-    moeleft:'เงินสดคงเหลือหลังหักภาระค่าใช้จ่ายจำเป็น (MOE) ถึง '+exMoeTargetLab()+'\n= (เงินสด+เทียบเท่า + ลูกหนี้ตามจ่าย − เจ้าหนี้ OP-UC นอก CUP) − MOE/เดือน × '+exMoeMonths()+' เดือน\n⚠️ ประเมินกรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลย) — ไม่นับรายรับที่จะเข้ามาระหว่างทาง\n⚠️ หักเจ้าหนี้ตามจ่ายออกก่อน + บวกลูกหนี้ตามจ่ายเข้าก่อน (เจ้าหนี้/ลูกหนี้มาก่อน MOE) เพราะเป็นเงินสดก้อนเดียวกัน จะนับซ้ำสองภาระไม่ได้\n🟢 สมมติเก็บลูกหนี้ได้เต็มจำนวน (เพราะฝั่งที่ค้างจ่ายคือกลุ่มที่ต้องชำระเจ้าหนี้ OP-UC นอก CUP อยู่แล้ว) ไม่ได้หักส่วนที่อาจเกลี่ยไม่ได้จริง\n⛔ ไม่ใช่คำของบ — เป็นสถานการณ์สมมติ ซึ่งไม่ได้เกิดจริง\n\nในเซลล์นี้มี 2 บรรทัดที่มาจากคนละสมมติฐาน — ดูป้ายกำกับหน้าบรรทัด\n• "สมมติไม่มีรายรับ" = ตัวเลขใหญ่ + ภาระ MOE (สถานการณ์สมมติ)\n• "ปกติ:" = ผลจากแบบจำลองที่นับรายรับตามจริง (เงินสดติดลบเดือนไหน)\nจึงมีได้ที่ตัวเลขใหญ่ติดลบ แต่บรรทัดล่างบอกว่าเงินสดไม่ติดลบ — ถูกทั้งคู่ คนละกรณีกัน\nถ้านับรายรับตามแบบจำลอง ไม่มี รพ. ไหนเงินสดติดลบเลย\n\n🔄 ปุ่ม "โยกช่วย" = ยกเงินสดส่วนที่เหลือไปให้ รพ. ที่ขาด (ข้ามจังหวัดได้) — ให้ได้จนระดับ ณ '+sepLab+' แตะ 5 เป็นเพดาน\nเปลี่ยนเดือนได้ที่ 💧 ประเมินสภาพคล่องถึง เหนือตาราง (สูงสุด '+EX_MMO_MAX+' เดือน)',
+    moeleft:'เงินสดคงเหลือหลังหักภาระค่าใช้จ่ายจำเป็น (MOE) ถึง '+exMoeTargetLab()+'\n= (เงินสด+เทียบเท่า + ลูกหนี้ตามจ่าย − เจ้าหนี้ OP-UC นอก CUP) − MOE/เดือน × '+exMoeMonths()+' เดือน\n⚠️ ประเมินกรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลย) — ไม่นับรายรับที่จะเข้ามาระหว่างทาง\n⚠️ หักเจ้าหนี้ตามจ่ายออกก่อน + บวกลูกหนี้ตามจ่ายเข้าก่อน (เจ้าหนี้/ลูกหนี้มาก่อน MOE) เพราะเป็นเงินสดก้อนเดียวกัน จะนับซ้ำสองภาระไม่ได้\n🟢 สมมติเก็บลูกหนี้ได้เต็มจำนวน (เพราะฝั่งที่ค้างจ่ายคือกลุ่มที่ต้องชำระเจ้าหนี้ OP-UC นอก CUP อยู่แล้ว) ไม่ได้หักส่วนที่อาจเกลี่ยไม่ได้จริง\n⛔ ไม่ใช่คำของบ — เป็นสถานการณ์สมมติ ซึ่งไม่ได้เกิดจริง\n\nในเซลล์นี้มี 2 บรรทัดที่มาจากคนละสมมติฐาน — ดูป้ายกำกับหน้าบรรทัด\n• "สมมติไม่มีรายรับ" = ตัวเลขใหญ่ + ภาระ MOE (สถานการณ์สมมติ)\n• "ปกติ:" = ผลจากแบบจำลองที่นับรายรับตามจริง (เงินสดติดลบเดือนไหน)\nจึงมีได้ที่ตัวเลขใหญ่ติดลบ แต่บรรทัดล่างบอกว่าเงินสดไม่ติดลบ — ถูกทั้งคู่ คนละกรณีกัน\nถ้านับรายรับตามแบบจำลอง ไม่มี รพ. ไหนเงินสดติดลบเลย\n\n🔄 ปุ่ม "โยกช่วย" = ยกเงินสดส่วนที่เหลือไปให้ รพ. ที่ขาด (ข้ามจังหวัดได้) — ให้ได้จนระดับ ณ '+sepLab+' แตะ 5 เป็นเพดาน\nเปลี่ยนเดือนได้ที่ 🗓️ ประเมิน/ตัดสินผล ณ เดือน เหนือตาราง (สูงสุด '+EX_MMO_MAX+' เดือน)\nเดือนนี้เป็นตัวเดียวกับที่ใช้ตัดสินคอลัมน์ระดับวิกฤตและเงินสนับสนุนทางขวา',
     topup:'ส่วนขาดสภาพคล่อง(MOE) = ส่วนที่ติดลบของคอลัมน์ก่อนหน้า — ถ้ารายรับไม่เป็นไปตามแผนถึงขั้นไม่มีรายรับเข้าเลยจนถึง '+exMoeTargetLab()+' จะขาดเงินเท่าไหร่\n⛔ เป็นผลการประเมินภายใต้สมมติฐาน ไม่ใช่เม็ดเงินที่ต้องของบจริง\nเม็ดเงินจริงให้ดูคอลัมน์ เงินสนับสนุนที่ต้องใช้ ซึ่งคำนวณจากแบบจำลองที่นับรายรับแล้ว\nใช้จัดลำดับว่า รพ. ใดมีสภาพคล่องเปราะที่สุดหากรายรับสะดุด',
     cash:'เดือนที่เงินสดจะติดลบระหว่างจำลอง (ไม่หมด = ไม่ติดลบตลอดช่วง) · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด',
     sep0:'ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก)',
@@ -3513,11 +3535,11 @@ function exRender(){
     ...EX_NEEDC.map(c=>['n_'+c.k,'💰 เงินที่ต้องสนับสนุนให้ผ่านเกณฑ์ '+c.n+' ('+c.th+')']),
     ['need','เงินสนับสนุนที่ต้องใช้ (รวม)'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
   document.getElementById('exResBox').innerHTML=`
-    <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${horLab})<span class="sp"></span>
+    <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${sepLab}${sepLab!==horLab?` และที่ปลายช่วงจำลอง ${horLab}`:''})<span class="sp"></span>
       <span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end">
       <span style="font-size:13px;font-weight:600;white-space:nowrap">💰 เงินสนับสนุนรวม: <span style="font-size:16px;color:var(--blue)">${fmtM(sumNeed)}</span></span>
-      <span style="font-size:13px;font-weight:600" title="ยอดที่ &quot;จัดสรรด้วยการโยกเงินจริงแล้ว&quot; เท่านั้น ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;✅ ทุกบาทในตัวเลขนี้มีต้นทางระบุชื่อ รพ. ผู้ให้เสมอ — ไม่ใช่ยอดลอย&#10;ยังไม่ได้โยก = 0 · กด ⚡ จัดสรรอัตโนมัติ ใต้ตาราง เพื่อให้ระบบเสนอให้&#10;ความต้องการตั้งต้น ${fmtM(sumGross)} (${nGross} แห่ง) ดูได้ในคอลัมน์ &quot;ส่วนขาดสภาพคล่อง(MOE)&quot; และบรรทัดสรุปใต้ตาราง&#10;เปลี่ยนเดือนได้ที่ 💧 ประเมินสภาพคล่องถึง ใต้หัวข้อนี้">💧 รวมเงินเติมตามสภาพคล่อง ถึง ${exMoeTargetLab()}: <span style="font-size:16px;color:${sumTopUp>0?'var(--green)':'var(--mut)'}">${fmtM(sumTopUp)}</span> <span class="tgt-note" style="font-weight:400">(${nTopUp} แห่ง${sumGross>0?` · จากที่ต้องการ ${fmtM(sumGross)}`:''})</span></span>
-      <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;เจ้าหนี้ OP-UC นอก CUP&quot; (บัญชี 2101020199.202) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว ไม่ขึ้นกับเดือนที่เลือกใน 💧 ประเมินสภาพคล่องถึง&#10;⚠️ ห้ามบวกรวมกับสองก้อนซ้ายเป็นคำของบก้อนเดียว — คนละฐานกัน">🧾 รวมเจ้าหนี้ OP-UC นอก CUP: <span style="font-size:16px;color:var(--gold)">${fmtM(sumPayIn)}</span> <span class="tgt-note" style="font-weight:400">(${nPayIn} แห่ง)</span></span>${EX_SHOW_TJAR?`<span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;ลูกหนี้ UC-OP นอก CUP&quot; (บัญชี 1102050101.203 + 1102050194.204) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นลูกหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว — นับรวมเข้าคอลัมน์ &quot;เงินสดคงเหลือหลังภาระ MOE&quot; แล้ว (สมมติเก็บได้เต็มจำนวน)&#10;⚠️ ทั้งเขตลูกหนี้ (${fmtM(exTjGapAll().ar)}) มากกว่าเจ้าหนี้ (${fmtM(exTjGapAll().pay)}) อยู่ ${fmtM(exTjGapAll().gap)} → คู่หนี้บางส่วนอยู่นอกชุด 103 แห่งนี้ เกลี่ยกันเองในเขตไม่ได้&#10;⚠️ ห้ามบวกรวมกับก้อนอื่นเป็นคำของบก้อนเดียว — คนละฐานกัน">📥 รวมลูกหนี้ UC-OP นอก CUP: <span style="font-size:16px;color:var(--green)">${fmtM(sumArIn)}</span> <span class="tgt-note" style="font-weight:400">(${nArIn} แห่ง)</span></span>`:''}</span></h3>
+      <span style="font-size:13px;font-weight:600" title="ยอดที่ &quot;จัดสรรด้วยการโยกเงินจริงแล้ว&quot; เท่านั้น ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;✅ ทุกบาทในตัวเลขนี้มีต้นทางระบุชื่อ รพ. ผู้ให้เสมอ — ไม่ใช่ยอดลอย&#10;ยังไม่ได้โยก = 0 · กด ⚡ จัดสรรอัตโนมัติ ใต้ตาราง เพื่อให้ระบบเสนอให้&#10;ความต้องการตั้งต้น ${fmtM(sumGross)} (${nGross} แห่ง) ดูได้ในคอลัมน์ &quot;ส่วนขาดสภาพคล่อง(MOE)&quot; และบรรทัดสรุปใต้ตาราง&#10;เปลี่ยนเดือนได้ที่ 🗓️ ประเมิน/ตัดสินผล ณ เดือน ใต้หัวข้อนี้">💧 รวมเงินเติมตามสภาพคล่อง ถึง ${exMoeTargetLab()}: <span style="font-size:16px;color:${sumTopUp>0?'var(--green)':'var(--mut)'}">${fmtM(sumTopUp)}</span> <span class="tgt-note" style="font-weight:400">(${nTopUp} แห่ง${sumGross>0?` · จากที่ต้องการ ${fmtM(sumGross)}`:''})</span></span>
+      <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;เจ้าหนี้ OP-UC นอก CUP&quot; (บัญชี 2101020199.202) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว ไม่ขึ้นกับเดือนที่เลือกใน 🗓️ ประเมิน/ตัดสินผล ณ เดือน&#10;⚠️ ห้ามบวกรวมกับสองก้อนซ้ายเป็นคำของบก้อนเดียว — คนละฐานกัน">🧾 รวมเจ้าหนี้ OP-UC นอก CUP: <span style="font-size:16px;color:var(--gold)">${fmtM(sumPayIn)}</span> <span class="tgt-note" style="font-weight:400">(${nPayIn} แห่ง)</span></span>${EX_SHOW_TJAR?`<span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;ลูกหนี้ UC-OP นอก CUP&quot; (บัญชี 1102050101.203 + 1102050194.204) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นลูกหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว — นับรวมเข้าคอลัมน์ &quot;เงินสดคงเหลือหลังภาระ MOE&quot; แล้ว (สมมติเก็บได้เต็มจำนวน)&#10;⚠️ ทั้งเขตลูกหนี้ (${fmtM(exTjGapAll().ar)}) มากกว่าเจ้าหนี้ (${fmtM(exTjGapAll().pay)}) อยู่ ${fmtM(exTjGapAll().gap)} → คู่หนี้บางส่วนอยู่นอกชุด 103 แห่งนี้ เกลี่ยกันเองในเขตไม่ได้&#10;⚠️ ห้ามบวกรวมกับก้อนอื่นเป็นคำของบก้อนเดียว — คนละฐานกัน">📥 รวมลูกหนี้ UC-OP นอก CUP: <span style="font-size:16px;color:var(--green)">${fmtM(sumArIn)}</span> <span class="tgt-note" style="font-weight:400">(${nArIn} แห่ง)</span></span>`:''}</span></h3>
     <div class="exctl" style="margin:0 0 8px 0">
       <label title="เลือกชุดบัญชีที่นับเป็น &quot;ค่าใช้จ่ายจำเป็น (MOE)&quot; — เปลี่ยนแค่ตัวเลข MOE/เดือน ทุกสูตรในตารางนี้ยังผูกกันเหมือนเดิม&#10;• MOE.Ver69 (ค่าเริ่มต้น) = นิยามล่าสุด ตรงกับคอลัมน์ &quot;เงินสดพอจ่าย MOE&quot; ในหน้า Watchlist&#10;• MOE.Ver68 = ชุดเดิม (มีค่าจ้างชั่วคราว(บริการ) แต่ไม่มีค่าเช่า)&#10;• Ver69 + จ่ายหนี้การค้า X% = จ่ายเงินสดให้ยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (9 บัญชี) แค่ X% ที่เหลือค้างเป็นเจ้าหนี้การค้า&#10;  → MOE เงินสดลดลง แต่ NI ไม่เปลี่ยน และเจ้าหนี้การค้าโตทุกเดือน (CR/QR/Cash แย่ลง)">💸 นิยาม MOE:
         <select onchange="exSetMoeVer(this.value)">
@@ -3548,7 +3570,7 @@ function exRender(){
           ${exProvs().map(p=>`<option value="${p}" ${EXST.prov===p?'selected':''}>${p}</option>`).join('')}
         </select></label>
       ${EXST.prov!=='all'?`<button type="button" class="ovbulkbtn" onclick="exSet('prov','all')">↺ ทุกจังหวัด</button> <span class="tgt-note">แสดงเฉพาะ ${EXST.prov} (${rows.length} แห่ง)</span>`:''}
-      <label title="ประเมินกรณีรายรับไม่เป็นไปตามแผน ขั้นรุนแรงสุด (ไม่มีรายรับเข้าเลยตั้งแต่งวดถัดไป) เงินสดที่มีอยู่จะรองรับภาระ MOE ได้ถึงเดือนไหน — แยกจาก 'ช่วงจำลอง' ด้านบนโดยตั้งใจ (ช่วงยาวเกินไปทำให้ตัวเลขบวมจนอ่านไม่ได้ จึงจำกัดไว้ ${EX_MMO_MAX} เดือน)">💧 ประเมินสภาพคล่องถึง:
+      <label title="เดือนเป้าที่ใช้ตัดสินทั้งครึ่งขวาของตาราง (เจ้าของงานสั่ง 11 ส.ค. 69) — เลือกแล้วขยับพร้อมกันหมด:&#10;• เงินสดคงเหลือหลังภาระ MOE + ส่วนขาดสภาพคล่อง (กรณีรายรับไม่เป็นไปตามแผนขั้นรุนแรงสุด ไม่มีรายรับเข้าเลย)&#10;• ระดับวิกฤต ก่อนช่วย/หลังช่วย ณ เดือนนั้น&#10;• เงินที่ต้องสนับสนุนทั้ง 6 เกณฑ์ + ยอดรวม (Solver เดินแบบจำลองถึงเดือนนั้น)&#10;แยกจาก 'ช่วงจำลอง' ด้านบนโดยตั้งใจ — ช่วงจำลองคือ &quot;ปลายทางที่จำลองถึง&quot; ส่วนตัวนี้คือ &quot;เดือนที่ใช้ตัดสิน&quot; (จำกัด ${EX_MMO_MAX} เดือน ยาวกว่านั้นตัวเลขบวมจนอ่านไม่ได้)">🗓️ ประเมิน/ตัดสินผล ณ เดือน:
         <select onchange="exSet('mmo',+this.value)">
           ${Array.from({length:EX_MMO_MAX},(_,i)=>i+1).map(k=>`<option value="${k}" ${exMoeMonths()===k?'selected':''}>${tLab(addMo(EX.hosp[0].bs.t,k))} (${k} เดือน)${k===exMoeMonthsDefault()?' — สิ้นปีงบ':''}</option>`).join('')}
         </select></label>
@@ -3689,7 +3711,7 @@ function exBuildTSV(items, horLab){
     ...(exMoeVer()==='69p'?[
       {h:'MOE ตามเกณฑ์คงค้าง/เดือน(ลบ. · ตัวที่หักใน NI)', v:x=>M(x.r0.moeAccMo), t:()=>sum(x=>x.r0.moeAccMo)},
       {h:'ส่วนที่ค้างเป็นเจ้าหนี้การค้า/เดือน(ลบ.)', v:x=>M(x.r0.stretchMo), t:()=>sum(x=>x.r0.stretchMo)},
-      {h:'เจ้าหนี้การค้าที่เพิ่มจากการค้างชำระถึง ก.ย.(ลบ.)', v:x=>M(x.r0.apStretch), t:()=>sum(x=>x.r0.apStretch)}]:[]),
+      {h:'เจ้าหนี้การค้าที่เพิ่มจากการค้างชำระถึง '+exSepLab()+'(ลบ.)', v:x=>M(x.r0.apStretch), t:()=>sum(x=>x.r0.apStretch)}]:[]),
     {h:'คชจ.นอกนิยาม/เดือน(ลบ.)', v:x=>M(x.r0.xmoeMo)},
     {h:'NIจำลอง/เดือน(ลบ.)', v:x=>M(x.r0.niM)},
     {h:'เงินสด+เทียบเท่า(ลบ.)', v:x=>M(x.h.bs.cn), t:()=>sum(x=>x.h.bs.cn)},

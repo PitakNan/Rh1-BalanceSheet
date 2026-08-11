@@ -107,8 +107,10 @@ const strch=j.hosp.map(h=>A.exSimPath(h,0));
 let badAp=0, badCash=0, badRatio=0, nWorse=0, dNiSim=0;
 j.hosp.forEach((h,i)=>{
   const b=base[i], s=strch[i];
-  const months=(12-h.bs.mo);
-  if(Math.abs(s.apStretch-s.stretchMo*months)>1) badAp++;              // กองขึ้นเดือนละครั้งตามช่วงจำลอง
+  // ⚠️ 11 ส.ค. 69: แบบจำลองเดินถึง "เดือนที่ไกลกว่า" ระหว่างช่วงจำลอง (ext) กับเดือนเป้าในตัวกรอง (mmo)
+  //    เจ้าหนี้ที่ยืดจึงกองขึ้นตามหน้าต่างนั้น ไม่ใช่ถึงสิ้นปีงบเสมอ (ST ตั้ง mmo:3 · ext:0 → 3 เดือน)
+  const months=Math.max((12-h.bs.mo)+0, 3);
+  if(Math.abs(s.apStretch-s.stretchMo*months)>1) badAp++;              // กองขึ้นเดือนละครั้งตามหน้าต่างที่จำลอง
   if(!(s.cnEnd>=b.cnEnd-1)) badCash++;                                 // เงินสดปลายงวดต้องไม่แย่ลง
   if(!(s.clEnd>=b.clEnd-1)) badRatio++;                                // หนี้สินหมุนเวียนต้องโตขึ้น
   if(b.sepBreak&&s.sepBreak){
@@ -116,7 +118,7 @@ j.hosp.forEach((h,i)=>{
     if(s.sepBreak.cr<b.sepBreak.cr-1e-9) nWorse++;
   }
 });
-chk(badAp===0, 'ยอดเจ้าหนี้ที่ยืด = ส่วนที่ยืด/เดือน × จำนวนเดือนถึง ก.ย. ทุกแห่ง', `ผิด ${badAp}`);
+chk(badAp===0, 'ยอดเจ้าหนี้ที่ยืด = ส่วนที่ยืด/เดือน × จำนวนเดือนที่จำลอง ทุกแห่ง', `ผิด ${badAp}`);
 chk(badCash===0, 'เงินสดปลายงวดไม่แย่ลงเมื่อยืดหนี้ (ผิด '+badCash+' แห่ง)');
 chk(badRatio===0, 'หนี้สินหมุนเวียนปลายงวดโตขึ้นจริงเมื่อยืดหนี้ (ผิด '+badRatio+' แห่ง)');
 chk(dNiSim<1, 'NI สะสม ณ ก.ย. เท่าเดิมทุกแห่ง — ยืดหนี้ไม่กลายเป็นกำไร', M(dNiSim));
