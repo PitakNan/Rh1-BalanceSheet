@@ -112,5 +112,30 @@ chk(tooLow.length===0, `ผู้ให้ ${givers.length} แห่ง ไม�
 const negGiver=givers.filter(hc=>A.exMoeLeft({h:H[hc],r0:A.exSimPath(H[hc],0)})<-2);
 chk(negGiver.length===0, `ไม่มีผู้ให้ที่ให้จนตัวเองติดลบ (พบ ${negGiver.length})`);
 
+// ══ ชิป 💧 ต้องอธิบายเองว่าทำไม "เติม" มากกว่า "ที่ต้องการ" (เจ้าของงานถาม 11 ส.ค. 69) ══════
+// ส่วนเกิน = กันชนข้อ ③ (EXTRA ต่อผู้รับ 1 แห่ง) พอดี — ถ้าไม่เขียนไว้ในชิป คนอ่านจะนึกว่าจัดสรรเกินโดยไม่มีเหตุผล
+console.log('\n━━ ชิป 💧 อธิบายส่วนที่เติมเกิน ━━');
+{
+  A.setEXST(ST({xfer:plan, crisis:'all'})); A.exRender();
+  const html=els.exResBox.innerHTML;
+  const m=html.match(/รวมเงินเติมตามสภาพคล่อง ถึง [^:<]+: <span[^>]*>([^<]+)<\/span> <span[^>]*>\((\d+) แห่ง · จากที่ต้องการ ([^)]+)\)<\/span>([\s\S]{0,240})/);
+  chk(!!m, 'อ่านชิป 💧 ได้ (ยอดเติม · จำนวนแห่ง · ยอดที่ต้องการ)');
+  if(m){
+    // ⚠️ จำนวน "แห่งที่ได้รับเกินยอดขาด" ไม่ใช่จำนวนผู้รับทั้งหมด (จังหวัดเงินไม่พอ = เติมไม่ครบ ไม่เกิน)
+    //    คิดรายแห่งแบบเดียวกับหน้าเว็บ แต่คำนวณจาก exXferIn/exMoeLeft ตรง ๆ (ไม่ลอกสูตรหน้าเว็บมา)
+    const ovs=j.hosp.map(h=>{ const need0=needBefore[h.hcode]||0; return A.exXferIn(h)-need0; }).filter(v=>v>1);
+    const nOv=ovs.length, xsWant=ovs.reduce((a,v)=>a+v,0);
+    const nR=+m[2], tail=m[4].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+    chk(/เติมเกิน/.test(tail) && tail.includes('กันชน'),
+        `ชิปบอกส่วนที่เติมเกิน + ที่มา (ได้ "${tail.slice(0,95)}")`);
+    chk(tail.includes(String(A.EXTRA/1e3)+'K') && tail.includes(nOv+' แห่ง') && tail.includes(M(xsWant)),
+        `ระบุยอดเกิน ${M(xsWant)} = กันชน ${A.EXTRA/1e3}K × ${nOv} แห่งที่เติมครบ (ผู้รับทั้งหมด ${nR} แห่ง)`);
+    chk(Math.abs(xsWant-nOv*A.EXTRA)<=Math.max(1,nOv),
+        `ยอดเกินรวม = กันชน × แห่งที่เติมครบ พอดี (${M(xsWant)} vs ${M(nOv*A.EXTRA)}) — ยืนยันว่าส่วนเกินมาจากกติกา ③ จริง`);
+    chk(!/ยอดขาดเปลี่ยนหลังทำแผน/.test(tail),
+        'แผนที่เพิ่งจัดสรรใหม่ ต้องไม่ขึ้นคำเตือน "ยอดขาดเปลี่ยนหลังทำแผน"');
+  }
+}
+
 console.log(`\n${fail.length?'❌ ไม่ผ่าน '+fail.length+' ข้อ:\n  - '+fail.join('\n  - '):'✅ ผ่านครบทั้ง 5 กติกา'}`);
 process.exit(fail.length?1:0);
