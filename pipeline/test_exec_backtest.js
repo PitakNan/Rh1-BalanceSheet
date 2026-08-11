@@ -72,10 +72,18 @@ const histMean=histUp.reduce((s,v)=>s+v,0)/(histUp.length||1);
 const floorUp=Math.round(histMean*(horizon/3)*0.2);
 chk(up>=floorUp, `จำนวนที่แย่ลงต้องสมจริง ≥${floorUp} แห่ง (ได้ ${up}) — ประวัติเฉลี่ย ${histMean.toFixed(0)} แห่ง/3 เดือน · งวดนี้เหลือ ${horizon} เดือน`);
 chk(z<=45, `ระดับ 0 ต้องไม่บวมเกินจริง ≤45 แห่ง (ได้ ${z}) — ของจริง ณ ด.12 ปี67=17 ปี68=11 แห่ง`);
-// ตัวเลือกฤดูกาลต้องมีผลจริง (กันโดนปิดโดยไม่ตั้งใจแล้วเงียบ)
-A.setEXST(mkST({seas:false,clGrow:false}));
-let up0=0; ex.hosp.forEach(h=>{ if(A.exSimPath(h,0).sepRisk>h.risk) up0++; });
-chk(up>up0, `เปิดปัจจัยฤดูกาลแล้วทำนาย "แย่ลง" มากกว่าตอนปิด (${up0} → ${up} แห่ง) = ตัวเลือกมีผลจริง`);
+// ── ตัวเลือกฤดูกาล/หนี้สิน ต้องมีผลจริง "แยกกันทีละตัว" ─────────────────────────────
+// 🚨 แก้ 11 ส.ค. 69: ของเดิมปิดพร้อมกันทั้ง seas+clGrow แล้ววัดรวม → พอคีย์ bs.niYE หายไป
+//    ทั้งชุดตอนเดินงวด 256910 ข้อนี้ยัง ✅ อยู่ (เพราะ clGrow ตัวเดียวก็ทำให้ต่างแล้ว)
+//    บั๊กเลยรอดออกไปถึงหน้าเว็บจริง — ต้องแยกวัดทีละสวิตช์เท่านั้น
+const upWith=o=>{ A.setEXST(mkST(o)); let n=0; ex.hosp.forEach(h=>{ if(A.exSimPath(h,0).sepRisk>h.risk) n++; }); return n; };
+const upNoSeas=upWith({seas:false}), upNoCl=upWith({clGrow:false});
+chk(up>upNoSeas, `ปิดเฉพาะ 📉 ฤดูกาล ต้องทำนาย "แย่ลง" น้อยลง (${upNoSeas} → ${up} แห่ง) = ข้อมูล bs.niYE มาถึงหน้าเว็บจริง`);
+chk(up>upNoCl,   `ปิดเฉพาะ 📊 หนี้สินเดินตามจริง ต้องทำนาย "แย่ลง" น้อยลง (${upNoCl} → ${up} แห่ง)`);
+// ตรวจตรง ๆ อีกชั้นว่าคีย์มาครบ — ชัดกว่าอ่านจากผลลัพธ์ปลายทาง
+const nYE=ex.hosp.filter(h=>+h.bs.niYE).length, nCLYE=ex.hosp.filter(h=>+h.bs.clYE).length;
+chk(nYE>=ex.hosp.length*0.8, `exec.json ต้องมี bs.niYE ครบ (ได้ ${nYE}/${ex.hosp.length} แห่ง) — export_exec.py เป็นคนสร้าง`);
+chk(nCLYE>=ex.hosp.length*0.8, `exec.json ต้องมี bs.clYE ครบ (ได้ ${nCLYE}/${ex.hosp.length} แห่ง)`);
 console.log('');
 console.log(bad.length?('❌ ไม่ผ่าน '+bad.length+' ข้อ'):'✅ ผ่านทุกข้อ');
 process.exit(bad.length?1:0);

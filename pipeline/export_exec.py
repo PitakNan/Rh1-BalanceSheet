@@ -50,6 +50,11 @@ from export_planfin import PN, REV_ORDER, EXP_ORDER, planfin_code, acc_root
 #              (3006Y − 3010X) พอดี · กระแสเงินสด = NI + depMo = บวกกลับ non-cash จริงเท่านั้น
 NONCASH_P = ("P24", "P241")
 
+# ══ ปีงบที่ใช้วัดปัจจัยฤดูกาลปลายปีงบ (niYE/clYE) ══
+# ใช้ 2 ปีล่าสุดที่ปิดงบครบแล้ว — ปี 2567 NI ไตรมาสท้ายพลิกลบ −328 ลบ./ด. · ปี 2568 −843 ลบ./ด.
+# เฉลี่ยสองปีได้ค่ากลาง ๆ ไม่สุดโต่งไปทางใดทางหนึ่ง (RISK_EXEC_MODEL.md 7.10 · MOE_CHANGELOG)
+YE_FY = (2567, 2568)
+
 # ══ รายได้ที่ไม่ใช่เงินสด (non-cash revenue) — สมมาตรกับ NONCASH_P ฝั่งค่าใช้จ่าย ══
 # 4302030101.102 "รายได้จากการรับบริจาค-สินทรัพย์อื่น" = ได้ของ ไม่ได้เงิน แต่ลงรายได้เต็มจำนวน
 # (แล้วทยอยรับรู้เป็นค่าเสื่อมในปีต่อ ๆ ไป) — งวด 256909 ทั้งเขต 1,146.3 ลบ. = 2.65% ของรายรับ
@@ -287,7 +292,8 @@ def main():
         # ── หนี้สินหมุนเวียนโตเฉลี่ย/เดือน จาก trend ปีงบเดียวกัน (ด.1 → งวดล่าสุด) ──
         # ใช้ค่าจริงของแต่ละ รพ. เอง ไม่ใช่ค่ากลางทั้งเขต · ถ้าข้อมูลไม่พอให้เป็น 0 (= พฤติกรรมเดิม)
         fy_now = int(t["t"]) // 100
-        tr_fy = [r for r in (h.get("trend") or [])
+        tr_all = h.get("trend") or []
+        tr_fy = [r for r in tr_all
                  if r.get("cl") is not None and r.get("t") is not None and int(r["t"]) // 100 == fy_now]
         tr_fy.sort(key=lambda r: int(r["t"]))
         cl_mo = 0.0
@@ -295,6 +301,25 @@ def main():
             span = (int(tr_fy[-1]["t"]) % 100) - (int(tr_fy[0]["t"]) % 100)
             if span >= 1:
                 cl_mo = round((float(tr_fy[-1]["cl"]) - float(tr_fy[0]["cl"])) / span, 0)
+        # ── ปัจจัยฤดูกาลปลายปีงบ niYE/clYE — วัดจาก trend จริงของแต่ละแห่ง (ปี YE_FY) ──
+        # 🚨 เพิ่มเข้าไพป์ไลน์ 11 ส.ค. 69 — เดิมค่าสองตัวนี้ถูกยัดมือลง exec.json งวด 256909
+        #    เท่านั้น (commit b345a64 แก้ไพป์ไลน์แค่ clMo) พอ export งวด 256910 คีย์เลยหายทั้ง
+        #    103 แห่ง → ปัจจัยฤดูกาลกลายเป็น no-op เงียบ ๆ และเงินสนับสนุนเป้า 6 ต่ำไป
+        #    50.85 เทียบ 83.15 ลบ. — ห้ามถอดออกอีก มี guard ท้ายไฟล์ + test_exec_backtest คุมไว้
+        #   niYE = ส่วนต่างของ NI ต่อเดือนช่วงปิดบัญชี (ด.10-12) เทียบ run-rate ต้นปี (ด.1-9)
+        #          → หน้าเว็บเอาไป "บวกเพิ่ม" จาก niM ในเดือน ด.≥10 จึงต้องเป็นส่วนต่าง ไม่ใช่ระดับ
+        #   clYE = อัตราโตหนี้สินหมุนเวียนต่อเดือนช่วงปิดบัญชี → หน้าเว็บใช้ "แทนที่" clMo (ไม่ใช่บวก)
+        ye_ni, ye_cl = [], []
+        for fy in YE_FY:
+            a = next((r for r in tr_all if r.get("t") == fy * 100 + 9), None)
+            c = next((r for r in tr_all if r.get("t") == fy * 100 + 12), None)
+            if not a or not c: continue
+            if a.get("ni") is not None and c.get("ni") is not None:
+                ye_ni.append((float(c["ni"]) - float(a["ni"])) / 3 - float(a["ni"]) / 9)
+            if a.get("cl") is not None and c.get("cl") is not None:
+                ye_cl.append((float(c["cl"]) - float(a["cl"])) / 3)
+        ni_ye = round(sum(ye_ni) / len(ye_ni), 0) if ye_ni else 0.0
+        cl_ye = round(sum(ye_cl) / len(ye_cl), 0) if ye_cl else 0.0   # 0 → หน้าเว็บถอยไปใช้ clMo เอง
         s = srisk.get(org5, {})
         grp = h.get("grp") or ""
         typ = "รพศ." if grp.startswith("รพศ.") else ("รพท." if grp.startswith("รพท.") else "รพช.")
@@ -315,6 +340,8 @@ def main():
                    #    ดีขึ้นเองโดยอัตโนมัติ และทำนายผิดทิศ: ปี 67/68 จริงระดับแย่ลง แต่โมเดลว่าดีขึ้น
                    #    วัดความลำเอียงแล้ว run-rate ดีกว่าตรึง (ปี 68: −7.3% → −2.8%)
                    "clMo": cl_mo,
+                   # ปัจจัยฤดูกาลปลายปีงบรายแห่ง (ดูบล็อกคำนวณด้านบน + guard ท้าย main())
+                   "niYE": ni_ye, "clYE": cl_ye,
                    # รายได้ไม่ใช่เงินสด/เดือน = รับบริจาคสินทรัพย์ (หักออกจากกระแสเงินสด ดู NONCASH_REV)
                    "donMo": round(max(0.0, bal(NONCASH_REV) / mo), 0),
                    # เจ้าหนี้แยกถัง (ฐานเงินสำรอง MOE · ดู cl_bucket + RISK_EXEC_MODEL.md 3.13)
@@ -352,6 +379,18 @@ def main():
     out = {"period": tmax, "periodLabel": summ.get("periodLabel"), "monthsElapsed": tmax % 100,
            "pn": PN, "revOrder": REV_ORDER, "expOrder": EXP_ORDER,
            "moeGroups": moe_meta, "moeVers": moe_vers, "cashDef": cash_def, "hosp": hosp}
+    # ══ 🚨 GUARD: ปัจจัยฤดูกาลต้องมีจริงก่อนเขียนไฟล์ ══════════════════════════════════
+    # เคสจริง 11 ส.ค. 69: คีย์ niYE/clYE หายทั้งชุดตอนเดินงวด 256910 แล้ว "ไม่มีอะไรพัง" —
+    # หน้าเว็บยังเรนเดอร์ปกติ สวิตช์ 📉 ยังกดได้ แต่เป็น no-op และเงินสนับสนุนต่ำไป 39%
+    # จึงต้องล้มที่ไพป์ไลน์ ไม่ใช่ปล่อยให้ไปโผล่เป็นตัวเลขผิดบนหน้าเว็บ
+    n_ye = sum(1 for x in hosp if x["bs"].get("niYE"))
+    ni_ye_tot = sum(x["bs"].get("niYE") or 0 for x in hosp)
+    if hosp and n_ye < len(hosp) * 0.8:
+        raise SystemExit(f"❌ ปัจจัยฤดูกาล niYE มีแค่ {n_ye}/{len(hosp)} แห่ง — "
+                         f"ตรวจ trend ปี {YE_FY} ใน h/*.json ก่อน (ห้ามเขียน exec.json ทับ)")
+    print(f"ปัจจัยฤดูกาลปลายปีงบ: niYE {n_ye}/{len(hosp)} แห่ง รวม {ni_ye_tot/1e6:,.1f} ลบ./เดือน · "
+          f"clYE รวม {sum(x['bs'].get('clYE') or 0 for x in hosp)/1e6:,.1f} ลบ./เดือน "
+          f"(clMo รวม {sum(x['bs'].get('clMo') or 0 for x in hosp)/1e6:,.1f})")
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     kb = os.path.getsize(OUT) / 1024
