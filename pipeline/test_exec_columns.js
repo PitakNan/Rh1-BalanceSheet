@@ -14,7 +14,7 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {fmtM,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
+const A=new Function(code+`;return {fmtM,sgnM,exSepLab,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
   exNetAfterDebt,exSolveCrit,exSolveCritNi,exSolveFor,exNeedPop,exNeedClose,NEEDC:EX_NEEDC,STEP:SV_STEP,
   SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
@@ -55,7 +55,8 @@ console.log(`EX_SHOW_TJAR = ${A.SHOW_TJAR} (${A.SHOW_TJAR?'เปิดคอล
 // ของเดิมใช้ tds[7+TJOFF] ฯลฯ พอเรียงคอลัมน์ใหม่ตามคำสั่งเจ้าของงาน เทสต์ฟ้อง 23 ข้อทั้งที่หน้าเว็บถูก
 // ตอนนี้อ่านหัวตารางจริงแล้วหาตำแหน่งจากชื่อคอลัมน์ → ย้ายคอลัมน์อีกกี่ครั้งก็ไม่ต้องแก้เลขในเทสต์
 // ฐาน 20 = จังหวัด·ชื่อ·ระดับ·เงินสด·เจ้าหนี้·สุทธิ·MOE·NI·คงเหลือ·ส่วนขาด·ระดับก่อน·[6 เกณฑ์]·รวม·ระดับหลัง·ปุ่ม
-const NCOL=20+(A.SHOW_TJAR?1:0);
+// 12 ส.ค. 69: +1 คอลัมน์ NWC (NI/NWC เปลี่ยนจาก "ต่อเดือน" เป็น "ระดับ ณ เดือนเป้า" ตามเกณฑ์ทางการ)
+const NCOL=21+(A.SHOW_TJAR?1:0);
 const NEEDC=A.NEEDC;
 
 for(const mmo of [1,3,6,13]){
@@ -74,13 +75,13 @@ for(const mmo of [1,3,6,13]){
   // ดัชนีคอลัมน์อ่านจากหัวตารางจริง (ดูเหตุผลที่ NCOL ด้านบน)
   const ths=[...head.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(m=>norm(m[1].replace(/<[^>]+>/g,' ')));
   const iOf=s=>ths.findIndex(t=>t.includes(norm(s)));
-  const iPay=iOf('เจ้าหนี้'), iNet=iOf('หลังจัดการหนี้สิน'), iNI=iOf('NI/เดือน'),
+  const iPay=iOf('เจ้าหนี้'), iNet=iOf('หลังจัดการหนี้สิน'), iNI=iOf('NI สะสม'), iNWC=iOf('NWC'),
         iLeft=iOf('คงเหลือหลังภาระMOE'), iTopC=iOf('ส่วนขาด');
   chk(nTh===NCOL, `หัวตาราง ${NCOL} ช่อง (ได้ ${nTh})`);
   chk([iPay,iNet,iNI,iLeft,iTopC].every(i=>i>=0), `หาตำแหน่งคอลัมน์หลักจากหัวตารางได้ครบ (เจ้าหนี้ ${iPay} · สุทธิ ${iNet} · NI ${iNI} · คงเหลือ ${iLeft} · ส่วนขาด ${iTopC})`);
   // ── ลำดับคอลัมน์ต้องอ่านเป็นสายเลขคณิตซ้าย→ขวา (เจ้าของงานสั่ง 11 ส.ค. 69) ──
   //    เงินสด → −เจ้าหนี้ → +ลูกหนี้ → =สุทธิ → −MOE → NI → คงเหลือ → ส่วนขาด → ระดับก่อน → 6 เกณฑ์ → รวม → ระดับหลัง
-  const order=['เงินสด+เทียบเท่า','เจ้าหนี้',...(A.SHOW_TJAR?['ลูกหนี้']:[]),'หลังจัดการหนี้สิน','MOE/เดือน','NI/เดือน',
+  const order=['เงินสด+เทียบเท่า','เจ้าหนี้',...(A.SHOW_TJAR?['ลูกหนี้']:[]),'หลังจัดการหนี้สิน','MOE/เดือน','NI สะสม','NWC',
                'คงเหลือหลังภาระMOE','ส่วนขาด','ก่อนช่วย',...NEEDC.map(c=>c.n+norm(c.th)),'รวม(Solver)','หลังช่วย'];
   const pos=order.map(s=>iOf(s));
   chk(pos.every((v,i)=>v>=0&&(i===0||v>pos[i-1])), `ลำดับคอลัมน์ถูกทั้งแถว (${pos.join('<')})`);
@@ -110,7 +111,7 @@ for(const mmo of [1,3,6,13]){
   chk(main.length===j.hosp.length, `แถวหลักครบ ${main.length}/${j.hosp.length}`);
 
   let badCol=0,badLeft=0,badTop=0,badRed=0,badSub=0,nRed=0,nTop=0;
-  let badNet=0,badNI=0,badNeed=0,badNeedMin=0,nNeedPos=0,nNeedFail=0,badLv=0,badNi=0,nNiAlt=0;
+  let badNet=0,badNI=0,badNW=0,badNeed=0,badNeedMin=0,nNeedPos=0,nNeedFail=0,badLv=0,badNi=0,nNiAlt=0;
   const iNeed0=ths.findIndex(t=>t.includes(norm('ต้องใช้ให้ผ่าน')));
   for(const h of j.hosp){
     const r=main.find(x=>x.includes('<b>'+h.name+'</b>')); if(!r){badCol++;continue;}
@@ -132,9 +133,14 @@ for(const mmo of [1,3,6,13]){
     const cNet=txt(tds[iNet][1]);
     if(expNet<0 ? !cNet.startsWith('ติดลบ '+fmtM(-expNet)) : !cNet.startsWith(fmtM(expNet))) badNet++;
     if(Math.abs((A.exMoeLeft(x)+ (r0.moeMo||0)*months) - expNet)>1) badNet++;   // สายเลขต้องต่อกัน: สุทธิ − MOE×เดือน = คงเหลือ
-    // 🆕 NI 2 บรรทัด: ตัวใหญ่ = จำลอง · บรรทัดเล็ก = เฉลี่ยจริงย้อนหลัง
-    const cNI=txt(tds[iNI][1]);
-    if(!cNI.includes('เฉลี่ยจริง '+(h.bs.mo>0?h.bs.mo:12)+' ด.')) badNI++;
+    // 🆕 12 ส.ค. 69: NI/NWC เป็น "ระดับ ณ เดือนเป้า" ไม่ใช่อัตราต่อเดือน (เกณฑ์ทางการวัดแบบนี้)
+    //    ตัวใหญ่ = ค่าคาดการณ์ ณ เดือนเป้า (ต้องตรงกับ sepBreak ที่ Solver ใช้เป๊ะ) · บรรทัดเล็ก = ค่าจริงงวดล่าสุด
+    const cNI=txt(tds[iNI][1]), cNW=txt(tds[iNWC][1]), b0=r0.sepBreak;
+    if(!cNI.includes('ปัจจุบัน '+A.tLab(h.bs.t))) badNI++;
+    if(b0&&!cNI.startsWith(A.sgnM?A.sgnM(b0.ni):fmtM(b0.ni))) badNI++;      // ตัวใหญ่ = NI สะสม ณ เดือนเป้า
+    if(!cNW.includes('ปัจจุบัน '+A.tLab(h.bs.t))) badNW++;
+    if(b0&&!cNW.startsWith(A.sgnM?A.sgnM(b0.nwc):fmtM(b0.nwc))) badNW++;    // ตัวใหญ่ = NWC ณ เดือนเป้า
+    if(cNI.includes('/เดือน')||cNW.includes('/เดือน')) badNI++;             // ⛔ ห้ามมีคำว่าต่อเดือนอีก
     // 🆕 6 คอลัมน์เงินที่ต้องใช้รายเกณฑ์ — ตรวจ "ผลลัพธ์ของ Solver ผ่านจริง + น้อยที่สุด"
     for(let ci=0;ci<NEEDC.length;ci++){
       const c=NEEDC[ci], v=A.exSolveCrit(h,c,r0), cell=txt(tds[iNeed0+ci][1]);
@@ -197,7 +203,8 @@ for(const mmo of [1,3,6,13]){
   chk(badRed===0, `เจ้าหนี้ไฮไลต์แดง+บอกส่วนขาดถูกต้อง (ผิด ${badRed}) · แดง ${nRed} แห่ง`);
   chk(badSub===0, `ทั้ง 2 บรรทัดในเซลล์ติดป้ายสมมติฐานครบ (ผิด ${badSub})`);
   chk(badNet===0, `คอลัมน์สุทธิหลังจัดการหนี้สิน = เงินสด−เจ้าหนี้+ลูกหนี้ และต่อกับคอลัมน์คงเหลือ (ผิด ${badNet})`);
-  chk(badNI===0, `คอลัมน์ NI มีบรรทัดค่าเฉลี่ยจริงย้อนหลังครบทุกแห่ง (ผิด ${badNI})`);
+  chk(badNI===0, `คอลัมน์ NI = NI สะสม ณ เดือนเป้า + บรรทัดค่าปัจจุบัน ครบทุกแห่ง ไม่มีคำว่า /เดือน (ผิด ${badNI})`);
+  chk(badNW===0, `คอลัมน์ NWC = NWC ณ เดือนเป้า + บรรทัดค่าปัจจุบัน ครบทุกแห่ง (ผิด ${badNW})`);
   chk(badNeed===0, `เงินที่ต้องใช้รายเกณฑ์: เซลล์ตรงกับ Solver + ผ่านจริงที่ยอดนั้น (ผิด ${badNeed}) · ต้องเติมเงิน ${nNeedPos} ช่อง · เงินก้อนไม่พอ ${nNeedFail} ช่อง`);
   chk(badNeedMin===0, `เงินที่ต้องใช้รายเกณฑ์เป็นค่าต่ำสุดจริง (ลดลง 1 step แล้วไม่ผ่าน) — ผิด ${badNeedMin}`);
   chk(badLv===0, `ทุกช่องบอก "ระดับที่จะได้" ตรงกับผลจำลองด้วยเงินก้อนของช่องนั้น + บอกเมื่อระดับไม่ขยับ (ผิด ${badLv})`);

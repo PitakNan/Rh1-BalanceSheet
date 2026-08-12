@@ -15,7 +15,7 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''};global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}};global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {exRender,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
+const A=new Function(code+`;return {exRender,exSepLab,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v}};`)();
 A.setEX(JSON.parse(fs.readFileSync(process.env.RD_JSON||'D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8')));
 const ST=o=>({mmo:3,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext:0,tgt:6,moeVer:'69',payPct:50,moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},tj:{mode:'off',scope:'crisis'},inj:{},open:{},xfer:[],arPct:100,arOvr:{},wide:false,clGrow:true,seas:true,...o});
 let fail=[];
@@ -34,16 +34,20 @@ const cellMain=c=>c.replace(/<span class="cellsub[\s\S]*?<\/span>/g,'').replace(
 // จับคู่ คอลัมน์บนจอ ↔ ชื่อคอลัมน์ใน TSV
 // ⚠️ ฝั่งจอใช้ "ชื่อหัวคอลัมน์" ไม่ใช่เลขดัชนี (แก้ 11 ส.ค. 69) — ตอนเรียงคอลัมน์ใหม่ตามคำสั่งเจ้าของงาน
 //    ดัชนีคงที่ทำให้เทสต์จับคู่ผิดคอลัมน์แล้วฟ้อง 21 ข้อทั้งที่ค่าบนจอกับ TSV ตรงกันอยู่
-const PAIRS=[
+// ⚠️ ป้าย NI/NWC มีชื่อเดือนเป้าอยู่ในหัวคอลัมน์ → ต้องสร้าง PAIRS **หลัง** setEXST ทุกรอบ
+//    (เรียก exSepLab() ตอน module load จะพังเพราะ EXST ยังเป็น null)
+const mkPAIRS=()=>[
   ['เจ้าหนี้','เจ้าหนี้ OP-UC นอก CUP ในจังหวัด 2101020199.202(ลบ.)'],
   ['ลูกหนี้','ลูกหนี้ UC-OP นอก CUP ในจังหวัด 1102050101.203+1102050194.204(ลบ.)'],
   ['เงินสด+เทียบเท่า','เงินสด+เทียบเท่า(ลบ.)'],
   ['หลังจัดการหนี้สิน','เงินสด+เทียบเท่า หลังจัดการหนี้สิน(ลบ. · เงินสด−เจ้าหนี้+ลูกหนี้±โยกช่วย)'],
   ['MOE/เดือน','MOE กองเศรษฐฯ/เดือน(ลบ. · เงินสดจ่ายจริง)'],
-  ['NI/เดือน','NIจำลอง/เดือน(ลบ.)'],
+  ['NI สะสม','NI สะสม ณ '+A.exSepLab()+' (คาดการณ์)'],
+  ['NWC','NWC ณ '+A.exSepLab()+' (คาดการณ์)'],
 ];
 for(const st of [{},{arPct:62},{arPct:62,tj:{mode:'forgive',scope:'all'}},{crisis:'67',arPct:62}]){
   A.setEXST(ST(st)); A.setEXOPEN({}); A.setEXBRK({}); A.setEXSORT({col:null,dir:-1}); A.exRender();
+  const PAIRS=mkPAIRS();
   const tsv=A.getTSV().split('\n').map(l=>l.split('\t'));
   const head=tsv[0], body=tsv.slice(1,-1), foot=tsv[tsv.length-1];
   const res=els['exResBox'].innerHTML;
