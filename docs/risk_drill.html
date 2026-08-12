@@ -2255,9 +2255,31 @@ function exSolveDown(h, L, ch){
   }
   return hi;
 }
-// ── แผงเจาะเกณฑ์ 7 คะแนน ณ ก.ย. (คลิก badge คอลัมน์ "ระดับ ก.ย.69 หลังช่วย") ──
-// EXBRK[hcode] = ระดับเป้าที่กำลังดูอยู่ในแผง (undefined = แผงปิด) — เป็นการดูรายแห่ง ไม่กระทบเป้าทั้งเขต (EXST.tgt)
-function exBrkToggle(hc){ if(EXBRK[hc]!=null) delete EXBRK[hc]; else EXBRK[hc]=EXST.tgt; exRender(); }
+// ── แผงเจาะเกณฑ์ 7 คะแนน = ป็อปอัป (เจ้าของงานสั่ง 12 ส.ค. 69 — ให้เหมือน badge "ก่อนช่วย") ──
+// เดิมกางเป็นแถวใต้ตาราง ทำให้ตารางกระโดดและต้องเลื่อนหา · เปลี่ยนเป็น .nip-overlay
+// pattern เดียวกับ exWhyPop (ก่อนช่วย) และ exXfOpen (โยกเงิน) ที่มีอยู่แล้ว
+// EXBRK[hcode] = ระดับเป้าที่กำลังดูอยู่ในป็อปอัป (ว่าง = ปิด) — ดูรายแห่ง ไม่กระทบเป้าทั้งเขต (EXST.tgt)
+// ⚠️ ห้ามเรียก exRender() ตอนเปิด/ปิด/เปลี่ยนระดับ — ตารางมี Solver 13 ตัว/แถว หน่วงเป็นร้อย ms
+//    และตัวเลขในตารางไม่ได้เปลี่ยนจากการเปิดดู จึงวาดเฉพาะป็อปอัปพอ
+function exBrkToggle(hc){ EXBRK={[hc]:EXST.tgt}; exBrkOpen(hc); }
+function exBrkOpen(hc){
+  const h=EX.hosp.find(p=>p.hcode===hc); if(!h) return;
+  if(EXBRK[hc]==null) EXBRK[hc]=EXST.tgt;
+  const lab=exSepLab();
+  let el=document.getElementById('exBrkOverlay');
+  if(!el){ el=document.createElement('div'); el.id='exBrkOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
+  el.onclick=exBrkClose;
+  el.innerHTML=`<div class="nip-modal" style="max-width:1080px" onclick="event.stopPropagation()">
+    <div class="nip-head" style="display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0"><h3>🔍 เกณฑ์ Risk Score ทั้ง 7 คะแนน — ${h.name}</h3>
+        <div class="note">${h.prov||''} · ${h.type} — ระดับ ณ <b>${lab}</b> หลังช่วย · เลือกดูระดับเป้าอื่นได้ในแผง</div></div>
+      <button type="button" class="tgt-apply" style="margin:0;flex-shrink:0" onclick="exBrkClose()">✕ ปิด</button>
+    </div>
+    <div class="nip-body" style="display:block">${exBrkHtml({h,r0:exSimPath(h,0)}, lab)}</div>
+  </div>`;
+  el.style.display='flex';
+}
+function exBrkClose(){ EXBRK={}; const el=document.getElementById('exBrkOverlay'); if(el) el.style.display='none'; }
 // ── แผงโยกเงิน = ป็อปอัป (เจ้าของงานสั่ง 6 ส.ค. 69 — แบบกางในแถวใหญ่เกินจนหน้าต่างเพี้ยน) ──
 // ใช้ pattern เดียวกับ niPlanOverlay/debtPlanOverlay ที่มีอยู่แล้ว (.nip-overlay/.nip-modal)
 function exXfToggle(hc){ EXXF={[hc]:1}; exXfOpen(hc); }
@@ -2572,7 +2594,7 @@ function exXfSubmit(hc, fill){
   a=Math.min(a,cap);                                // ⛔ กันเกินเพดานเสมอ แม้ผู้ใช้พิมพ์เกิน
   if(a>0) exXferAdd(hc,t,a); else exRender();
 }
-function exBrkLvl(hc,L){ EXBRK[hc]=L; exRender(); }
+function exBrkLvl(hc,L){ EXBRK[hc]=L; exBrkOpen(hc); }   // วาดเฉพาะป็อปอัป ไม่แตะตาราง
 // เกณฑ์ทั้ง 7 คะแนน: LI 3 (CR/QR/Cash) + ST 2 (NWC/NI) + SU 0-2 = เต็ม 7 ตรงสูตรทางการ
 const EX_CRIT=[
   {g:'LI',n:'CR',d:'สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน',th:'≥ 1.50',v:b=>b.cr,f:fmtR,ok:b=>b.cr>=1.5},
@@ -2867,8 +2889,10 @@ async function renderExec(){
     <div class="panel" style="margin-top:14px" id="exMoeBox"></div>
     <div class="panel" style="margin-top:14px" id="exRevBox"></div>
     <div class="panel" style="margin-top:14px" id="exTjBox"></div>
-    <div class="panel" style="margin-top:14px" id="exRgBox"></div>
     <div class="panel" style="margin-top:14px" id="exProvTjBox"></div>
+    <!-- 🏦 เงินกองกลางเขตฯ วางติดเหนือตารางผลจำลอง (เจ้าของงานสั่ง 12 ส.ค. 69 — เดิมอยู่ลึก หาไม่เจอ)
+         เป็นเมนูที่ใช้สั่งโอนจริง จึงต้องอยู่ในระยะสายตาเดียวกับตารางที่ดูส่วนขาด -->
+    <div class="panel" style="margin-top:14px" id="exRgBox"></div>
     <div class="panel" style="margin-top:14px" id="exResBox"></div>
     <div class="gap-note" style="margin-top:14px">⚙️ สมมติฐาน: <b>NI จำลอง/เดือน = Σรายรับกองทุน×(1+%ปรับ) − MOE (นิยามกองเศรษฐกิจสุขภาพ) − คชจ.นอกนิยาม (run-rate) − รายการไม่ใช่เงินสด</b> · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด · ค่าเฉลี่ยรายรับ/รายจ่ายมาจากยอดจริงสะสม ${EX.monthsElapsed} เดือน (ต.ค.–${EX.periodLabel}) จากงบทดลอง — <b>รวมส่วนต่ำ/ส่วนสูงแล้ว</b> · เงินสนับสนุน = เงินก้อนครั้งเดียวเดือน 0 เพิ่ม CA/QN/เงินสด <b>และรับรู้เป็นรายได้เงินอุดหนุนจากหน่วยงานภาครัฐเข้า NI ด้วย</b> (ตามผัง MOPH หลักเดียวกับ Option ยกหนี้ — CFO กำหนด 27 ก.ค. 69) · เกณฑ์คะแนน CR/QR/Cash/NWC/NI/SU ตรงสูตรทางการกองเศรษฐกิจสุขภาพชุดเดียวกับหน้าจำลองเดิม · จุดตั้งต้นเดือน 0 ตรง badge ที่แสดง (${exRiskSrcLab()}) · เป็นการจำลองเชิงสถานการณ์เพื่อวางแผนจัดสรร ไม่ใช่พยากรณ์ — ที่มารายบัญชีของแต่ละส่วนดูในหัวข้อนั้น ๆ</div>
   </div>`;
@@ -4060,7 +4084,8 @@ function exRender(){
       <td><span class="badge brkbadge${brkOpen?' on':''}" style="background:${riskColor(r1.sepRisk)}" title="คลิกดูเกณฑ์ทั้ง 7 คะแนน ก่อน/หลังช่วย ณ ${sepLab} — เลือกดูระดับเป้าอื่นได้" onclick="exBrkToggle('${hc}')">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${exMoeMonths()!==exMoeMonthsDefault()?` <span class="tgt-note" title="ระดับ ณ สิ้นปีงบ (${horLab}) หลังช่วย — Solver คุมจุดนี้เป็นพื้นเสมอ ไม่ว่าจะเลือกเดือนเป้าเป็นเดือนไหน&#10;ถ้าเลขนี้แตะเป้าพอดีขณะที่ระดับ ณ เดือนเป้าดีเกินเป้า = เงินก้อนนี้ถูกกำหนดโดยสิ้นปีงบ ไม่ใช่เดือนที่เลือก">→ สิ้นปีงบ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
     </tr>`;
-    const brkRow=brkOpen?`<tr class="ovsub"><td colspan="${EX_NCOL}">${exBrkHtml(x,sepLab)}</td></tr>`:'';
+    // แผงเจาะเกณฑ์ 7 คะแนนย้ายไปเป็นป็อปอัปแล้ว (exBrkOpen) — ไม่มีแถวกางใต้ตารางอีก
+    const brkRow='';
     if(!open) return main+brkRow;
     const segs=[];
     for(const p of EX.revOrder){ const r=h.rev[p]; if(!r) continue;
@@ -4297,13 +4322,18 @@ function exRender(){
   exSecWrap('exMoeBox','moe',false);
   exSecWrap('exRevBox','rev',false);
   exSecWrap('exTjBox','tj',false);
-  exSecWrap('exRgBox','rg',false);
+  // 🏦 เงินกองกลางเขตฯ = แผงเดียวนอกจากตารางผลจำลองที่ "กางไว้" เป็นค่าเริ่มต้น
+  // เพราะเป็นเมนูสั่งโอนจริง ถ้ายุบไว้ผู้ใช้หาไม่เจอ (เจ้าของงานแจ้ง 12 ส.ค. 69)
+  exSecWrap('exRgBox','rg',true);
   // ⚠️ ไม่ห่อ exProvTjBox — แผงสรุปรายจังหวัดใช้ <details> + exKeepOpen('provtj') ยุบได้อยู่แล้ว
   //    และค่าเริ่มต้นเป็น "ยุบ" ตามที่ต้องการ (EXST.open.provtj ไม่ได้ตั้งไว้) · ห่อซ้ำจะได้ 2 ชั้น
   exSecWrap('exResBox','sim',true);
   // ป็อปอัปโยกเงินเปิดค้างอยู่ → วาดใหม่ให้ตัวเลขเพดาน/รายการสดเสมอ
   { const hc=Object.keys(EXXF)[0], ov=document.getElementById('exXfOverlay');
     if(hc && ov && ov.style.display!=='none') exXfOpen(hc); }
+  // ป็อปอัปเจาะเกณฑ์ 7 คะแนนเปิดค้างอยู่ → วาดใหม่ด้วย (เช่น เปลี่ยนเดือนเป้า/มาตรการระหว่างเปิด)
+  { const hc=Object.keys(EXBRK)[0], ov=document.getElementById('exBrkOverlay');
+    if(hc && ov && ov.style.display!=='none') exBrkOpen(hc); }
   if(exScrollEl) exScrollEl.scrollTop=exScrollTop;
   if(exTblPos){ const el=document.getElementById('exTblWrap');
     if(el){ el.scrollTop=exTblPos.t; el.scrollLeft=exTblPos.l; } }

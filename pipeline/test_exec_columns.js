@@ -211,9 +211,12 @@ for(const mmo of [1,3,6,13]){
   chk(badLv===0, `ทุกช่องบอก "ระดับที่จะได้" ตรงกับผลจำลองด้วยเงินก้อนของช่องนั้น + บอกเมื่อระดับไม่ขยับ (ผิด ${badLv})`);
   chk(badNi===0, `ทางเลือก "ทำกำไร/เดือน" ตรงกับ Solver + ผ่านจริงและเป็นค่าต่ำสุด (ผิด ${badNi} · มีทางเลือก ${nNiAlt} ช่อง)`);
   // colspan ต้องเท่าหัวตารางเสมอ
+  // ⚠️ 12 ส.ค. 69: แผงเจาะเกณฑ์ 7 คะแนน (EXBRK) ย้ายไปเป็นป็อปอัปแล้ว จึง **ไม่สร้างแถวในตาราง**
+  //    เหลือแถวย่อยเดียวคือ "ปรับรายแห่ง" (EXOPEN) — ตั้ง EXBRK ไว้ด้วยเพื่อยันว่าไม่มีแถวงอกกลับมา
   A.setEXOPEN({[j.hosp[0].hcode]:true}); A.setEXBRK({[j.hosp[1].hcode]:6}); A.exRender();
   const cs=[...els.exResBox.innerHTML.matchAll(/<tr class="ovsub"><td colspan="(\d+)"/g)].map(m=>+m[1]);
-  chk(cs.length===2&&cs.every(c=>c===nTh), `colspan แถวย่อย = ${nTh} (ได้ ${cs.join(',')})`);
+  chk(cs.length===1&&cs.every(c=>c===nTh), `colspan แถวย่อย = ${nTh} · มีแถวเดียว (ได้ ${cs.length} แถว: ${cs.join(',')})`);
+  chk(!els.exResBox.innerHTML.includes('brk-head'), 'EXBRK ไม่กางแผงเจาะเกณฑ์ในตารางอีกแล้ว (ย้ายไปป็อปอัป)');
   A.setEXOPEN({}); A.setEXBRK({}); A.exRender();
   // TSV
   const L=A.getTSV().split('\n'), w=[...new Set(L.map(l=>l.split('\t').length))];
