@@ -2331,10 +2331,10 @@ function exNowPop(hc){
     body=`<div class="tgt-row" style="font-size:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span>ระดับวิกฤต ณ งวด <b>${EX.periodLabel}</b> ${badge(h.risk)}</span>
         <span class="tgt-note">= สภาพคล่อง ${sc.li} + ความมั่นคง ${sc.st} + อยู่รอด ${sc.su} = <b>${sc.risk}</b> คะแนน</span></div>
-      <div class="note">คะแนนเป็น <b>แต้มโทษ</b> — 0 = ดีที่สุด · 7 = แย่ที่สุด · ที่มาคะแนน: ${srcLab}</div>
+      <div class="note"><b>Score</b> — 0 = ดีที่สุด · 7 = แย่ที่สุด · ที่มาคะแนน: ${srcLab}</div>
       ${h.risk!=null&&h.risk!==sc.risk?`<div class="note tgt-warn">⚠️ badge (${h.risk}) ต่างจากคะแนนที่คำนวณจากงบทดลอง (${sc.risk}) — badge ใช้ตัวเลขที่ รพ. รายงาน ส่วนตารางนี้กางจากงบทดลองงวดเดียวกัน</div>`:''}
       <table class="gaptbl" style="margin-top:10px">
-        <tr><th class="l">เกณฑ์</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน</th><th>ห่างจากเกณฑ์ (บาท)</th><th>แต้มโทษ</th></tr>
+        <tr><th class="l">เกณฑ์</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน</th><th>ห่างจากเกณฑ์ (บาท)</th><th>Score</th></tr>
         ${rows}
         <tr><td class="l"><b>SU (โอกาสอยู่รอด)</b><div class="note">มาจาก NWC กับ NI 2 ตัวข้างบนร่วมกัน — ไม่ใช่เกณฑ์ผ่าน/ไม่ผ่าน จึงไม่มีระยะห่างเป็นบาทของตัวเอง</div></td>
           <td>0–2 แต้ม</td><td colspan="2" class="note">${suTxt}</td>
@@ -2398,7 +2398,7 @@ function exCmpTable(b0,b1,labA,labB,noteB){
       <td class="${p1?'brk-ok':'brk-no'}">${p0?0:1} → <b>${p1?0:1}</b> ${p0===p1?(p1?'✓':'✗'):(p1?'🎉':'⚠️')}</td></tr>`;
   }).join('');
   return `<table class="gaptbl" style="margin-top:6px">
-    <tr><th class="l">เกณฑ์</th><th>ผ่านเมื่อ</th><th>${labA}</th><th>${labB}${noteB?'<br><span class="thsub">'+noteB+'</span>':''}</th><th>เปลี่ยน</th><th>ห่างจากเกณฑ์ (บาท)</th><th>แต้มโทษ</th></tr>
+    <tr><th class="l">เกณฑ์</th><th>ผ่านเมื่อ</th><th>${labA}</th><th>${labB}${noteB?'<br><span class="thsub">'+noteB+'</span>':''}</th><th>เปลี่ยน</th><th>ห่างจากเกณฑ์ (บาท)</th><th>Score</th></tr>
     ${rows}
     <tr><td class="l"><b>SU (โอกาสอยู่รอด)</b><div class="note">มาจาก NWC กับ NI ร่วมกัน — ไม่มีเกณฑ์เป็นบาทของตัวเอง</div></td>
       <td>0–2 แต้ม</td><td>${s0.su} แต้ม</td><td${s1.su!==s0.su?' style="font-weight:700"':''}>${s1.su} แต้ม</td>
@@ -2420,7 +2420,7 @@ function exScenGrid(rows, base){
       <td>${badge(s.risk)}${base&&s.risk!==base.risk?`<div class="note">${s.risk<base.risk?'<b class="brk-ok">ดีขึ้น '+(base.risk-s.risk)+'</b>':'<b class="brk-no">แย่ลง '+(s.risk-base.risk)+'</b>'}</div>`:(base?'<div class="note">เท่าเดิม</div>':'')}</td></tr>`;
   }).join('');
   return `<table class="gaptbl" style="margin-top:6px">
-    <tr><th class="l">ฉาก</th><th>CR<br><span class="thsub">≥1.50</span></th><th>QR<br><span class="thsub">≥1.00</span></th><th>Cash<br><span class="thsub">≥0.80</span></th><th>NWC<br><span class="thsub">≥0</span></th><th>NI<br><span class="thsub">≥0</span></th><th>SU</th><th>รวมแต้ม</th></tr>
+    <tr><th class="l">ฉาก</th><th>CR<br><span class="thsub">≥1.50</span></th><th>QR<br><span class="thsub">≥1.00</span></th><th>Cash<br><span class="thsub">≥0.80</span></th><th>NWC<br><span class="thsub">≥0</span></th><th>NI<br><span class="thsub">≥0</span></th><th>SU</th><th>รวม Score</th></tr>
     ${body}</table>`;
 }
 function exTjScore(b){ return b&&b.cl?scoreOf(b.ca,b.cl,b.qn,b.cn,b.ni,b.mo):null; }
@@ -2475,7 +2475,7 @@ function exTjPop(hc){
         <span class="tgt-note">= ${pct.toFixed(1)}% ของหนี้สินหมุนเวียน (${fmtM(b0.cl)}) · เงินสดที่มี ${fmtM(b0.cn)}${
           D>b0.cn?' <b class="brk-no">ไม่พอจ่ายเต็มก้อน</b>':''}</span></div>
       ${exHeadDelta(sc0,s1,'หลังจ่ายจริง')}
-      <div class="note">คะแนนเป็น<b>แต้มโทษ</b> 0 = ดีที่สุด · 7 = แย่ที่สุด${
+      <div class="note"><b>Score</b> — 0 = ดีที่สุด · 7 = แย่ที่สุด${
         h.risk!=null&&h.risk!==sc0.risk?` · ⚠️ badge ในตาราง (${h.risk}) ต่างจากที่คำนวณจากงบทดลอง (${sc0.risk}) — badge ใช้ตัวเลขที่ รพ. รายงาน`:''}</div>
       <div class="tgt-row" style="font-weight:600;margin-top:12px">💸 จ่ายจริง: เจ้าหนี้หายไปพร้อมกับเงินสด ${fmtM(paid)}</div>
       <div class="note">เงินสด+เทียบเท่า / สินทรัพย์เร็ว / สินทรัพย์หมุนเวียน <b>− ${fmtM(paid)}</b>
@@ -2527,7 +2527,7 @@ function exArPop(hc){
         <span>ลูกหนี้ UC-OP นอก CUP ที่คาดว่าเก็บได้ <b>${fmtM(A)}</b></span>
         <span class="tgt-note">จากยอดเต็ม ${fmtM(raw)}${cut>0?' · ตั้งไว้ว่าเก็บไม่ได้ '+fmtM(cut):''} · คิดเป็น ${pctCl.toFixed(1)}% ของหนี้สินหมุนเวียน</span></div>
       ${exHeadDelta(sc0,s1,'หลังเก็บเงินได้')}
-      <div class="note">คะแนนเป็น<b>แต้มโทษ</b> 0 = ดีที่สุด · 7 = แย่ที่สุด</div>
+      <div class="note"><b>Score</b> — 0 = ดีที่สุด · 7 = แย่ที่สุด</div>
       <div class="tgt-row" style="font-weight:600;margin-top:12px">📥 เก็บเงินได้: ลูกหนี้ลดลงพร้อมกับเงินสดเพิ่มขึ้น ${fmtM(A)}</div>
       <div class="note">เงินสด+เทียบเท่า <b>+ ${fmtM(A)}</b> · ลูกหนี้ <b>− ${fmtM(A)}</b> — เป็นการ<b>ย้ายภายในสินทรัพย์หมุนเวียนด้วยกันเอง</b></div>
       ${exCmpTable(b0,bGot,'ก่อนเก็บ','หลังเก็บได้','เงินสดเข้า '+fmtM(A))}
