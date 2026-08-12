@@ -2280,6 +2280,87 @@ function exBrkOpen(hc){
   el.style.display='flex';
 }
 function exBrkClose(){ EXBRK={}; const el=document.getElementById('exBrkOverlay'); if(el) el.style.display='none'; }
+// ══ 🧮 ป็อปอัป "Risk Score ณ ปัจจุบัน" (เจ้าของงานสั่ง 12 ส.ค. 69) ═══════════════════════
+// คลิก badge คอลัมน์ "ระดับ ณ ปัจจุบัน" → กางเกณฑ์ทีละตัวพร้อม **ระยะห่างเป็นบาท**
+//   ยังไม่ผ่าน → ขาดอีกเท่าไหร่ (แสดงเป็น −)   ·   ผ่านแล้ว → เกินเกณฑ์อยู่เท่าไหร่ (แสดงเป็น +)
+// ต่างจากป็อปอัป "หลังช่วย" ตรงที่ตัวนี้เป็น **งบทดลองงวดล่าสุดล้วน ๆ ไม่จำลองอะไรเลย**
+//
+// ⚠️ ระยะห่างคิดบน "ตัวส่วนคงเดิม" — เงินก้อนเดียวดัน CA/QN/CN/NWC/NI ขึ้นพร้อมกันหมด
+//    ⛔ ห้ามบวก 5 บรรทัดรวมกัน · ยอดจริงที่ต้องใช้ = **ตัวที่ขาดมากที่สุด** (สรุปไว้ท้ายตาราง)
+// ⚠️ ใช้กติกาปัด 2 ตำแหน่งแบบเดียวกับ scoreOf/HFO → เกณฑ์ที่ตัดสินจริงคือ th−0.005 (ดู 3.11)
+//    จงใจไม่ใช้ EX_CRIT.ok ตรงนี้ เพราะ EX_CRIT ไม่ปัด จะขัดกับคะแนนที่ badge แสดง
+const EX_NOW_R2=0.005;                       // เผื่อการปัด 2 ตำแหน่ง: r2(x)>=th ⟺ x>=th−0.005
+const EX_NOW_ROWS=[
+  {n:'CR (Current ratio)', d:'สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน', thL:'≥ 1.50', grp:'LI',
+   val:b=>b.ca/b.cl, fmt:fmtR, gap:b=>b.ca-(1.5-EX_NOW_R2)*b.cl, lift:'สินทรัพย์หมุนเวียน'},
+  {n:'QR (Quick ratio)', d:'สินทรัพย์เร็ว (ไม่รวมสินค้าคงเหลือ) ÷ หนี้สินหมุนเวียน', thL:'≥ 1.00', grp:'LI',
+   val:b=>b.qn/b.cl, fmt:fmtR, gap:b=>b.qn-(1.0-EX_NOW_R2)*b.cl, lift:'สินทรัพย์เร็ว'},
+  {n:'Cash ratio', d:'เงินสด+เทียบเท่า ÷ หนี้สินหมุนเวียน', thL:'≥ 0.80', grp:'LI',
+   val:b=>b.cn/b.cl, fmt:fmtR, gap:b=>b.cn-(0.8-EX_NOW_R2)*b.cl, lift:'เงินสด+เทียบเท่า'},
+  {n:'NWC (เงินทุนหมุนเวียน)', d:'สินทรัพย์หมุนเวียน − หนี้สินหมุนเวียน', thL:'≥ 0', grp:'ST',
+   val:b=>b.ca-b.cl, fmt:fmtM, gap:b=>b.ca-b.cl, lift:'สินทรัพย์หมุนเวียน'},
+  {n:'NI (กำไร/ขาดทุนสะสม)', d:'กำไร/ขาดทุนสุทธิสะสมทั้งปีงบ (รวมค่าเสื่อม)', thL:'≥ 0', grp:'ST',
+   val:b=>b.ni, fmt:fmtM, gap:b=>b.ni, lift:'กำไรสะสม'},
+];
+function exNowPop(hc){
+  const h=EX.hosp.find(p=>p.hcode===hc); if(!h) return;
+  const bs=h.bs, sc=bs.cl?scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo):null;
+  const badge=v=>'<span class="badge" style="background:'+riskColor(v)+';padding:1px 7px">'+(v!=null?v:'–')+'</span>';
+  const srcLab=(h.src==='gl')?'คำนวณด้วยสูตรทางการจากงบทดลอง':(h.src?'ทางการ (รพ. รายงาน)':'ไม่ระบุที่มา');
+  let body;
+  if(!sc){ body='<div class="note">งวดนี้ไม่มีค่าดิบงบดุล (หนี้สินหมุนเวียน = 0) จึงคำนวณเกณฑ์ไม่ได้</div>'; }
+  else{
+    const b={ca:bs.ca,cl:bs.cl,qn:bs.qn,cn:bs.cn,ni:bs.ni,mo:bs.mo};
+    let worst=0;
+    const rows=EX_NOW_ROWS.map(c=>{
+      const g=c.gap(b), pass=g>=0, pt=pass?0:1;
+      if(!pass) worst=Math.max(worst,-g);
+      return `<tr><td class="l"><b>${c.n}</b><div class="note">${c.d}</div></td>
+        <td>${c.thL}</td><td>${c.fmt(c.val(b))}</td>
+        <td class="${pass?'brk-ok':'brk-no'}"><b>${pass?'+ เกิน '+fmtM(g):'− ขาด '+fmtM(-g)}</b>
+          <div class="note">${pass?'ลด'+c.lift+'ได้อีก '+fmtM(g)+' ก่อนตก':'ต้องเพิ่ม'+c.lift+'อีก '+fmtM(-g)}</div></td>
+        <td class="${pass?'brk-ok':'brk-no'}">${pt} คะแนน ${pass?'✓':'✗'}</td></tr>`;
+    }).join('');
+    const su=exSuMonths(b);
+    const suTxt=su&&su.v!=null&&isFinite(su.v)?`${su.lbl} ≈ ${su.v.toFixed(1)} เดือน`
+      :(b.ca-b.cl>=0&&b.ni>=0?'NWC และ NI เป็นบวกทั้งคู่ = ปลอดภัยสุด':'NWC และ NI ติดลบทั้งคู่ = แย่สุด');
+    body=`<div class="tgt-row" style="font-size:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>ระดับวิกฤต ณ งวด <b>${EX.periodLabel}</b> ${badge(h.risk)}</span>
+        <span class="tgt-note">= สภาพคล่อง ${sc.li} + ความมั่นคง ${sc.st} + อยู่รอด ${sc.su} = <b>${sc.risk}</b> คะแนน</span></div>
+      <div class="note">คะแนนเป็น <b>แต้มโทษ</b> — 0 = ดีที่สุด · 7 = แย่ที่สุด · ที่มาคะแนน: ${srcLab}</div>
+      ${h.risk!=null&&h.risk!==sc.risk?`<div class="note tgt-warn">⚠️ badge (${h.risk}) ต่างจากคะแนนที่คำนวณจากงบทดลอง (${sc.risk}) — badge ใช้ตัวเลขที่ รพ. รายงาน ส่วนตารางนี้กางจากงบทดลองงวดเดียวกัน</div>`:''}
+      <table class="gaptbl" style="margin-top:10px">
+        <tr><th class="l">เกณฑ์</th><th>ผ่านเมื่อ</th><th>ค่าปัจจุบัน</th><th>ห่างจากเกณฑ์ (บาท)</th><th>แต้มโทษ</th></tr>
+        ${rows}
+        <tr><td class="l"><b>SU (โอกาสอยู่รอด)</b><div class="note">มาจาก NWC กับ NI 2 ตัวข้างบนร่วมกัน — ไม่ใช่เกณฑ์ผ่าน/ไม่ผ่าน จึงไม่มีระยะห่างเป็นบาทของตัวเอง</div></td>
+          <td>0–2 แต้ม</td><td colspan="2" class="note">${suTxt}</td>
+          <td class="${sc.su===0?'brk-ok':'brk-no'}">${sc.su} คะแนน</td></tr>
+      </table>
+      <div class="tgt-row" style="font-weight:600;margin-top:12px">💰 ถ้าจะปิดช่องว่างด้วยเงินก้อนเดียว</div>
+      <div class="note">${worst>0
+        ? `เงินก้อน <b class="brk-no">${fmtM(worst)}</b> (= เกณฑ์ที่ขาดมากที่สุด) ปิดได้<b>ทุกเกณฑ์ที่ยังขาด</b>พร้อมกัน
+           <br>เพราะเงินก้อนเดียวดัน เงินสด+เทียบเท่า / สินทรัพย์เร็ว / สินทรัพย์หมุนเวียน / NWC ขึ้นเท่ากันทั้งหมด
+           และรับรู้เป็นรายได้เงินอุดหนุนเข้า NI ด้วย (หลักเดียวกับที่ใช้ทั้งแท็บนี้)
+           <br>⛔ <b>ห้ามบวกช่อง "ขาด" ทั้ง 5 บรรทัดรวมกัน</b> — จะได้ยอดเกินจริงหลายเท่า`
+        : 'ผ่านครบทุกเกณฑ์แล้ว ไม่ต้องเติมเงินเพื่อคะแนน — ตัวเลขฝั่ง "+ เกิน" คือระยะที่ยังถอยได้ก่อนตกเกณฑ์'}</div>
+      <div class="note" style="margin-top:8px">⚠️ ระยะห่างคิดบน <b>หนี้สินหมุนเวียนคงเดิม ณ งวดนี้</b> ไม่ได้จำลองไปข้างหน้า —
+        ถ้าอยากได้ยอดที่เล็งระดับ ณ เดือนเป้า ให้ดูคอลัมน์ "💰 ต้องใช้ให้ผ่าน" หรือกด badge ระดับหลังช่วย
+        <br>⚠️ เกณฑ์อัตราส่วนตัดสินหลัง<b>ปัด 2 ตำแหน่ง</b>ตามที่ HFO ทำ ระยะห่างจึงเผื่อจุดปัดไว้แล้ว (0.005 × หนี้สินหมุนเวียน)</div>`;
+  }
+  let el=document.getElementById('exNowOverlay');
+  if(!el){ el=document.createElement('div'); el.id='exNowOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
+  el.onclick=exNowClose;
+  el.innerHTML=`<div class="nip-modal" style="max-width:940px" onclick="event.stopPropagation()">
+    <div class="nip-head" style="display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1;min-width:0"><h3>🧮 Risk Score ณ ปัจจุบัน — ${h.name}</h3>
+        <div class="note">${h.prov||''} · ${h.type} — งบทดลองงวด <b>${EX.periodLabel}</b> (ยังไม่จำลองอะไรทั้งสิ้น)</div></div>
+      <button type="button" class="tgt-apply" style="margin:0;flex-shrink:0" onclick="exNowClose()">✕ ปิด</button>
+    </div>
+    <div class="nip-body" style="display:block">${body}</div>
+  </div>`;
+  el.style.display='flex';
+}
+function exNowClose(){ const el=document.getElementById('exNowOverlay'); if(el) el.style.display='none'; }
 // ── แผงโยกเงิน = ป็อปอัป (เจ้าของงานสั่ง 6 ส.ค. 69 — แบบกางในแถวใหญ่เกินจนหน้าต่างเพี้ยน) ──
 // ใช้ pattern เดียวกับ niPlanOverlay/debtPlanOverlay ที่มีอยู่แล้ว (.nip-overlay/.nip-modal)
 function exXfToggle(hc){ EXXF={[hc]:1}; exXfOpen(hc); }
@@ -3939,7 +4020,7 @@ function exRender(){
     const main=`<tr>
       ${WIDE?'':`<td>${h.prov||''}</td>`}
       <td${WIDE?' class="wide-name"':''}><b>${h.name}</b>${WIDE?`<span class="cellsub">${h.prov||''}</span>`:` <span class="tgt-note">${h.type}${h.cls?' '+h.cls:''}</span> <a class="ovlink" href="#h/${hc}">เปิดหน้าเต็ม →</a>`}</td>
-      <td><span class="badge" style="background:${riskColor(h.risk)}">${h.risk!=null?h.risk:'–'}</span></td>
+      <td><span class="badge brkbadge" style="background:${riskColor(h.risk)}" title="คลิกดู Risk Score ณ งวดนี้ทีละเกณฑ์ — ยังขาดอีกกี่บาทถึงจะผ่าน หรือผ่านมาแล้วเกินอยู่กี่บาท" onclick="exNowPop('${hc}')">${h.risk!=null?h.risk:'–'}</span></td>
       <td${h.bs.cn<=0?' style="color:var(--red);font-weight:700"':''}>${fmtM(h.bs.cn)}${(()=>{
         // เงินสดพอจ่าย MOE: เงินสดที่มีจ่ายค่าใช้จ่ายจำเป็นได้กี่เดือน (เทียบข้ามขนาด รพ. ได้)
         // เตือนเมื่อน้อยกว่าเกณฑ์ขั้นต่ำ 3 เดือน (ตาม SU) = ไม่ได้กันเงินไว้ล่วงหน้า ต้องพึ่งรายรับระหว่างทาง
