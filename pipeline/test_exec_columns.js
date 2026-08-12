@@ -14,7 +14,7 @@ global.localStorage={getItem:()=>null,setItem(){},removeItem(){}};
 global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
-const A=new Function(code+`;return {fmtM,sgnM,exSepLab,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
+const A=new Function(code+`;return {fmtM,sgnM,exSepLab,exRgDep,exRgIn,exRender,exSimPath,exMoeLeft,exTopUp,exHorMonths,exPayIn,exArIn,exHorLab,tLab,exMoeMonths,exMoeTargetLab,EXMAX:EX_MMO_MAX,
   exNetAfterDebt,exSolveCrit,exSolveCritNi,exSolveFor,exNeedPop,exNeedClose,NEEDC:EX_NEEDC,STEP:SV_STEP,
   SHOW_TJAR:EX_SHOW_TJAR,SHOW_GIVE:EX_SHOW_GIVE,getTSV:()=>EX_TSV,setEX:v=>{EX=v},setEXST:v=>{EXST=v},
   setEXOPEN:v=>{EXOPEN=v},setEXBRK:v=>{EXBRK=v},setEXSORT:v=>{EXSORT=v},getEXST:()=>EXST};`)();
@@ -120,7 +120,7 @@ for(const mmo of [1,3,6,13]){
     const r0=A.exSimPath(h,0);
     const x={h,r0};
     const pay=A.exPayIn(h), arIn=A.exArIn(h);
-    const expLeft=(h.bs.cn-pay+arIn)-(r0.moeMo||0)*months;
+    const expLeft=(h.bs.cn-pay+arIn-A.exRgDep(h)+A.exRgIn(h))-(r0.moeMo||0)*months;   // 🏦 รวมเงินเขตฝาก
     const expTop=expLeft<0?-expLeft:0;
     // ตรวจว่า helper ตรงกับสูตรที่ตั้งใจ (ไม่ใช่แค่ตรงกับตัวเอง)
     if(Math.abs(A.exMoeLeft(x)-expLeft)>1) badLeft++;
@@ -128,7 +128,8 @@ for(const mmo of [1,3,6,13]){
     if(A.exHorMonths(h)!==months) badLeft++;
     const cLeft=txt(tds[iLeft][1]), cTop=txt(tds[iTopC][1]), cPay=tds[iPay][0];
     // 🆕 คอลัมน์สุทธิหลังจัดการหนี้สิน = ตัวกลางของ exMoeLeft — ต้องตรงกับ 3 คอลัมน์ทางซ้ายเป๊ะ
-    const expNet=h.bs.cn-pay+arIn;
+    // 🏦 12 ส.ค. 69: ต้องหักเงินของเขตที่ฝากไว้ และบวกเงินเขตที่ได้รับจัดสรร (ดู 7.27)
+    const expNet=h.bs.cn-pay+arIn-A.exRgDep(h)+A.exRgIn(h);
     if(Math.abs(A.exNetAfterDebt(h)-expNet)>1) badNet++;
     const cNet=txt(tds[iNet][1]);
     if(expNet<0 ? !cNet.startsWith('ติดลบ '+fmtM(-expNet)) : !cNet.startsWith(fmtM(expNet))) badNet++;
@@ -417,7 +418,9 @@ console.log('━━ ⚓ คุมสิ้นปีงบเป็นพื้�
 // รอบ 3 (12 ส.ค. 69): + บรรทัดการเปลี่ยนแปลงเงินทุนหมุนเวียน (ลูกหนี้/สินค้าคงเหลือ)
 //   เดิมก่อนรอบนี้: [1,123.45] [2,104.95] [3,106.50] [6,156.85] [13,296.35]
 //   13 ด. ขึ้นแรงสุด (296→362) เพราะยิ่งจำลองยาว ผลของลูกหนี้/สินค้าคงเหลือยิ่งสะสม
-for(const [mmo,want] of [[1,123.40],[2,104.20],[3,112.35],[6,165.40],[13,361.75]]){
+// รอบ 4 (12 ส.ค. 69): + หักเงินของเขตที่ฝากไว้ + แก้บั๊ก QR>CR
+//   เดิมรอบ 3: [1,123.40] [2,104.20] [3,112.35] [6,165.40] [13,361.75]
+for(const [mmo,want] of [[1,126.00],[2,107.65],[3,115.80],[6,168.85],[13,369.35]]){
   A.setEXST(ST(0,mmo));
   const got=sumNeedNow()/1e6;
   chk(Math.abs(got-want)<0.02, `เดือนเป้า ${String(mmo).padStart(2)} ด. (${A.exMoeTargetLab()}) → เงินสนับสนุนรวม ${got.toFixed(2)} ลบ. (ยันไว้ ${want.toFixed(2)})`);

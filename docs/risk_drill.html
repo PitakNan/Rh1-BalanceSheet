@@ -1468,7 +1468,63 @@ function exXferNet(h){ return exXferIn(h)-exXferOut(h); }
 // ⚠️ ต้องรวม exXferNet ด้วย ไม่งั้นพอมีแผนโยกเงิน คอลัมน์นี้จะไม่ต่อกับคอลัมน์ถัดไป
 //    (สายเลขในตารางต้องบวกลบตามกันได้ทุกเมื่อ — เซลล์บอกที่มาไว้ในบรรทัดเล็ก)
 // ⚠️ exMoeLeft ต้องเรียกตัวนี้ ห้ามเขียนสูตรซ้ำสองที่ ไม่งั้นแก้ที่เดียวแล้วอีกที่ค้าง
-function exNetAfterDebt(h){ return h.bs.cn-exPayIn(h)+exArIn(h)+exXferNet(h); }
+// ── 🏦 เงินของเขตที่ฝากไว้กับ รพ. (เจ้าของงานแจ้ง 12 ส.ค. 69) ─────────────────────
+// ไม่ใช่เงินของ รพ. เอง แต่ไปนอนอยู่ในบัญชีเงินฝากธนาคารนอกงบประมาณ **โดยไม่มีบัญชี
+// เงินรับฝากคู่กันฝั่งหนี้สิน** (ตรวจงบ 256910 แล้ว) → เงินสด+เทียบเท่าสูงเกินจริง
+// ต้องหักออกตั้งแต่ต้นก่อนคำนวณทุกอย่าง ไม่งั้น Cash/QR/CR ของ 3 แห่งนี้ดีเกินจริง
+// ⚠️ หักฝั่งเงินสดอย่างเดียว ห้ามแตะหนี้สิน (ไม่มีคู่บัญชีอยู่แล้ว) · ⚠️ ไม่กระทบ NI (ไม่ใช่รายได้/คชจ.)
+// ยอดมาจาก exec.json (REGION_DEPOSIT ใน export_exec.py) — ห้าม hardcode ซ้ำที่นี่
+function exRgDep(h){ return (EX.regionDep&&+EX.regionDep[h.hcode])||0; }
+function exRgHolders(){ return Object.keys(EX.regionDep||{}); }
+function exRgPool(){ return exRgHolders().reduce((s,k)=>s+(+EX.regionDep[k]||0),0); }
+// แผนเติมจากเงินเขต: [{f:hcode ผู้ฝาก, t:hcode ผู้รับ, a:บาท}]
+function exRgList(){ return Array.isArray(EXST.rgAlloc)?EXST.rgAlloc:[]; }
+function exRgIn(h){ return exRgList().filter(x=>x.t===h.hcode).reduce((s,x)=>s+(+x.a||0),0); }
+function exRgUsed(f){ return exRgList().filter(x=>x.f===f).reduce((s,x)=>s+(+x.a||0),0); }
+function exRgLeft(f){ return Math.max(0,((+((EX.regionDep||{})[f]))||0)-exRgUsed(f)); }
+function exRgLeftAll(){ return exRgHolders().reduce((s,k)=>s+exRgLeft(k),0); }
+function exRgAdd(f,t,a){
+  a=Math.max(0,Math.round((+a||0)/SV_STEP)*SV_STEP);
+  const cur=(exRgList().find(x=>x.f===f&&x.t===t)||{a:0}).a;
+  a=Math.min(a, exRgLeft(f)+cur);                    // ให้เกินก้อนที่เหลือไม่ได้
+  EXST.rgAlloc=exRgList().filter(x=>!(x.f===f&&x.t===t));
+  if(a>0) EXST.rgAlloc.push({f,t,a});
+  exSave(); exRender();
+}
+function exRgDel(f,t){ EXST.rgAlloc=exRgList().filter(x=>!(x.f===f&&x.t===t)); exSave(); exRender(); }
+function exRgClear(){ EXST.rgAlloc=[]; exSave(); exRender(); }
+// ⚡ จัดสรรอัตโนมัติ — หลักการเดียวกับเงินเติมสภาพคล่อง: ไล่เติม "ส่วนขาดสภาพคล่อง(MOE)"
+// เรียงจากแห่งที่ขาดมากสุดก่อน · ดึงจากก้อนที่เหลือมากสุดก่อน
+// ⚠️ ไม่เติมให้ผู้ฝากเอง — เงินอยู่ในมือเขาแล้ว ถ้าเติมกลับเท่ากับไม่ได้หักออกตั้งแต่แรก
+function exRgAuto(){
+  const hold=exRgHolders();
+  const left={}; hold.forEach(k=>left[k]=(+EX.regionDep[k]||0));
+  const keep=EXST.rgAlloc; EXST.rgAlloc=[];          // คิดส่วนขาด "ก่อน" ได้รับจัดสรร
+  let needs;
+  try{
+    needs=EX.hosp.filter(h=>hold.indexOf(h.hcode)<0)
+      .map(h=>{const r0=exSimPath(h,0); return {hc:h.hcode,need:exTopUp({h,r0})};})
+      .filter(x=>x.need>0).sort((a,b)=>b.need-a.need);
+  } finally { EXST.rgAlloc=keep; }
+  const out=[];
+  for(const x of needs){
+    let want=x.need;
+    while(want>0){
+      const f=hold.slice().sort((a,b)=>left[b]-left[a])[0];
+      if(!f||left[f]<=0){ want=0; break; }
+      const a=Math.min(want,left[f]);
+      const ex=out.find(o=>o.f===f&&o.t===x.hc);
+      if(ex) ex.a+=a; else out.push({f,t:x.hc,a});
+      left[f]-=a; want-=a;
+    }
+    if(hold.every(k=>left[k]<=0)) break;             // เงินหมดแล้ว
+  }
+  EXST.rgAlloc=out.map(o=>({f:o.f,t:o.t,a:Math.round(o.a/SV_STEP)*SV_STEP})).filter(o=>o.a>0);
+  exSave(); exRender();
+}
+// ⚠️ exNetAfterDebt ต้องหักเงินเขตที่ฝากไว้ออก และบวกเงินเขตที่ได้รับจัดสรรเข้ามา
+//    (ทั้งสองอย่างเป็นเงินสดล้วน ไม่แตะหนี้สิน)
+function exNetAfterDebt(h){ return h.bs.cn-exPayIn(h)+exArIn(h)+exXferNet(h)-exRgDep(h)+exRgIn(h); }
 function exMoeLeft(x){ return exNetAfterDebt(x.h) - (x.r0.moeMo||0)*exHorMonths(x.h); }
 // เงินที่ต้องเติมขั้นต่ำให้ "อยู่รอด" ถึงเดือนเป้า — คนละตัวกับเงินสนับสนุน Solver (ซึ่งเล็งระดับวิกฤต)
 // ⚠️ ตัดเศษต่ำกว่า 1 บาททิ้ง (11 ส.ค. 69) — เงินโยกช่วยที่เติม "ครบพอดี" เหลือเศษ float ระดับ 0.2 บาท
@@ -1593,6 +1649,8 @@ function exDefaultState(){
           // xfer: แผนโยกเงินช่วยกันระหว่าง รพ. [{f:hcodeผู้ให้, t:hcodeผู้รับ, a:จำนวนบาท}] — เจ้าของงานสั่ง 6 ส.ค. 69
           // เก็บถาวรใน localStorage (เป็นแผนจัดสรรจริง ไม่ใช่มุมมองชั่วคราวแบบ hub)
           xfer:[],
+          // rgAlloc: แผนเติมจาก 'เงินของเขตที่ฝากไว้' [{f:hcodeผู้ฝาก, t:hcodeผู้รับ, a:บาท}]
+          rgAlloc:[],
           // arPct/arOvr: ลูกหนี้ตามจ่ายที่คาดว่า "เก็บได้จริง" — % รวมทั้งเขต + กำหนดเองรายแห่ง (บาท)
           arPct:100, arOvr:{},
           // wide: โหมดกว้าง — ซ่อนคอลัมน์จังหวัด + ย่อคอลัมน์ชื่อ รพ. เพื่อให้เห็นคอลัมน์ขวาครบในหน้าเดียว
@@ -1610,7 +1668,7 @@ function exDefaultState(){
 function exSave(){ try{ localStorage.setItem(exStoreKey(), JSON.stringify(EXST)); }catch(e){} }
 function exMergeState(s){
   if(!s) return;
-  EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},sect:{...(s.sect||{})},xfer:Array.isArray(s.xfer)?s.xfer:[],arOvr:{...(s.arOvr||{})}};
+  EXST={...EXST,...s,types:{...EXST.types,...(s.types||{})},tj:{...EXST.tj,...(s.tj||{})},open:{...EXST.open,...(s.open||{})},sect:{...(s.sect||{})},xfer:Array.isArray(s.xfer)?s.xfer:[],rgAlloc:Array.isArray(s.rgAlloc)?s.rgAlloc:[],arOvr:{...(s.arOvr||{})}};
 }
 function exLoad(){
   EXST=exDefaultState(); EX_CARRY=null;
@@ -1867,8 +1925,11 @@ function exSimPath(h, inj, sc){
   // 🔄 เงินโยกช่วยสุทธิ รวมเข้ากับ inj ตรงนี้ที่เดียว → ทุกคอลัมน์/Solver/เพดาน รับผลอัตโนมัติ
   //    ผู้รับ (net บวก) = ได้เงินอุดหนุน · ผู้ให้ (net ลบ) = จ่ายเงินอุดหนุนออก (กลไก drain เดิมรองรับสองทิศอยู่แล้ว)
   //    ⚠️ Solver (exSolveFor) จึงหา "เงินที่ยังต้องขอเพิ่มนอกเหนือจากที่โยกกันเองแล้ว" ซึ่งเป็นความหมายที่ต้องการ
-  inj=(+inj||0)+exXferNet(h);
+  inj=(+inj||0)+exXferNet(h)+exRgIn(h);   // เงินเขตที่ได้รับจัดสรร = เงินอุดหนุน (เข้า NI เหมือนเงินสนับสนุน)
   let st={cca:bs.ca, ccl:bs.cl, cqn:bs.qn, ccn:bs.cn, ni:bs.ni, mo:bs.mo};
+  // 🏦 หักเงินของเขตที่ฝากไว้ออกจากยอดตั้งต้น — ไม่ใช่เงินของ รพ. เอง
+  //    ⛔ ห้ามรวมเข้า inj เพราะ inj เข้า NI ด้วย — การหักเงินฝากไม่ใช่ค่าใช้จ่าย ไม่ควรกด NI
+  { const d=exRgDep(h); if(d>0){ st.cca-=d; st.cqn-=d; st.ccn-=d; } }
   // ── กลไกเงินสดไม่พอ ตามหลักเกณฑ์คงค้าง (CFO กำหนด 28 ก.ค. 69) ──────────────────
   // ยอดคงเหลือติดลบเป็นไปไม่ได้ทางบัญชี (เงินสดติดลบ = ไม่มีเงินจ่ายแต่ยังจ่าย) และ รพ. ต้อง
   // กันเงินสดไว้จ่าย "ค่าใช้จ่ายจำเป็น (MOE)" ของเดือนที่เหลือถึงสิ้นปีงบก่อนเสมอ
@@ -2036,6 +2097,14 @@ function exSimPath(h, inj, sc){
     // ⚠️ ดูดเกินเงินสดที่มีไม่ได้ (จะให้เครดิตลูกค้าเกินกว่าเงินที่มีไม่ได้) → เกลี่ยตามสัดส่วน
     if(seas&&(arProf||invProf)){
       let sAR=arProf?((+arProf[st.mo-1]||0)-arOff):0, sINV=invProf?((+invProf[st.mo-1]||0)-invOff):0;
+      // 🚨 เพดาน 2 ทาง — ไม่ใส่แล้วได้ QR > CR ซึ่ง**เป็นไปไม่ได้ทางบัญชี**
+      //   (สินทรัพย์เร็ว ⊆ สินทรัพย์หมุนเวียน เสมอ) เจอจริงตอนเทสต์: ฮอด QR 1.142 > CR 1.075
+      //   ขาขึ้น: ดูดเป็นลูกหนี้/สินค้าคงเหลือเกิน "เงินสดที่มี" ไม่ได้
+      //   ขาลง: ปล่อยลูกหนี้/สินค้าคงเหลือคืนเป็นเงินสด เกิน "ยอดที่มีอยู่จริง" ไม่ได้
+      //         สินค้าคงเหลือคงเหลือ = cca − cqn · ลูกหนี้คงเหลือ = cqn − ccn
+      const invOn=Math.max(0,st.cca-st.cqn), arOn=Math.max(0,st.cqn-st.ccn);
+      if(sINV<-invOn) sINV=-invOn;
+      if(sAR<-arOn)  sAR=-arOn;
       const tot=sAR+sINV;
       if(tot>0&&tot>st.ccn){ const k=Math.max(0,st.ccn)/tot; sAR*=k; sINV*=k; }
       st.ccn-=sAR+sINV; st.cqn-=sINV;
@@ -2067,7 +2136,7 @@ function exSimPath(h, inj, sc){
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     if(k<=fyMo) endRisk=r;   // endRisk = ระดับ ณ "สิ้นปีงบ" (พื้นที่คุมเสมอ) — ถ้าเดือนเป้าไกลกว่า ห้ามเลื่อนตาม
   }
-  return {sepRisk,endRisk,cashOut,niM,wcAR,wcINV,revMo:exRevMo(h),moeMo:moeMoV,moeAccMo:exMoeAccMo(h),
+  return {sepRisk,endRisk,cashOut,niM,wcAR,wcINV,rgDep:exRgDep(h),rgIn:exRgIn(h),revMo:exRevMo(h),moeMo:moeMoV,moeAccMo:exMoeAccMo(h),
           stretchMo,apStretch,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
           owedAdd,resNeed0,resCash:resCashV,resAccr:resAccrV,cashAvail0,cnEnd:st.ccn,clEnd:st.ccl};
 }
@@ -2798,6 +2867,7 @@ async function renderExec(){
     <div class="panel" style="margin-top:14px" id="exMoeBox"></div>
     <div class="panel" style="margin-top:14px" id="exRevBox"></div>
     <div class="panel" style="margin-top:14px" id="exTjBox"></div>
+    <div class="panel" style="margin-top:14px" id="exRgBox"></div>
     <div class="panel" style="margin-top:14px" id="exProvTjBox"></div>
     <div class="panel" style="margin-top:14px" id="exResBox"></div>
     <div class="gap-note" style="margin-top:14px">⚙️ สมมติฐาน: <b>NI จำลอง/เดือน = Σรายรับกองทุน×(1+%ปรับ) − MOE (นิยามกองเศรษฐกิจสุขภาพ) − คชจ.นอกนิยาม (run-rate) − รายการไม่ใช่เงินสด</b> · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด · ค่าเฉลี่ยรายรับ/รายจ่ายมาจากยอดจริงสะสม ${EX.monthsElapsed} เดือน (ต.ค.–${EX.periodLabel}) จากงบทดลอง — <b>รวมส่วนต่ำ/ส่วนสูงแล้ว</b> · เงินสนับสนุน = เงินก้อนครั้งเดียวเดือน 0 เพิ่ม CA/QN/เงินสด <b>และรับรู้เป็นรายได้เงินอุดหนุนจากหน่วยงานภาครัฐเข้า NI ด้วย</b> (ตามผัง MOPH หลักเดียวกับ Option ยกหนี้ — CFO กำหนด 27 ก.ค. 69) · เกณฑ์คะแนน CR/QR/Cash/NWC/NI/SU ตรงสูตรทางการกองเศรษฐกิจสุขภาพชุดเดียวกับหน้าจำลองเดิม · จุดตั้งต้นเดือน 0 ตรง badge ที่แสดง (${exRiskSrcLab()}) · เป็นการจำลองเชิงสถานการณ์เพื่อวางแผนจัดสรร ไม่ใช่พยากรณ์ — ที่มารายบัญชีของแต่ละส่วนดูในหัวข้อนั้น ๆ</div>
@@ -3177,6 +3247,63 @@ function exCopyProvTSV(){
   const done=ok=>{ const el=document.getElementById('exProvCopyMsg'); if(el) el.textContent=ok?'คัดลอกแล้ว ✓ วางใน Excel ได้เลย':'คัดลอกไม่ได้'; };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(EXPROV_TSV).then(()=>done(true),()=>done(false));
   else done(false);
+}
+// ── 🏦 แผง "เงินของเขตที่ฝากไว้" (เจ้าของงานสั่ง 12 ส.ค. 69) ───────────────────────
+// เลือกได้ว่าจะเติมให้ รพ. ไหน และดึงจากก้อนของ รพ. ผู้ฝากรายใด
+// หลักการเดียวกับเงินเติมสภาพคล่อง: เป้าคือปิด "ส่วนขาดสภาพคล่อง(MOE)" ถึงเดือนเป้า
+function exRenderRg(items){
+  const box=document.getElementById('exRgBox'); if(!box) return;
+  const hold=exRgHolders();
+  if(!hold.length){ box.innerHTML=''; return; }
+  const nm=hc=>{const h=EX.hosp.find(x=>x.hcode===hc); return h?h.name:hc;};
+  const pool=exRgPool(), left=exRgLeftAll(), used=pool-left;
+  // แถวผู้ฝาก
+  const holdRows=hold.map(f=>`<tr><td class="l"><b>${nm(f)}</b></td>
+    <td>${fmtM(+EX.regionDep[f]||0)}</td><td>${fmtM(exRgUsed(f))}</td>
+    <td class="${exRgLeft(f)>0?'brk-ok':''}">${fmtM(exRgLeft(f))}</td></tr>`).join('');
+  // แถวแผนจัดสรร
+  const plan=exRgList().slice().sort((a,b)=>b.a-a.a);
+  const planRows=plan.length?plan.map(x=>{
+    const h=EX.hosp.find(o=>o.hcode===x.t);
+    const r0=h?exSimPath(h,0):null, sh=h&&r0?exTopUp({h,r0}):0;
+    return `<tr><td class="l">${nm(x.f)}</td><td class="l"><b>${nm(x.t)}</b>${h?`<span class="cellsub">${h.prov||''} · ${h.type}</span>`:''}</td>
+      <td><b>${fmtM(x.a)}</b></td>
+      <td>${sh>0?`<span class="brk-no">ยังขาด ${fmtM(sh)}</span>`:'<span class="brk-ok">✅ ครบแล้ว</span>'}</td>
+      <td><button type="button" class="ovbulkbtn" onclick="exRgDel('${x.f}','${x.t}')">ลบ</button></td></tr>`;
+  }).join(''):'<tr><td colspan="5" class="l"><span class="tgt-note">ยังไม่ได้จัดสรร — กด ⚡ จัดสรรอัตโนมัติ หรือเพิ่มรายการเองด้านล่าง</span></td></tr>';
+  // ตัวเลือกผู้รับ = ทุกแห่งที่ไม่ใช่ผู้ฝาก
+  const opts=EX.hosp.filter(h=>hold.indexOf(h.hcode)<0)
+    .slice().sort((a,b)=>(a.prov||'').localeCompare(b.prov||'','th')||a.name.localeCompare(b.name,'th'))
+    .map(h=>`<option value="${h.hcode}">${h.prov||''} · ${h.name}</option>`).join('');
+  const fOpts=hold.map(f=>`<option value="${f}">${nm(f)} (เหลือ ${fmtM(exRgLeft(f))})</option>`).join('');
+  box.innerHTML=`<h3>🏦 เงินของเขตที่ฝากไว้กับ รพ. — ใช้เติมสภาพคล่องให้ทั้งเขต<span class="sp"></span></h3>
+    <div class="note">เงินก้อนนี้ <b>ไม่ใช่ของ รพ. ที่ถือไว้</b> จึง<b>หักออกจากเงินสด+เทียบเท่าของเขาตั้งแต่ต้นแล้ว</b>
+      ทุกคอลัมน์ในหน้านี้ (เงินสดสุทธิ · Cash/QR/CR · ระดับวิกฤต) คิดบนยอดที่หักแล้วทั้งหมด
+      — ⚠️ ตรวจงบ ${EX.periodLabel} แล้ว<b>ไม่มีบัญชีเงินรับฝากคู่กันฝั่งหนี้สิน</b> จึงหักฝั่งเงินสดอย่างเดียว ไม่แตะหนี้สิน</div>
+    <div class="tgt-row" style="margin-top:8px">
+      <b>ก้อนรวม ${fmtM(pool)}</b> · จัดสรรแล้ว <b>${fmtM(used)}</b> · คงเหลือ <b class="${left>0?'brk-ok':'brk-no'}">${fmtM(left)}</b>
+      <button type="button" class="tgt-apply" style="margin-left:10px" onclick="exRgAuto()">⚡ จัดสรรอัตโนมัติ</button>
+      <button type="button" class="ovbulkbtn" onclick="exRgClear()">🗑️ ล้างแผน</button>
+    </div>
+    <div class="wrap-x" style="margin-top:8px"><table class="gaptbl">
+      <tr><th class="l">ผู้ถือเงินฝากของเขต</th><th>ยอดที่ฝากไว้</th><th>จัดสรรไปแล้ว</th><th>คงเหลือ</th></tr>${holdRows}
+    </table></div>
+    <div class="wrap-x" style="margin-top:10px"><table class="gaptbl">
+      <tr><th class="l">ดึงจากก้อนของ</th><th class="l">เติมให้</th><th>จำนวน</th><th>ส่วนขาดสภาพคล่องหลังเติม</th><th></th></tr>${planRows}
+    </table></div>
+    <div class="tgt-row" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span class="tgt-note">เพิ่มเอง:</span>
+      <select id="exRgF">${fOpts}</select>
+      <span class="tgt-note">→</span>
+      <select id="exRgT">${opts}</select>
+      <input type="number" id="exRgA" class="exnum" step="0.5" min="0" placeholder="ลบ.">
+      <button type="button" class="tgt-apply" style="margin:0" onclick="(function(){
+        var f=document.getElementById('exRgF').value,t=document.getElementById('exRgT').value,
+            a=(+document.getElementById('exRgA').value||0)*1e6; exRgAdd(f,t,a);})()">เพิ่ม/แก้</button>
+    </div>
+    <div class="note" style="margin-top:6px">⚡ จัดสรรอัตโนมัติ = ไล่เติมส่วนขาดสภาพคล่อง(MOE) ถึง ${exSepLab()}
+      จากแห่งที่ขาดมากสุดก่อน ดึงจากก้อนที่เหลือมากสุดก่อน · <b>ไม่เติมให้ผู้ถือเงินฝากเอง</b>
+      (เงินอยู่ในมือเขาแล้ว เติมกลับเท่ากับไม่ได้หักออกตั้งแต่แรก)</div>`;
 }
 function exRenderProvTj(items){
   const box=document.getElementById('exProvTjBox'); if(!box) return;
@@ -3700,6 +3827,7 @@ function exRender(){
   const nArIn=items.filter(x=>exArIn(x.h)>0).length;
   // สรุปรายจังหวัด (แผงระหว่าง Option ตามจ่าย ↔ ตารางผลจำลอง) — ต้องเรียกหลังสร้าง items
   // เพื่อให้รวมจากชุดแถวเดียวกับตารางล่างเป๊ะ ๆ ตำแหน่งใน DOM กำหนดที่ #exProvTjBox แล้ว
+  exRenderRg(items);
   exRenderProvTj(items);
   const nHelp=items.filter(x=>(x.inj||0)>0).length;
   const nFail=items.filter(x=>x.need==null).length;
@@ -4169,6 +4297,7 @@ function exRender(){
   exSecWrap('exMoeBox','moe',false);
   exSecWrap('exRevBox','rev',false);
   exSecWrap('exTjBox','tj',false);
+  exSecWrap('exRgBox','rg',false);
   // ⚠️ ไม่ห่อ exProvTjBox — แผงสรุปรายจังหวัดใช้ <details> + exKeepOpen('provtj') ยุบได้อยู่แล้ว
   //    และค่าเริ่มต้นเป็น "ยุบ" ตามที่ต้องการ (EXST.open.provtj ไม่ได้ตั้งไว้) · ห่อซ้ำจะได้ 2 ชั้น
   exSecWrap('exResBox','sim',true);

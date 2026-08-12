@@ -145,9 +145,10 @@ for(const [ver,pct,lab] of [['69',100,'MOE.Ver69'],['68',100,'MOE.Ver68'],['69p'
   const nTh=((rows[0]||'').match(/<th\b/g)||[]).length;
   const main=rows.filter(r=>r.includes('class="ovtgl"'));
   const badTd=main.filter(r=>(r.match(/<td\b/g)||[]).length!==nTh).length;
-  // ฐาน 20 คอลัมน์ (+ ลูกหนี้ถ้าเปิด) — ชุดใหม่ 11 ส.ค. 69 รวม 6 คอลัมน์ "เงินที่ต้องสนับสนุนรายเกณฑ์"
-  // และตัด "เงินที่ยกให้" ออก · จำนวนคอลัมน์ที่ถูกต้องตรวจละเอียดใน test_exec_columns.js
-  chk(!err && nTh===20+(A.SHOW_TJAR?1:0) && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
+  // ฐาน 21 คอลัมน์ (+ ลูกหนี้ถ้าเปิด) — 11 ส.ค. 69 รวม 6 คอลัมน์ "เงินที่ต้องสนับสนุนรายเกณฑ์"
+  // และตัด "เงินที่ยกให้" ออก · 12 ส.ค. 69 เพิ่มคอลัมน์ NWC (20 → 21)
+  // จำนวนคอลัมน์ที่ถูกต้องตรวจละเอียดใน test_exec_columns.js — ที่นี่ตรวจแค่ว่าไม่พังตอนสลับโหมด MOE
+  chk(!err && nTh===21+(A.SHOW_TJAR?1:0) && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
       && html.includes(`value="${ver}" selected`) && moeBox.includes(lab),
       `โหมด ${lab}: เรนเดอร์ครบ ${main.length} แถว × ${nTh} คอลัมน์ · dropdown ค้างค่าถูก · ไม่มี undefined/NaN`,
       err||(badTd?`td ไม่ครบ ${badTd} แถว`:''));
