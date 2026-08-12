@@ -2330,6 +2330,86 @@ function exNeedPop(hc, k){
   el.style.display='flex';
 }
 function exNeedClose(){ const el=document.getElementById('exNeedOverlay'); if(el) el.style.display='none'; }
+// ── ป็อปอัป "ทำไมระดับถึงเปลี่ยน" (เจ้าของงานสั่ง 12 ส.ค. 69) ────────────────────────
+// คลิก badge คอลัมน์ "ระดับ <เดือนเป้า> ก่อนช่วย" → กางสะพานคะแนน:
+//   คะแนนงวดปัจจุบัน → ปัจจัยที่เปลี่ยนระหว่างทาง → มาตรการที่เลือก → คะแนน ณ เดือนเป้า
+// ⚠️ แต่ละแถวคำนวณด้วยการ "ปิดปัจจัยนั้นตัวเดียว" แล้ววัดส่วนต่างจริง ไม่ใช่การเดา
+//    ผลรวมของแถวไม่เท่ากับส่วนต่างรวม เพราะปัจจัยมีปฏิสัมพันธ์กัน (ระบุไว้บนจอ)
+// ⚠️ ต้องคืนค่า EXST ทุกครั้งหลังจำลอง ไม่งั้นสถานะทั้งหน้าเพี้ยนตามป็อปอัป
+function exWhyPop(hc){
+  const h=EX.hosp.find(p=>p.hcode===hc); if(!h) return;
+  const lab=exSepLab(), bs=h.bs;
+  const base=exSimPath(h,0), b1=base.sepBreak; if(!b1) return;
+  const now=h.risk!=null?h.risk:0, at=base.sepRisk;
+  const badge=v=>'<span class="badge" style="background:'+riskColor(v)+';padding:1px 7px">'+(v!=null?v:'–')+'</span>';
+  const keep=EXST, sim=o=>{ EXST=Object.assign({},keep,o); let r; try{ r=exSimPath(h,0); } finally { EXST=keep; } return r; };
+  const FACT=[
+    {n:'ทิศทางผลดำเนินงานรายเดือน', d:'NI ของแต่ละเดือนไม่เท่ากัน + ลูกหนี้/สินค้าคงเหลือดูดเงินสดไปตามฤดูกาล (วัดจากงบจริงปีงบ 2567+2568 ของ รพ. นี้เอง)', off:{seas:false}},
+    {n:'หนี้สินหมุนเวียนเดินตามจริง', d:'เจ้าหนี้การค้า/ค่าใช้จ่ายค้างจ่ายโตตามอัตราจริงของ รพ. นี้ = ตัวส่วนของ CR/QR/Cash ratio โตขึ้นทุกเดือน', off:{clGrow:false}}
+  ];
+  const rowsF=FACT.map(f=>{
+    const lv=sim(f.off).sepRisk, d=(lv==null||at==null)?null:(at-lv);
+    return '<tr><td class="l"><b>'+f.n+'</b><div class="note">'+f.d+'</div></td><td>'+(lv==null?'–':badge(lv))+'</td>'
+      +'<td class="'+(d>0?'brk-no':(d<0?'brk-ok':''))+'">'
+      +(d==null?'–':(d>0?'ดันระดับขึ้น '+d:(d<0?'กดระดับลง '+(-d):'ไม่เปลี่ยนระดับ')))+'</td></tr>';
+  }).join('');
+  const tjOn=EXST.tj&&EXST.tj.mode!=='off';
+  const tjLab={pay:'ตามจ่ายเป็นเงินสด',forgive:'ยกหนี้ (รับรู้เป็นรายได้)',smart:'จ่ายก่อนแล้วคืนบางส่วน'}[EXST.tj?EXST.tj.mode:'']||'';
+  const x={h,r0:base};
+  const xin=exXferIn(h), xout=exXferOut(h), short=exTopUp(x);
+  const need=exSolveFor(h,EXST.tgt), inj=exInjOf(h,need)||0;
+  const rAfter=exSimPath(h,inj);
+  const acts=[];
+  if(tjOn){ const off=sim({tj:{mode:'off',scope:(EXST.tj||{}).scope||'crisis'}});
+    acts.push({n:'Option หนี้ค่ารักษาตามจ่าย: <b>'+tjLab+'</b>',
+      d:'เจ้าหนี้ตามจ่าย '+fmtM(exPayIn(h))+' · ลูกหนี้ '+fmtM(exArIn(h))
+        +(EXST.tj.mode==='forgive'?' — ยกหนี้รับรู้เป็นรายได้ (4301020105.256) จึงดัน NI ขึ้นด้วย':''),
+      lv:off.sepRisk, cmp:'เทียบกับถ้าไม่ทำ Option นี้'}); }
+  if(xin>0) acts.push({n:'🔄 รับเงินโยกช่วยจาก รพ. อื่น <b>'+fmtM(xin)+'</b>', d:'นับรวมอยู่ในระดับ "ก่อนช่วย" แล้ว', lv:null, cmp:''});
+  if(xout>0) acts.push({n:'🔄 ยกเงินไปช่วย รพ. อื่น <b>'+fmtM(xout)+'</b>', d:'ทำให้เงินสดของ รพ. นี้ลดลง', lv:null, cmp:''});
+  const rowsA=acts.map(a=>'<tr><td class="l"><b>'+a.n+'</b><div class="note">'+a.d+'</div></td><td>'
+    +(a.lv==null?'<span class="tgt-note">—</span>':badge(a.lv))+'</td><td class="note">'+a.cmp+'</td></tr>').join('');
+  const b0=(bs.cl?Object.assign({},scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo),{ni:bs.ni,mo:bs.mo}):null);
+  const flipBad=b0?EX_CRIT.filter(c=>c.ok(b0)&&!c.ok(b1)).map(c=>c.n):[];
+  const flipGood=b0?EX_CRIT.filter(c=>!c.ok(b0)&&c.ok(b1)).map(c=>c.n):[];
+  const moeTxt=short>0
+    ? 'เงินสด+เทียบเท่าหลังจัดการหนี้สิน <b>'+fmtM(exNetAfterDebt(h))+'</b> − ภาระ MOE '+exHorMonths(h)+' เดือน <b>'+fmtM((base.moeMo||0)*exHorMonths(h))+'</b> = <b class="brk-no">ขาด '+fmtM(short)+'</b>'
+      +'<br>⚠️ เงินก้อนนี้ทำให้ <b>จ่ายค่าใช้จ่ายจำเป็นได้ครบถึง '+lab+'</b> — <b>คนละตัว</b>กับเงินสนับสนุนที่เล็งระดับวิกฤต ('+(need==null?'เงินก้อนอย่างเดียวไม่พอ':fmtM(need))+') เพราะเกณฑ์คะแนนวัดอัตราส่วนงบดุล ไม่ได้วัดว่าเงินพอจ่ายหรือไม่'
+    : 'เงินสดพอจ่าย MOE ถึง '+lab+' อยู่แล้ว (คงเหลือ <b class="brk-ok">'+fmtM(exMoeLeft(x))+'</b>) — ไม่ต้องเติมเพื่อ<b>สภาพคล่อง</b>'
+      +(need>0?' แต่ยังต้องใช้ <b>'+fmtM(need)+'</b> เพื่อให้<b>ระดับวิกฤต</b>ถึงเป้า ≤'+EXST.tgt+' ซึ่งเป็นคนละเรื่องกัน':'');
+  let el=document.getElementById('exWhyOverlay');
+  if(!el){ el=document.createElement('div'); el.id='exWhyOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
+  el.onclick=exWhyClose;
+  el.innerHTML='<div class="nip-modal" style="max-width:880px" onclick="event.stopPropagation()">'
+   +'<div class="nip-head" style="display:flex;align-items:flex-start;gap:10px">'
+   +'<div style="flex:1;min-width:0"><h3>📈 ทำไมระดับถึงเปลี่ยน — '+h.name+'</h3>'
+   +'<div class="note">'+(h.prov||'')+' · '+h.type+' · จากงวด <b>'+tLab(bs.t)+'</b> ถึงเดือนเป้า <b>'+lab+'</b></div></div>'
+   +'<button type="button" class="tgt-apply" style="margin:0;flex-shrink:0" onclick="exWhyClose()">✕ ปิด</button></div>'
+   +'<div class="nip-body" style="display:block">'
+   +'<div class="tgt-row" style="font-size:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+   +'<span>คะแนนงวด '+tLab(bs.t)+' '+badge(now)+'</span><span>→</span>'
+   +'<span>ก่อนช่วย ณ '+lab+' '+badge(at)+'</span>'
+   +(inj>0?'<span>→</span><span>หลังเติมเงิน '+fmtM(inj)+' '+badge(rAfter.sepRisk)+'</span>':'')+'</div>'
+   +'<div class="note">'+(now===at?'ระดับไม่เปลี่ยนระหว่างทาง':(at>now?'<b class="brk-no">แย่ลง '+(at-now)+' ระดับ</b>':'<b class="brk-ok">ดีขึ้น '+(now-at)+' ระดับ</b>'))
+   +(flipBad.length?' · เกณฑ์ที่พลิกเป็น<b>ไม่ผ่าน</b>: <b class="brk-no">'+flipBad.join(' · ')+'</b>':'')
+   +(flipGood.length?' · เกณฑ์ที่พลิกเป็น<b>ผ่าน</b>: <b class="brk-ok">'+flipGood.join(' · ')+'</b>':'')+'</div>'
+   +'<div class="tgt-row" style="font-weight:600;margin-top:12px">① ปัจจัยที่ทำให้เปลี่ยนระหว่างทาง</div>'
+   +'<div class="note">แต่ละแถว = <b>ปิดปัจจัยนั้นตัวเดียว</b>แล้วดูว่าระดับจะเป็นเท่าไหร่ — ส่วนต่างคือผลของปัจจัยนั้น</div>'
+   +'<table class="gaptbl" style="margin-top:6px"><tr><th class="l">ปัจจัย</th><th>ถ้าไม่มีปัจจัยนี้</th><th>ผลของปัจจัย</th></tr>'+rowsF+'</table>'
+   +'<div class="tgt-row" style="font-weight:600;margin-top:12px">② มาตรการที่เลือกอยู่ตอนนี้</div>'
+   +(acts.length?'<table class="gaptbl" style="margin-top:6px"><tr><th class="l">มาตรการ</th><th>ระดับถ้าไม่ทำ</th><th></th></tr>'+rowsA+'</table>'
+      :'<div class="note">ยังไม่ได้เปิดมาตรการใด (Option ตามจ่าย/ยกหนี้ = ปิด · ไม่มีเงินโยกช่วย) — ระดับ "ก่อนช่วย" จึงเป็นผลของการดำเนินงานล้วน</div>')
+   +'<div class="tgt-row" style="font-weight:600;margin-top:12px">③ เติมเงินให้พอจ่าย MOE ถึง '+lab+'</div>'
+   +'<div class="note">'+moeTxt+'</div>'
+   +'<div class="tgt-row" style="font-weight:600;margin-top:12px">④ ผลลัพธ์ ณ '+lab+'</div>'
+   +'<div class="note">CR '+fmtR(b1.cr)+' · QR '+fmtR(b1.qr)+' · Cash '+fmtR(b1.cash)+' · NWC '+fmtM(b1.nwc)
+   +' · NI สะสม '+fmtM(b1.ni)+' · SU '+b1.su+' → รวม <b>'+(b1.li+b1.st+b1.su)+'</b> คะแนน '
+   +'(แสดงเป็นระดับ '+badge(at)+' หลัง anchor กับคะแนนงวดปัจจุบัน)</div>'
+   +'<div class="note" style="margin-top:8px">⚠️ ผลของแต่ละปัจจัย<b>บวกกันตรง ๆ ไม่ได้</b> — ปัจจัยมีปฏิสัมพันธ์กัน เช่น หนี้สินโตทำให้ตัวส่วนของทุกอัตราส่วนโตพร้อมกัน</div>'
+   +'</div></div>';
+  el.style.display='flex';
+}
+function exWhyClose(){ const el=document.getElementById('exWhyOverlay'); if(el) el.style.display='none'; }
 // ══ 📂 ยุบ/ขยายแผงในแท็บผู้บริหาร (เจ้าของงานสั่ง 12 ส.ค. 69) ══════════════════════════════
 // ทุกแผงยุบเป็นค่าเริ่มต้น ยกเว้นตารางผลจำลอง (แผงทำงานหลัก) — จำสถานะไว้ใน EXST.sect
 // ⚠️ ห้ามใช้คีย์ EXST.open ซ้ำ — คีย์นั้นเป็นของตารางย่อยข้างในแผง MOE/รายรับ (ยุบ/กางรายหมวด)
@@ -3806,7 +3886,7 @@ function exRender(){
           got>0?`<span class="cellsub" style="color:var(--green)">รับแล้ว ${fmtM(got)} จาก ${ins.length} แห่ง</span>`:''}${
           got>0?(rest>0?`<span class="cellsub warn">ยังขาด ${fmtM(rest)}</span>`:`<span class="cellsub" style="color:var(--green)">✅ ครบแล้ว</span>`):''}${badges}</td>`;
       })()}
-      <td><span class="badge" style="background:${riskColor(r0.sepRisk)}">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
+      <td><span class="badge brkbadge" style="background:${riskColor(r0.sepRisk)}" title="คลิกดูว่าระดับเปลี่ยนจากคะแนนงวดปัจจุบันเพราะอะไรบ้าง — ปัจจัยระหว่างทาง · มาตรการที่เลือก · เงินที่ต้องเติมให้พอจ่าย MOE" onclick="exWhyPop('${hc}')">${r0.sepRisk!=null?r0.sepRisk:'–'}</span></td>
       ${(()=>{
         // 💰 เงินที่ต้องสนับสนุนให้ "แต่ละเกณฑ์" ผ่าน ณ เดือนเป้า (11 ส.ค. 69) — ดูข้อห้ามบวกกันที่ exSolveCrit
         // ตัวหนา = เกณฑ์ที่แพงสุดของ รพ. นั้น = "ตัวคุม" ที่กำหนดว่าต้องเติมเงินเท่าไหร่จริง ๆ
