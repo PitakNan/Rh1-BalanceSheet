@@ -351,6 +351,52 @@ def main():
             prof_rows.append([v - avg for v in mm])        # ส่วนต่างจากค่าเฉลี่ยปีนั้น (ผลรวม = 0)
         ni_prof = ([round(sum(c) / len(prof_rows), 0) for c in zip(*prof_rows)]
                    if prof_rows else [0.0] * 12)
+        # ── โปรไฟล์ CL รายเดือน (เจ้าของงานสั่ง 12 ส.ค. 69 · เหตุผลเดียวกับ niProf) ──────
+        # NWC = CA − CL · CA เดินตามกระแสเงินสด ส่วน CL เดินตาม clMo ซึ่งเป็น "ค่าเฉลี่ยแบน"
+        # → NWC จึงแบนตาม เป็นข้อผิดเดียวกับที่ NI เคยเป็น (clYE = แพตช์บล็อก 3 เดือน แบบเดียวกับ niYE)
+        # วัดจริงทั้งเขต: ธ.ค. +114 · พ.ค. −106 · มี.ค. −104 ลบ. = ไม่แบนเลย
+        # ⚠️ cl เป็น "ยอดคงเหลือ" ไม่ใช่ยอดสะสมในปีงบ → เดือน 1 ต้องเทียบกับ ด.12 ของปีก่อน
+        #    (ต่างจาก ni ที่รีเซ็ตทุก 1 ต.ค. จึงใช้ยอดตัวเองได้เลย) — พลาดตรงนี้โปรไฟล์จะเบ้ทั้งชุด
+        cl_rows = []
+        for fy in PROF_FY:
+            y = {int(r["t"]) % 100: r for r in tr_all
+                 if r.get("cl") is not None and int(r["t"]) // 100 == fy}
+            prev12 = next((r for r in tr_all if r.get("t") == (fy - 1) * 100 + 12
+                           and r.get("cl") is not None), None)
+            if len(y) < 12 or not prev12: continue
+            mm = [float(y[m]["cl"]) - float(prev12["cl"] if m == 1 else y[m - 1]["cl"])
+                  for m in range(1, 13)]
+            avg = sum(mm) / 12.0
+            cl_rows.append([v - avg for v in mm])
+        cl_prof = ([round(sum(c) / len(cl_rows), 0) for c in zip(*cl_rows)]
+                   if cl_rows else [0.0] * 12)
+        # ── โปรไฟล์ "การเปลี่ยนแปลงเงินทุนหมุนเวียน" รายเดือน (12 ส.ค. 69 · เจ้าของงานสั่ง) ──────
+        # กรอบบัญชี: งบกระแสเงินสดวิธีทางอ้อม บรรทัดที่โมเดลขาดไปคือ
+        #   ± การเปลี่ยนแปลงลูกหนี้การค้า  ± การเปลี่ยนแปลงสินค้าคงเหลือ
+        # ของเดิมบวกกำไรทั้งก้อนเข้า "เงินสด" ตรง ๆ = สมมติว่าเก็บเงินสดได้ทันที 100%
+        # ทั้งที่ลูกหนี้+สินค้าคงเหลือ = 54% ของสินทรัพย์หมุนเวียนทั้งเขต
+        # แยก 3 ถังจากตัวเลขที่มีอยู่แล้ว (ไม่ต้องดึงบัญชีเพิ่ม):
+        #   เงินสดและรายการเทียบเท่า = cn (1003X)
+        #   ลูกหนี้ + สินทรัพย์เร็วอื่น = qn − cn (1002X − 1003X)
+        #   สินค้าคงเหลือ + อื่น ๆ    = ca − qn (1001X − 1002X)
+        # ⚠️ ยอดคงเหลือ ไม่ใช่ยอดสะสมปีงบ → เดือน 1 ต้องเทียบ ด.12 ปีก่อน (เหมือน cl_prof)
+        def _bucket_prof(getter):
+            rows = []
+            for fy in PROF_FY:
+                y = {int(r["t"]) % 100: r for r in tr_all
+                     if int(r["t"]) // 100 == fy and r.get("ca") is not None
+                     and r.get("qn") is not None and r.get("cn") is not None}
+                p12 = next((r for r in tr_all if r.get("t") == (fy - 1) * 100 + 12
+                            and r.get("ca") is not None and r.get("qn") is not None
+                            and r.get("cn") is not None), None)
+                if len(y) < 12 or not p12: continue
+                mm = [getter(y[m]) - getter(p12 if m == 1 else y[m - 1]) for m in range(1, 13)]
+                avg = sum(mm) / 12.0
+                rows.append([v - avg for v in mm])
+            return ([round(sum(c) / len(rows), 0) for c in zip(*rows)] if rows else [0.0] * 12)
+
+        ar_prof  = _bucket_prof(lambda r: float(r["qn"]) - float(r["cn"]))
+        inv_prof = _bucket_prof(lambda r: float(r["ca"]) - float(r["qn"]))
         s = srisk.get(org5, {})
         grp = h.get("grp") or ""
         typ = "รพศ." if grp.startswith("รพศ.") else ("รพท." if grp.startswith("รพท.") else "รพช.")
@@ -376,6 +422,13 @@ def main():
                    # niProf[0..11] = ส่วนต่าง NI รายเดือน ต.ค.→ก.ย. เทียบค่าเฉลี่ยทั้งปี (ผลรวม = 0)
                    # หน้าเว็บใช้แทน niYE ทั้งหมด และหักค่าเฉลี่ยของเดือนที่ผ่านมาแล้วออกเพื่อกันนับซ้ำ
                    "niProf": ni_prof,
+                   # clProf[0..11] = ส่วนต่างการโตของหนี้สินหมุนเวียนรายเดือน (ผลรวม = 0)
+                   # ใช้คู่กับ clMo แบบเดียวกับที่ niProf ใช้คู่กับ run-rate ของ NI
+                   "clProf": cl_prof,
+                   # การเปลี่ยนแปลงเงินทุนหมุนเวียนรายเดือน (ผลรวม 12 ด. = 0 ทั้งคู่)
+                   #   arProf  = ลูกหนี้ + สินทรัพย์หมุนเวียนเร็วอื่น
+                   #   invProf = สินค้าคงเหลือ + สินทรัพย์หมุนเวียนอื่น
+                   "arProf": ar_prof, "invProf": inv_prof,
                    # รายได้ไม่ใช่เงินสด/เดือน = รับบริจาคสินทรัพย์ (หักออกจากกระแสเงินสด ดู NONCASH_REV)
                    "donMo": round(max(0.0, bal(NONCASH_REV) / mo), 0),
                    # เจ้าหนี้แยกถัง (ฐานเงินสำรอง MOE · ดู cl_bucket + RISK_EXEC_MODEL.md 3.13)
@@ -432,6 +485,27 @@ def main():
     if _pf_bad:
         raise SystemExit(f"❌ niProf ผลรวม 12 เดือนต้องเป็น 0 (เป็นการกระจายตัว ไม่ใช่การเพิ่มยอด) "
                          f"— ผิด {len(_pf_bad)} แห่ง เช่น {_pf_bad[:5]}")
+    n_cf = sum(1 for x in hosp if any(x["bs"].get("clProf") or []))
+    if hosp and n_cf < len(hosp) * 0.8:
+        raise SystemExit(f"❌ โปรไฟล์ CL รายเดือน clProf มีแค่ {n_cf}/{len(hosp)} แห่ง — "
+                         f"ตรวจ trend ปี {PROF_FY} + งวด ด.12 ของปีก่อนหน้า ใน h/*.json ก่อน")
+    _cf_bad = [x["hcode"] for x in hosp
+               if abs(sum(x["bs"].get("clProf") or [0])) > max(1000.0, abs(x["bs"]["cl"]) * 1e-4)]
+    if _cf_bad:
+        raise SystemExit(f"❌ clProf ผลรวม 12 เดือนต้องเป็น 0 — ผิด {len(_cf_bad)} แห่ง เช่น {_cf_bad[:5]}")
+    for _k, _lab in (("arProf", "ลูกหนี้"), ("invProf", "สินค้าคงเหลือ")):
+        _n = sum(1 for x in hosp if any(x["bs"].get(_k) or []))
+        if hosp and _n < len(hosp) * 0.8:
+            raise SystemExit(f"❌ โปรไฟล์เงินทุนหมุนเวียน {_k} ({_lab}) มีแค่ {_n}/{len(hosp)} แห่ง")
+        _bad = [x["hcode"] for x in hosp
+                if abs(sum(x["bs"].get(_k) or [0])) > max(1000.0, abs(x["bs"]["ca"]) * 1e-4)]
+        if _bad:
+            raise SystemExit(f"❌ {_k} ผลรวม 12 เดือนต้องเป็น 0 — ผิด {len(_bad)} แห่ง เช่น {_bad[:5]}")
+        _t = [sum(x["bs"][_k][i] for x in hosp) / 1e6 for i in range(12)]
+        print(f"โปรไฟล์{_lab}รายเดือน ({_k}) ทั้งเขต ลบ./ด.: " + " ".join(f"{v:,.0f}" for v in _t))
+    _cf_tot = [sum(x["bs"]["clProf"][i] for x in hosp) / 1e6 for i in range(12)]
+    print("โปรไฟล์ CL รายเดือน (clProf) ทั้งเขต ลบ./ด. ต.ค.→ก.ย.: "
+          + " ".join(f"{v:,.0f}" for v in _cf_tot))
     _pf_tot = [sum(x["bs"]["niProf"][i] for x in hosp) / 1e6 for i in range(12)]
     print("โปรไฟล์ NI รายเดือน (niProf) ทั้งเขต ลบ./ด. ต.ค.→ก.ย.: "
           + " ".join(f"{v:,.0f}" for v in _pf_tot))

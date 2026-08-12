@@ -1890,6 +1890,35 @@ function exSimPath(h, inj, sc){
   //     (ต่างจาก exYeAdj ที่ตรึงตัวคูณของปีนี้ไปใช้กับปีหน้าด้วย = ทอนฤดูกาลปีหน้าผิด)
   const niProf=(Array.isArray(bs.niProf)&&bs.niProf.length===12)?bs.niProf:null;
   const profOff=niProf?niProf.slice(0,bs.mo).reduce((a,b)=>a+(+b||0),0)/Math.max(1,bs.mo):0;
+  // ── โปรไฟล์ CL รายเดือน (เจ้าของงานสั่ง 12 ส.ค. 69) — เหตุผลเดียวกับ niProf ──────────
+  //   NWC = CA − CL · ฝั่ง CA เดินตามกระแสเงินสด ส่วน CL เดินตาม clMo ที่เป็น "ค่าเฉลี่ยแบน"
+  //   → NWC จึงแบนตาม CL เป็นข้อผิดเดียวกับที่ NI เคยเป็น (clYE = แพตช์บล็อก 3 เดือน เหมือน niYE)
+  //   วัดจริงทั้งเขต: ธ.ค. +114 · พ.ค. −106 · มี.ค. −104 ลบ. = ไม่แบนเลย
+  //   ⛔ NWC/CR/QR/Cash/SU ไม่มีการพยากรณ์ของตัวเอง — ทุกตัวเป็นผลลัพธ์ของ 2 ตัวขับนี้เท่านั้น
+  //      (กระแสเงินสด → CA/QN/CN · clMo+clProf → CL) แก้ที่ตัวขับที่เดียว ทุกอัตราส่วนขยับตาม
+  //   🪤 ตัวหักกันนับซ้ำของ CL ใช้ช่วงเดือน "ไม่เท่ากับ" ของ NI — พลาดตรงนี้แล้วโมเดลมองโลกสวยเกิน
+  //      niM มาจากยอดสะสม ÷ mo = ครอบคลุมเดือน 1..mo ครบ → ตัวหักใช้ niProf[0..mo-1]
+  //      clMo มาจาก (cl ณ ด.mo − cl ณ ด.1) ÷ (mo−1) = วัดจาก "ช่วงห่าง" = เดือน 2..mo เท่านั้น
+  //      → ตัวหักต้องเป็น clProf[1..mo-1] ไม่ใช่ [0..mo-1] (ต่างกันจริง 13.6 ลบ./2 เดือน ที่งวด 256910)
+  //      จับได้ด้วย test_exec_backtest: ใช้ช่วงผิดแล้ว "แย่ลง ณ ก.ย." ร่วงจาก 7 เหลือ 5 แห่ง
+  const clProf=(Array.isArray(bs.clProf)&&bs.clProf.length===12)?bs.clProf:null;
+  const clProfOff=(clProf&&bs.mo>1)?clProf.slice(1,bs.mo).reduce((a,b)=>a+(+b||0),0)/(bs.mo-1):0;
+  // ── การเปลี่ยนแปลงเงินทุนหมุนเวียน (12 ส.ค. 69 · เจ้าของงานสั่ง) ─────────────────────
+  // กรอบบัญชี: งบกระแสเงินสด **วิธีทางอ้อม** ที่สมบูรณ์ต้องมี 3 ส่วน
+  //     กำไรสุทธิ
+  //   + รายการที่ไม่ใช่เงินสด (ค่าเสื่อมราคา/ตัดจำหน่าย/หนี้สงสัยจะสูญ − รายได้รับบริจาคสินทรัพย์)
+  //   ± การเปลี่ยนแปลงในสินทรัพย์และหนี้สินดำเนินงาน   ← **ของเดิมไม่มีบรรทัดนี้เลย**
+  //   = เงินสดสุทธิจากกิจกรรมดำเนินงาน
+  // ของเดิมบวกกำไรทั้งก้อนเข้าเงินสดตรง ๆ = สมมติว่าเรียกเก็บเป็นเงินสดได้ทันที 100%
+  // ทั้งที่ลูกหนี้ + สินค้าคงเหลือ = 54% ของสินทรัพย์หมุนเวียนทั้งเขต (5,853 + 1,542 จาก 13,598 ลบ.)
+  // ผลคือ CA/สินทรัพย์เร็ว/เงินสด ขยับเท่ากันเป๊ะ → ระยะห่าง CR–QR–Cash ไม่มีวันเปลี่ยน
+  // และเงินสดถูกทำนายสูงเกินจริง (backtest ปี 68: +53.4%)
+  const arProf=(Array.isArray(bs.arProf)&&bs.arProf.length===12)?bs.arProf:null;
+  const invProf=(Array.isArray(bs.invProf)&&bs.invProf.length===12)?bs.invProf:null;
+  // ตัวหักกันนับซ้ำใช้ช่วงเดือน 2..mo เหมือน clProf (ทั้งคู่วัดจาก "ผลต่างของยอดคงเหลือ" ไม่ใช่ยอดสะสม)
+  const wcOff=a=>(a&&bs.mo>1)?a.slice(1,bs.mo).reduce((x,y)=>x+(+y||0),0)/(bs.mo-1):0;
+  const arOff=wcOff(arProf), invOff=wcOff(invProf);
+  let wcAR=0, wcINV=0;   // ยอดสะสมที่ย้ายเข้าลูกหนี้/สินค้าคงเหลือ (ใช้อธิบายในป็อปอัป)
   let owedAdd=0;                                    // เจ้าหนี้ที่เพิ่มจากการจ่ายไม่ได้ (แสดงในแผงเจาะเกณฑ์)
   // ── ตัวเลือก "MOE.Ver69 + จ่ายหนี้การค้า X%" (แบบ A ที่ CFO เลือก 6 ส.ค. 69) ──
   // ส่วนที่เลือกไม่จ่าย = ตั้งใจยืดเครดิตผู้ขาย (คนละเรื่องกับ owedAdd ที่เป็น "จ่ายไม่ได้เพราะเงินไม่มี")
@@ -1999,6 +2028,19 @@ function exSimPath(h, inj, sc){
     // ขาดดุลรายเดือนใช้เงินสำรองได้ (เป็นการดำเนินงานปกติที่เงินสำรองมีไว้เพื่อสิ่งนี้)
     // แต่ยังห้ามเงินสดติดลบ — ส่วนที่จ่ายไม่ได้ค้างเป็นเจ้าหนี้
     if(c>=0){ st.cca+=c; st.cqn+=c; st.ccn+=c; } else drain(-c,true);
+    // ── บรรทัด "การเปลี่ยนแปลงในสินทรัพย์ดำเนินงาน" ของงบกระแสเงินสดวิธีทางอ้อม ──────────
+    // เป็นการ **จัดประเภทใหม่ภายในสินทรัพย์หมุนเวียน** ไม่ได้เปลี่ยนยอด CA รวม
+    //   ลูกหนี้เพิ่ม     → เงินสดลด (ขายเชื่อ ยังไม่ได้รับเงิน) · สินทรัพย์เร็วเท่าเดิม (ลูกหนี้อยู่ใน 1002X)
+    //   สินค้าคงเหลือเพิ่ม → เงินสดลด และสินทรัพย์เร็วลด (สินค้าคงเหลือไม่อยู่ใน 1002X)
+    // → CR ไม่ขยับ · QR ขยับตามสินค้าคงเหลือ · Cash ratio ขยับตามทั้งสอง = ระยะห่างสามตัวเปลี่ยนได้จริง
+    // ⚠️ ดูดเกินเงินสดที่มีไม่ได้ (จะให้เครดิตลูกค้าเกินกว่าเงินที่มีไม่ได้) → เกลี่ยตามสัดส่วน
+    if(seas&&(arProf||invProf)){
+      let sAR=arProf?((+arProf[st.mo-1]||0)-arOff):0, sINV=invProf?((+invProf[st.mo-1]||0)-invOff):0;
+      const tot=sAR+sINV;
+      if(tot>0&&tot>st.ccn){ const k=Math.max(0,st.ccn)/tot; sAR*=k; sINV*=k; }
+      st.ccn-=sAR+sINV; st.cqn-=sINV;
+      wcAR+=sAR; wcINV+=sINV;
+    }
     if(stretchMo>0){ st.ccl+=stretchMo; apStretch+=stretchMo; }   // หนี้ที่ยืดไว้กองขึ้นเป็นเจ้าหนี้การค้า
     // ══ ปัจจัยฤดูกาลปลายปีงบ (เจ้าของงานเคาะ 6 ส.ค. 69 หลัง backtest) ══════════════════
     // ⚠️ โมเดลเดิมตรึง CL คงที่ + ลาก NI ต้นปีต่อไปดื้อ ๆ → ทำนายผิดทิศชัดเจน:
@@ -2013,14 +2055,19 @@ function exSimPath(h, inj, sc){
     const isYE=(st.mo>=10);                       // ก.ค.-ก.ย. = ช่วงปิดบัญชีปลายปีงบ (ยังใช้กับ clYE)
     // NI ตามฤดูกาลจริงรายเดือน (ไม่แตะเงินสด) — มีโปรไฟล์ใช้โปรไฟล์ ไม่มีค่อยถอยไปใช้ niYE เดิม
     if(seas) st.ni+=niProf?(+niProf[st.mo-1]||0)-profOff:(isYE?niYEV:0);
-    if(clGrow) st.ccl=Math.max(1, st.ccl+(seas&&isYE?clYEV:clMoV));
+    // CL: มีโปรไฟล์ → ฐาน clMo + ทิศทางของเดือนนั้น · ไม่มี → ถอยไปพฤติกรรมเดิม (clYE แทน clMo)
+    if(clGrow){
+      let clAdd=clMoV;
+      if(seas) clAdd=clProf?clMoV+((+clProf[st.mo-1]||0)-clProfOff):(isYE?clYEV:clMoV);
+      st.ccl=Math.max(1, st.ccl+clAdd);
+    }
     const sc=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
     r=anc(sc.risk);
     if(k===tgtMo){ sepRisk=r; sepBreak=brk(sc,st.ni,st.mo); }   // เดือนเป้าที่เลือกในตัวกรอง (เดือนเดียว ไม่ใช่ "ก.ย. แรกที่เจอ")
     if(st.ccn<=0 && cashOut==null) cashOut=k;
     if(k<=fyMo) endRisk=r;   // endRisk = ระดับ ณ "สิ้นปีงบ" (พื้นที่คุมเสมอ) — ถ้าเดือนเป้าไกลกว่า ห้ามเลื่อนตาม
   }
-  return {sepRisk,endRisk,cashOut,niM,revMo:exRevMo(h),moeMo:moeMoV,moeAccMo:exMoeAccMo(h),
+  return {sepRisk,endRisk,cashOut,niM,wcAR,wcINV,revMo:exRevMo(h),moeMo:moeMoV,moeAccMo:exMoeAccMo(h),
           stretchMo,apStretch,xmoeMo:exXmoeOn()?exXmoeMo(h):0,sepBreak,
           owedAdd,resNeed0,resCash:resCashV,resAccr:resAccrV,cashAvail0,cnEnd:st.ccn,clEnd:st.ccl};
 }
