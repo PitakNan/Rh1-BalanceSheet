@@ -2568,17 +2568,32 @@ function exArClose(){ exPopClose('exArOverlay'); }
 //    โยก/เงินเขตที่ได้รับ → ca/qn/cn/ni เพิ่ม (เงินอุดหนุน) · เงินเขตที่ฝากไว้ → ca/qn/cn ลด (ไม่ใช่เงินเรา ไม่แตะ NI)
 //    จ่าย MOE → ca/qn/cn/ni ลด (ค่าใช้จ่ายที่ต้องจ่ายโดยไม่มีรายรับเข้า)
 //    เงินสดติดลบ → ส่วนที่จ่ายไม่ไหวค้างเป็นเจ้าหนี้ (exCashClamp — กติกาเดียวกับ exSimPath)
-function exMoePop(hc){
-  const h=EX.hosp.find(p=>p.hcode===hc); if(!h) return;
-  const r0=exSimPath(h,0), x={h,r0};
-  const b0=exBS(h), sc0=exTjScore(b0);
+// ── 🔗 งบดุล "สายเงินจริง" — ตัวเดียวที่สร้างฉากนี้ (เจ้าของงานสั่ง 13 ส.ค. 69) ─────────────
+//   ระดับ ณ ปัจจุบัน + ลูกหนี้ UC-OP นอก CUP − เจ้าหนี้ UC-OP นอก CUP ± โยก/เงินเขต − ภาระ MOE
+//   = สายเลขคณิตเดียวกับคอลัมน์เงินในตาราง #exec (จบที่ exMoeLeft)
+// ⛔ ห้ามคัดลอกสมการนี้ไปไว้ที่อื่น — ป็อปอัป 💧 (exMoePop) และหัวข้อ ⑤ ของ exWhyPop ใช้ตัวนี้ร่วมกัน
+//    ไม่งั้นเลขสองที่จะหลุดจากกันเมื่อสูตรเปลี่ยน (บทเรียนเดียวกับ 7.30)
+// ⚠️ ภาระ MOE ลง NI ด้วย (เจ้าของงานเคาะ 13 ส.ค. 69) = ฉาก "ไม่มีรายรับเข้าเลย" เต็มรูป
+function exChainBS(h, r0){
+  r0=r0||exSimPath(h,0);
+  const b0=exBS(h);
   const D=exPayIn(h), A=exArIn(h), cut=exArCut(h), xf=exXferNet(h), dep=exRgDep(h), rin=exRgIn(h);
-  const mm=exHorMonths(h), moeMo=r0.moeMo||0, M=moeMo*mm;
-  const net=exNetAfterDebt(h), left=exMoeLeft(x), lab=exMoeTargetLab();
-  const sub=xf+rin;                                                  // เงินอุดหนุนที่ได้รับ/ยกให้ (เข้า NI)
+  const mm=exHorMonths(h), moeMo=r0.moeMo||0, M=moeMo*mm, sub=xf+rin;   // sub = เงินอุดหนุนที่ได้รับ/ยกให้ (เข้า NI)
   const bS=exCashClamp({...b0,
     ca:b0.ca-D-cut+sub-dep-M, qn:b0.qn-D-cut+sub-dep-M,
     cn:b0.cn-D+A+sub-dep-M,   cl:Math.max(0,b0.cl-D), ni:b0.ni-cut+sub-M});
+  return {b0, bS, D, A, cut, xf, dep, rin, sub, mm, moeMo, M,
+          net:exNetAfterDebt(h), left:exMoeLeft({h,r0})};
+}
+function exMoePop(hc){
+  const h=EX.hosp.find(p=>p.hcode===hc); if(!h) return;
+  const r0=exSimPath(h,0), x={h,r0};
+  const C=exChainBS(h,r0);
+  const b0=C.b0, sc0=exTjScore(b0);
+  const D=C.D, A=C.A, cut=C.cut, xf=C.xf, dep=C.dep, rin=C.rin;
+  const mm=C.mm, moeMo=C.moeMo, M=C.M;
+  const net=C.net, left=C.left, lab=exMoeTargetLab();
+  const bS=C.bS;
   const s1=exTjScore(bS);
   // สายเลขคณิต — แสดงเฉพาะพจน์ที่มีค่าจริง เพื่อไม่ให้ตารางรกด้วยแถว 0
   let run=b0.cn; const line=(lab,v,note,bold)=>{ run+=v;
@@ -2807,6 +2822,43 @@ function exWhyPop(hc){
   const b0=(bs.cl?Object.assign({},scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo),{ni:bs.ni,mo:bs.mo}):null);
   const flipBad=b0?EX_CRIT.filter(c=>c.ok(b0)&&!c.ok(b1)).map(c=>c.n):[];
   const flipGood=b0?EX_CRIT.filter(c=>!c.ok(b0)&&c.ok(b1)).map(c=>c.n):[];
+  // ── ⑤ สายเงินจริง (เจ้าของงานสั่ง 13 ส.ค. 69) — วัดระดับอีกวิธีหนึ่ง เทียบกับแบบจำลองข้างบน ──
+  //   นิยาม: ระดับ ณ ปัจจุบัน + ลูกหนี้ − เจ้าหนี้ ± โยก/เงินเขต − ภาระ MOE ถึงเดือนเป้า
+  //   = ฉากเดียวกับป็อปอัป 💧 ในคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE" (ใช้ exChainBS ร่วมกัน)
+  //   ⚠️ ตัวนี้ **ไม่นับรายรับเลย** จึงแย่กว่าแบบจำลองเสมอ — เป็นคนละคำถาม ถูกทั้งคู่ (ประเด็นเดิม 7.8 ⑦)
+  //   วัดจริงงวด 256910: แย่ลง 77 แห่ง · ดีขึ้น 0 · ตัวขับคือ MOE ล้วน (ถ้าไม่หัก MOE เท่าเดิม 98 แห่ง)
+  const C=exChainBS(h,base), sCh0=exTjScore(C.b0), sCh1=exTjScore(C.bS);
+  let chainHtml='<div class="note">งวดนี้ไม่มีค่าดิบงบดุล (หนี้สินหมุนเวียน = 0) จึงคำนวณเกณฑ์ไม่ได้</div>';
+  if(sCh0&&sCh1){
+    // เกณฑ์ที่พลิก — อ่านจาก EX_NOW_ROWS ชุดเดียวกับตารางข้างล่าง (ห้ามตั้งเกณฑ์ของตัวเอง)
+    const fBad=EX_NOW_ROWS.filter(c=>c.gap(C.b0)>=0&&c.gap(C.bS)<0).map(c=>c.n.replace(/ *\(.*\)/,''));
+    const fGood=EX_NOW_ROWS.filter(c=>c.gap(C.b0)<0&&c.gap(C.bS)>=0).map(c=>c.n.replace(/ *\(.*\)/,''));
+    if(sCh1.su>sCh0.su) fBad.push('SU ('+sCh0.su+'→'+sCh1.su+')');
+    if(sCh1.su<sCh0.su) fGood.push('SU ('+sCh0.su+'→'+sCh1.su+')');
+    chainHtml=exHeadDelta(sCh0,sCh1,'ณ '+lab+' ตามสายเงินจริง')
+     +'<div class="note">'
+     +(fBad.length?'เกณฑ์ที่พลิกเป็น<b>ไม่ผ่าน</b>: <b class="brk-no">'+fBad.join(' · ')+'</b>':'')
+     +(fGood.length?(fBad.length?' · ':'')+'เกณฑ์ที่พลิกเป็น<b>ผ่าน</b>: <b class="brk-ok">'+fGood.join(' · ')+'</b>':'')
+     +(!fBad.length&&!fGood.length?(sCh1.risk===sCh0.risk
+        ?'ไม่มีเกณฑ์ไหนพลิก และระดับไม่ขยับ — เกณฑ์ที่ไม่ผ่านอยู่แล้วก็ยังไม่ผ่าน (ดูช่อง "ห่างจากเกณฑ์" ว่าถอยห่างไปอีกเท่าไหร่)'
+        :'ไม่มีเกณฑ์ผ่าน/ไม่ผ่านตัวไหนพลิก แต่ระดับขยับจากคะแนน SU'):'')+'</div>'
+     +'<table class="gaptbl" style="margin-top:6px"><tr><th class="l">รายการ</th><th>จำนวน</th></tr>'
+     +'<tr><td class="l">เงินสด+เทียบเท่า ณ งวด '+tLab(bs.t)+'</td><td>'+fmtM(C.b0.cn)+'</td></tr>'
+     +(C.D>0?'<tr><td class="l">− จ่ายเจ้าหนี้ UC-OP นอก CUP</td><td class="brk-no">− '+fmtM(C.D)+'</td></tr>':'')
+     +(C.A>0?'<tr><td class="l">+ เก็บลูกหนี้ UC-OP นอก CUP</td><td class="brk-ok">+ '+fmtM(C.A)+'</td></tr>':'')
+     +(C.xf!==0?'<tr><td class="l">'+(C.xf>0?'+ รับโยกช่วย':'− โยกออกไปช่วยแห่งอื่น')+'</td><td class="'+(C.xf>0?'brk-ok':'brk-no')+'">'+(C.xf>0?'+ ':'− ')+fmtM(Math.abs(C.xf))+'</td></tr>':'')
+     +(C.dep>0?'<tr><td class="l">− เงินของเขตที่ฝากไว้</td><td class="brk-no">− '+fmtM(C.dep)+'</td></tr>':'')
+     +(C.rin>0?'<tr><td class="l">+ เงินกองกลางเขตฯ ที่ได้รับ</td><td class="brk-ok">+ '+fmtM(C.rin)+'</td></tr>':'')
+     +'<tr style="font-weight:700"><td class="l">− ภาระ MOE '+C.mm+' เดือน (ถึง '+lab+')</td><td class="brk-no">− '+fmtM(C.M)+'</td></tr>'
+     +'<tr style="font-weight:700;border-top:2px solid var(--line)"><td class="l">= เงินสดคงเหลือหลังภาระ MOE</td>'
+     +'<td class="'+(C.left<0?'brk-no':'brk-ok')+'">'+(C.left<0?'ขาด '+fmtM(-C.left):'เหลือ '+fmtM(C.left))+'</td></tr></table>'
+     +exCmpTable(C.b0,C.bS,'ปัจจุบัน ('+tLab(bs.t)+')','ณ '+lab,'สายเงินจริง ไม่มีรายรับ')
+     +'<div class="note" style="margin-top:6px">'
+     +(C.bS.back>0?'⚠️ <b>เงินสดไม่พอจ่ายภาระทั้งหมด</b> ส่วนที่จ่ายไม่ไหว '+fmtM(C.bS.back)+' ถูกนับกลับเป็น<b>เจ้าหนี้ค้างจ่าย</b> เกณฑ์จึงแย่ลงหนักกว่าที่คาด<br>':'')
+     +'⚠️ <b>ตัวเลขชุดนี้ไม่ต้องตรงกับระดับ '+badge(at)+' ข้างบน</b> — ข้างบนเป็นแบบจำลองที่นับรายรับ/รายจ่ายตามจริง '
+     +'ส่วนชุดนี้สมมติ<b>ไม่มีรายรับเข้าเลย</b> '+C.mm+' เดือน และภาระ MOE ลง NI ด้วย จึงแย่กว่าเสมอ — เป็นคนละคำถาม ถูกทั้งคู่'
+     +'<br>⛔ <b>ห้ามบวกช่อง "ห่างจากเกณฑ์" ทุกบรรทัดรวมกัน</b> — ยอดจริง = ตัวที่ขาดมากที่สุด</div>';
+  }
   const moeTxt=short>0
     ? 'เงินสด+เทียบเท่าหลังจัดการหนี้สิน <b>'+fmtM(exNetAfterDebt(h))+'</b> − ภาระ MOE '+exHorMonths(h)+' เดือน <b>'+fmtM((base.moeMo||0)*exHorMonths(h))+'</b> = <b class="brk-no">ขาด '+fmtM(short)+'</b>'
       +'<br>⚠️ เงินก้อนนี้ทำให้ <b>จ่ายค่าใช้จ่ายจำเป็นได้ครบถึง '+lab+'</b> — <b>คนละตัว</b>กับเงินสนับสนุนที่เล็งระดับวิกฤต ('+(need==null?'เงินก้อนอย่างเดียวไม่พอ':fmtM(need))+') เพราะเกณฑ์คะแนนวัดอัตราส่วนงบดุล ไม่ได้วัดว่าเงินพอจ่ายหรือไม่'
@@ -2815,7 +2867,7 @@ function exWhyPop(hc){
   let el=document.getElementById('exWhyOverlay');
   if(!el){ el=document.createElement('div'); el.id='exWhyOverlay'; el.className='nip-overlay'; document.body.appendChild(el); }
   el.onclick=exWhyClose;
-  el.innerHTML='<div class="nip-modal" style="max-width:880px" onclick="event.stopPropagation()">'
+  el.innerHTML='<div class="nip-modal" style="max-width:1060px" onclick="event.stopPropagation()">'
    +'<div class="nip-head" style="display:flex;align-items:flex-start;gap:10px">'
    +'<div style="flex:1;min-width:0"><h3>📈 ทำไมระดับถึงเปลี่ยน — '+h.name+'</h3>'
    +'<div class="note">'+(h.prov||'')+' · '+h.type+' · จากงวด <b>'+tLab(bs.t)+'</b> ถึงเดือนเป้า <b>'+lab+'</b></div></div>'
@@ -2840,6 +2892,10 @@ function exWhyPop(hc){
    +'<div class="note">CR '+fmtR(b1.cr)+' · QR '+fmtR(b1.qr)+' · Cash '+fmtR(b1.cash)+' · NWC '+fmtM(b1.nwc)
    +' · NI สะสม '+fmtM(b1.ni)+' · SU '+b1.su+' → รวม <b>'+(b1.li+b1.st+b1.su)+'</b> คะแนน '
    +'(แสดงเป็นระดับ '+badge(at)+' หลัง anchor กับคะแนนงวดปัจจุบัน)</div>'
+   +'<div class="tgt-row" style="font-weight:600;margin-top:14px">⑤ 🔗 อีกวิธีวัด — เดินตาม<b>สายเงินจริง</b>จากระดับ ณ ปัจจุบัน</div>'
+   +'<div class="note">ระดับ ณ ปัจจุบัน <b>+ ลูกหนี้ UC-OP นอก CUP − เจ้าหนี้ UC-OP นอก CUP</b> แล้วรวม<b>ภาระ MOE</b> ถึง '+lab
+   +' — สายเลขคณิตเดียวกับคอลัมน์เงินในตารางนี้ (ฉากเดียวกับป็อปอัป 💧 ที่คลิกจากคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE")</div>'
+   +chainHtml
    +'<div class="note" style="margin-top:8px">⚠️ ผลของแต่ละปัจจัย<b>บวกกันตรง ๆ ไม่ได้</b> — ปัจจัยมีปฏิสัมพันธ์กัน เช่น หนี้สินโตทำให้ตัวส่วนของทุกอัตราส่วนโตพร้อมกัน</div>'
    +'</div></div>';
   el.style.display='flex';

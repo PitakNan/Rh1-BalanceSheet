@@ -14,6 +14,7 @@ global.location={hash:''}; global.navigator={clipboard:null};
 global.getComputedStyle=()=>({getPropertyValue:()=>'#888'});
 global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0);
 const A=new Function(code+`;return {exWhyPop,exWhyClose,exSimPath,exSolveFor,exSepLab,exTopUp,exMoeLeft,fmtM,
+  exChainBS,exTjScore,exBS,exMoePop,scoreOf,
   setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v},setEXBRK:v=>{EXBRK=v},getEXST:()=>EXST};`)();
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=o=>Object.assign({mmo:2,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext:0,tgt:6,
@@ -77,6 +78,53 @@ chk(/onclick="exWhyPop\('\$\{hc\}'\)"/.test(raw), 'badge ระดับก่�
 chk(/exWhyPop[\s\S]{0,80}riskColor\(r0\.sepRisk\)|riskColor\(r0\.sepRisk\)[\s\S]{0,200}exWhyPop/.test(raw),
     'ผูกที่ badge ของ r0.sepRisk (ก่อนช่วย) ไม่ใช่ badge อื่น');
 chk(/onclick="exBrkToggle/.test(raw), 'badge "หลังช่วย" ยังเป็น exBrkToggle เหมือนเดิม (ไม่ทับกัน)');
+
+console.log('\n━━ ⑦ หัวข้อ ⑤ "สายเงินจริง" (13 ส.ค. 69 · RISK_EXEC_MODEL 7.31) ━━');
+// นิยาม: ระดับ ณ ปัจจุบัน + ลูกหนี้ − เจ้าหนี้ − ภาระ MOE ถึงเดือนเป้า (ภาระ MOE ลง NI ด้วย)
+// ⚠️ ตัวนี้ **ต้องไม่** ถูกบังคับให้เท่ากับระดับก่อนช่วย — คนละคำถาม (ดู 7.8 ⑦ / 7.30)
+A.setEXST(ST({}));
+const secOf=html=>{ const i=String(html).indexOf('อีกวิธีวัด'); return i<0?'':String(html).slice(i); };
+const badgesOf=s=>[...s.matchAll(/class="badge"[^>]*>(\d+|–)</g)].map(m=>m[1]);
+let noSec=0, mismatch=[], leftBad=[];
+for(const h of j.hosp){
+  A.exWhyPop(h.hcode);
+  const sec=secOf(els['exWhyOverlay'].innerHTML);
+  if(!sec){ noSec++; continue; }
+  if(!h.bs||!h.bs.cl) continue;
+  const C=A.exChainBS(h), s1=A.exTjScore(C.bS), s0=A.exTjScore(C.b0);
+  const b=badgesOf(sec);
+  // exHeadDelta วาง 2 badge แรก = [ระดับ ณ ปัจจุบัน, ระดับตามสายเงินจริง]
+  if(b.length<2 || +b[0]!==s0.risk || +b[1]!==s1.risk)
+    mismatch.push(h.name+' บนจอ '+b.slice(0,2).join('→')+' ควรเป็น '+s0.risk+'→'+s1.risk);
+  // เงินสดคงเหลือปิดท้ายสายเลขคณิต ต้องเป็นยอดเดียวกับ exMoeLeft (ตัวเดียวกับคอลัมน์)
+  const want='เงินสดคงเหลือหลังภาระ MOE '+(C.left<0?'ขาด ':'เหลือ ')+A.fmtM(Math.abs(C.left));
+  if(!txt(sec).includes(want)) leftBad.push(h.name+' ควรเป็น '+want);
+}
+chk(noSec===0, `หัวข้อ ⑤ โผล่ครบ ${j.hosp.length} แห่ง (ขาด ${noSec})`);
+chk(mismatch.length===0, `ระดับบนจอ = scoreOf(exChainBS) เป๊ะทุกแห่ง (ผิด ${mismatch.length})`+(mismatch.length?' → '+mismatch[0]:''));
+chk(leftBad.length===0, `เงินสดคงเหลือปิดตรง exMoeLeft ทุกแห่ง (ผิด ${leftBad.length})`+(leftBad.length?' → '+leftBad[0]:''));
+
+// ตัวเลขต้องตรงกับป็อปอัป 💧 (exMoePop) ที่ใช้ฉากเดียวกัน — สองที่ห้ามหลุดจากกัน
+let drift2=[];
+for(const h of j.hosp){
+  if(!h.bs||!h.bs.cl) continue;
+  A.exWhyPop(h.hcode); const a=badgesOf(secOf(els['exWhyOverlay'].innerHTML)).slice(0,2).join('→');
+  A.exMoePop(h.hcode);   // overlay ถูกสร้างตอนเรียกครั้งแรก (exPopShell) จึงอ่านหลังเรียกเสมอ
+  const m=String((els['exMoeOverlay']||{}).innerHTML||''), i=m.indexOf('Risk Score จะเป็นอย่างไร');
+  const bm=badgesOf(i<0?m:m.slice(i)).slice(0,2).join('→');
+  if(a!==bm) drift2.push(h.name+' ⑤='+a+' 💧='+bm);
+}
+chk(drift2.length===0, `ระดับในหัวข้อ ⑤ = ป็อปอัป 💧 ตัวเดียวกันทุกแห่ง (ต่าง ${drift2.length})`+(drift2.length?' → '+drift2[0]:''));
+
+A.setEXST(ST({mmo:6})); A.exWhyPop(h0.hcode);
+const sec6=txt(secOf(els['exWhyOverlay'].innerHTML));
+chk(sec6.includes('ภาระ MOE 6 เดือน'), 'สายเลขคณิตใช้จำนวนเดือนตามตัวกรอง (6 เดือน)');
+chk(sec6.includes('ณ '+A.exSepLab()), 'หัวข้อ ⑤ ใช้เดือนเป้าเดียวกับทั้งป็อปอัป');
+A.setEXST(ST({})); A.exWhyPop(h0.hcode);
+const sec2=txt(secOf(els['exWhyOverlay'].innerHTML));
+chk(sec2.includes('ไม่ต้องตรงกับระดับ'), 'มีคำเตือนว่าตัวเลขชุดนี้ไม่ต้องตรงกับระดับก่อนช่วย');
+chk(sec2.includes('ห้ามบวก'), 'มีคำเตือนห้ามบวกช่อง "ห่างจากเกณฑ์" รวมกัน');
+chk(JSON.stringify(A.getEXST())===JSON.stringify(ST({})), 'EXST ยังไม่เพี้ยนหลังเปิดหัวข้อ ⑤ ครบทุกแห่ง');
 
 console.log('\n━━ สรุป ━━');
 if(fail.length){ console.log(`❌ ไม่ผ่าน ${fail.length} ข้อ`); fail.forEach(f=>console.log('   '+f)); process.exit(1); }

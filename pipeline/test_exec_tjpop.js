@@ -236,8 +236,14 @@ A.setEXST(ST()); A.exRender();
 const fnAr=slice('function exArPop','function exArClose');
 chk(!/CR|QR/.test(fnAr)||!/เก็บ[^<]{0,20}(CR|QR)[^<]{0,20}ดีขึ้น/.test(fnAr),'ไม่มีประโยคอ้างว่าเก็บลูกหนี้แล้ว CR/QR ดีขึ้น');
 chk(/exArIn\(h\)/.test(fnAr)&&/exArRaw\(h\)/.test(fnAr),'ลูกหนี้อ่านทั้งยอดหลังปรับ % และยอดดิบ');
-const fnMoe=slice('function exMoePop','function exMoeClose');
-chk(/exMoeLeft\(x\)/.test(fnMoe)&&/exNetAfterDebt\(h\)/.test(fnMoe),'MOE ใช้ exMoeLeft/exNetAfterDebt ตัวเดียวกับคอลัมน์ ไม่คำนวณเอง');
+// 🪤 ขอบเขตต้องครอบ exChainBS ด้วย (13 ส.ค. 69) — ฉาก "สายเงินจริง" ถูกแยกออกไปเป็นฟังก์ชันร่วม
+//    ที่ exMoePop และ exWhyPop ⑤ ใช้ด้วยกัน · กติกาที่ตรวจคือ "ไม่คำนวณเอง" ไม่ใช่ "ต้องเขียนในตัว
+//    exMoePop" — ผูก regex กับตำแหน่งโค้ดแล้วเทสต์จะฟ้องทุกครั้งที่ refactor ทั้งที่ตรรกะยังถูก
+//    (บทเรียนเดียวกับการเลิกผูกดัชนีคอลัมน์เป็นเลขคงที่ · RISK_EXEC_MODEL 7.21)
+const fnMoe=slice('function exChainBS','function exMoeClose');
+// ตรวจว่า "เรียกฟังก์ชันร่วม" ไม่ใช่ชื่อตัวแปรที่ส่งเข้าไป — ส่วนที่ยันค่าจริงคือข้อ ⑦/⑧ ข้างบน
+// (สายเลขคณิตปิดตรง exMoeLeft + cn ปลายทาง = exMoeLeft ครบ 103 แห่ง) ซึ่งเป็นการพิสูจน์เชิงตัวเลข
+chk(/exMoeLeft\(/.test(fnMoe)&&/exNetAfterDebt\(h\)/.test(fnMoe),'MOE ใช้ exMoeLeft/exNetAfterDebt ตัวเดียวกับคอลัมน์ ไม่คำนวณเอง');
 chk(/exHorMonths\(h\)/.test(fnMoe)&&/exMoeTargetLab\(\)/.test(fnMoe),'MOE ผูกกับเดือนในตัวกรอง ไม่ hardcode');
 // ทุกป็อปอัปต้องใช้ตัวเรนเดอร์ร่วม เพื่อให้หน้าตา/กติกาการปัดเศษตรงกัน
 for(const [f,a,b] of [['เจ้าหนี้','function exTjPop','function exTjClose'],['ลูกหนี้','function exArPop','function exArClose'],['MOE','function exMoePop','function exMoeClose']])
