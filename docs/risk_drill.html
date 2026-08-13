@@ -1821,7 +1821,7 @@ function exTjCalc(){
 // forgive: รพช.(ลูกหนี้)=ได้รับยกหนี้เต็ม (payIn) · ผู้รับภาระ(เจ้าหนี้)=ยกหนี้ให้ตามสัดส่วน (shares)
 //   ⚠️ รพช. hub (EXTJHUB) เป็นได้ทั้งสองบทบาทพร้อมกัน (ค้างเองด้วย + เป็นผู้รับภาระของ รพช. เล็กด้วย)
 //   จึงต้องหักลบกันเป็นค่าสุทธิ (ได้รับเต็ม − ยกให้ตามสัดส่วน) ไม่ใช่แค่เช็คว่าเป็นลูกหนี้แล้วคืนเลย
-// smart(ยกหนี้เจาะจง): รพช.=ได้รับเงินคืนเฉพาะที่จำเป็น (refund R, 0 ถ้าระดับ≤3 หลังจ่าย) · เจ้าหนี้=0 (ได้รับชำระแล้ว เงินคืนมาจากเขต)
+// smart(ยกหนี้เจาะจง): รพช.=ได้รับเงินคืนเฉพาะที่จำเป็น (refund R, 0 ถ้าระดับ≤เป้า (EXST.tgt) หลังจ่าย) · เจ้าหนี้=0 (ได้รับชำระแล้ว เงินคืนมาจากเขต)
 // off/pay: 0 (ไม่มีการยกให้)
 function exTjGive(h){
   if(!EXTJ) return 0;
@@ -1841,11 +1841,12 @@ function exTjRole(h){
   if(EXST.tj.mode==='smart'){ return (EXTJ.debtors.has(h.hcode) && ((EXTJ.refund&&EXTJ.refund[h.hcode])||0)>0) ? 'got' : ''; }
   return '';
 }
-// ── ยกหนี้เจาะจง (smart): หา "เงินคืนขั้นต่ำ" ต่อ รพช. (0..payIn) ให้ระดับ ณ ก.ย. ≤ 3 ──
-// จ่ายเต็มแล้ว ≤3 อยู่แล้ว → R=0 (ระดับ 0-3 ไม่ได้รับ) · คืนเต็มยังไม่ถึง → คืนเต็ม (best effort) · เก็บใน EXTJ.refund[hcode]
+// ── ยกหนี้เจาะจง (smart): หา "เงินคืนขั้นต่ำ" ต่อ รพช. (0..payIn) ให้ระดับ ณ เดือนเป้า ≤ เป้าที่ตั้ง ──
+// ⭐ 13 ส.ค. 69 (เจ้าของงานสั่ง): เป้าผูกกับปุ่มเป้าหมาย EXST.tgt แทนค่าตายตัว 3 เดิม
+// จ่ายเต็มแล้ว ≤เป้า อยู่แล้ว → R=0 (ไม่ได้รับ) · คืนเต็มยังไม่ถึง → คืนเต็ม (best effort) · เก็บใน EXTJ.refund[hcode]
 function exTjSolveRefunds(){
   EXTJ.refund={};
-  const L=3;
+  const L=EXST.tgt;
   EXTJ.debtors.forEach(hc=>{
     const h=EX.hosp.find(x=>x.hcode===hc); if(!h) return;
     const D=h.tj.payIn;
@@ -4034,7 +4035,8 @@ function exRender(){
   if(EXST.tj.mode==='smart'){   // เติม EXTJ.refund ต่อ รพช. — cache ไว้ คำนวณใหม่เฉพาะตอน state ที่กระทบผลจำลองเปลี่ยน
     // ⚠️ hub ต้องอยู่ใน sig ด้วย (เพิ่ม 6 ส.ค. 69) — hub เปลี่ยน → shares เปลี่ยน → sepRisk ของ
     //    รพช. hub (ซึ่งเป็นลูกหนี้ด้วย) เปลี่ยน → เงินคืนที่ต้องใช้เปลี่ยน · ถ้าไม่ใส่จะได้ผลเก่าค้าง
-    const sig=JSON.stringify({s:EXST.tj.scope,mmo:exMoeMonths(),adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct(),hub:[...EXTJHUB].sort().join(','),xfer:exXferList(),arPct:exArPct(),arOvr:EXST.arOvr});
+    // ⚠️ tgt ต้องอยู่ใน sig ด้วย (13 ส.ค. 69 — เป้าเจาะจงผูกกับปุ่มเป้าหมายแล้ว) ไม่งั้นสลับเป้าแล้วเงินคืนไม่อัปเดต
+    const sig=JSON.stringify({s:EXST.tj.scope,tgt:EXST.tgt,mmo:exMoeMonths(),adj:EXST.adj,adjAll:EXST.adjAll,ovr:EXST.ovr,moePct:EXST.moePct,moePctAll:EXST.moePctAll,moeOff:EXST.moeOff,moeOvr:EXST.moeOvr,revOff:EXST.revOff,xmoe:EXST.xmoe,moeVer:exMoeVer(),payPct:exPayPct(),hub:[...EXTJHUB].sort().join(','),xfer:exXferList(),arPct:exArPct(),arOvr:EXST.arOvr});
     if(_refundCache.sig===sig && _refundCache.refund) EXTJ.refund=_refundCache.refund;
     else { exTjSolveRefunds(); _refundCache={sig, refund:EXTJ.refund}; }
   }
@@ -4175,7 +4177,7 @@ function exRender(){
         <label><input type="radio" name="extj" ${EXST.tj.mode==='off'?'checked':''} onchange="exSetTj('mode','off')"> ไม่ใช้</label>
         <label><input type="radio" name="extj" ${EXST.tj.mode==='forgive'?'checked':''} onchange="exSetTj('mode','forgive')"> 🤝 ยกหนี้ (เงินให้เปล่าตามหนี้ค้าง → เคลียร์กัน)</label>
         <label><input type="radio" name="extj" ${EXST.tj.mode==='pay'?'checked':''} onchange="exSetTj('mode','pay')"> 💵 รพช. จ่ายชำระจริง</label>
-        <label><input type="radio" name="extj" ${EXST.tj.mode==='smart'?'checked':''} onchange="exSetTj('mode','smart')"> 🎯 ยกหนี้เจาะจง (จ่ายก่อน → คืนเฉพาะที่จำเป็นให้ระดับ ≤3)</label>
+        <label><input type="radio" name="extj" ${EXST.tj.mode==='smart'?'checked':''} onchange="exSetTj('mode','smart')"> 🎯 ยกหนี้เจาะจง (จ่ายก่อน → คืนเฉพาะที่จำเป็นให้ระดับ ≤${EXST.tgt})</label>
       </div>
       <div class="optgrp">
         <span class="optgrp-lbl">ขอบเขต</span>
@@ -4192,9 +4194,9 @@ function exRender(){
         </select>
       </div>
     </div>
-    ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า · <b>🎯 ยกหนี้เจาะจง</b>: สมมติ รพช. จ่ายจริงก่อน แล้ว<b>เขตคืนเงินเฉพาะเท่าที่จำเป็น</b>ให้ระดับ ณ ${sepLab} ≤3 — รพช. ที่ยังไหว (≤3 หลังจ่าย) ไม่ได้รับ, ที่ >3 คืนขั้นต่ำพอลงถึง 3 (ไม่เกินยอดที่จ่าย) · เจ้าหนี้ได้รับชำระครบ — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่งผู้รับภาระ (รพศ./รพท.+รพช. hub) ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+exArIn(h),0))} <span class="tgt-note">(หลังปรับ ${exArPct()}% · ยอดดิบ ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+exArRaw(h),0))})</span></div>`
+    ${EXST.tj.mode==='off'?`<div class="note" style="margin-top:8px">🤝 <b>ยกหนี้</b>: หนี้สินหมุนเวียน รพช. ลด (เงินสดไม่ขยับ) + รับรู้รายได้ยกหนี้ · รพศ./รพท. ตัดลูกหนี้เป็น คชจ.อุดหนุน (ไม่ได้เงินสด) → สภาพคล่อง รพช. ดีขึ้นทันที · <b>จ่ายจริง</b>: รพช. เสียเงินสดเท่าหนี้ · รพศ./รพท. ได้เงินสดเข้า · <b>🎯 ยกหนี้เจาะจง</b>: สมมติ รพช. จ่ายจริงก่อน แล้ว<b>เขตคืนเงินเฉพาะเท่าที่จำเป็น</b>ให้ระดับ ณ ${sepLab} ≤${EXST.tgt} — รพช. ที่ยังไหว (≤${EXST.tgt} หลังจ่าย) ไม่ได้รับ, ที่ >${EXST.tgt} คืนขั้นต่ำพอลงถึง ${EXST.tgt} (ไม่เกินยอดที่จ่าย) · เจ้าหนี้ได้รับชำระครบ — เจ้าหนี้ตามจ่ายในจังหวัดทั้งเขต: รพช. ค้าง ${fmtM(EX.hosp.filter(h=>h.type==='รพช.').reduce((s,h)=>s+h.tj.payIn,0))} · ลูกหนี้ฝั่งผู้รับภาระ (รพศ./รพท.+รพช. hub) ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+exArIn(h),0))} <span class="tgt-note">(หลังปรับ ${exArPct()}% · ยอดดิบ ${fmtM(EX.hosp.filter(h=>exIsCred(h)).reduce((s,h)=>s+exArRaw(h),0))})</span></div>`
     :`<div class="tgt-row" style="margin-top:8px">${EXST.tj.mode==='smart'
-      ?`🎯 คืนเงินเจาะจงรวม: <b>${fmtM(refundTot)}</b> ให้ รพช. ${nRefund} แห่ง <span class="tgt-note">(เฉพาะที่ระดับ >3 ณ ${sepLab} หลังจ่าย · ที่ระดับ ≤3 ไม่ได้รับ · ยอดจ่ายเต็มก่อนคืน ${fmtM(EXTJ.total)} จาก ${EXTJ.debtors.size} แห่ง)</span>`
+      ?`🎯 คืนเงินเจาะจงรวม: <b>${fmtM(refundTot)}</b> ให้ รพช. ${nRefund} แห่ง <span class="tgt-note">(เฉพาะที่ระดับ >${EXST.tgt} ณ ${sepLab} หลังจ่าย · ที่ระดับ ≤${EXST.tgt} ไม่ได้รับ · ยอดจ่ายเต็มก่อนคืน ${fmtM(EXTJ.total)} จาก ${EXTJ.debtors.size} แห่ง)</span>`
       :`ยอดหนี้ที่เคลียร์: <b>${fmtM(EXTJ.total)}</b> จาก รพช. ${EXTJ.debtors.size} แห่ง <span class="tgt-note">(${Object.entries(EXTJ.byProv).map(([pv,v])=>pv+' '+fmtM(v)).join(' · ')})</span>${EXTJ.uncovered>1?` <span class="tgt-warn">⚠️ ${fmtM(EXTJ.uncovered)} เกลี่ยไม่ได้ (ลูกหนี้ฝั่งรับในจังหวัดไม่พอ/ไม่มี)</span>`:''}`}</div>
     <div class="note" style="margin-top:6px"><b>ภาระที่รับ</b> = min( ลูกหนี้ตัวเอง , รพช.ค้างรวมจังหวัด × ลูกหนี้ตัวเอง ÷ ลูกหนี้เจ้าหนี้รวมจังหวัด ) — <b>ต่างจาก "ลูกหนี้นอก CUP"</b> เพราะฝั่ง รพช.(ค้าง) กับฝั่งผู้รับภาระ(ลูกหนี้) บันทึกแยกเล่ม ยอดไม่ตรงกัน จึงเกลี่ยได้แค่เท่าที่ รพช. ยอมรับว่าค้าง</div>
     <div class="acctbl-wrap" style="max-height:260px;margin-top:6px;overflow-x:auto">
@@ -4297,7 +4299,7 @@ function exRender(){
     topup:'ส่วนขาดสภาพคล่อง(MOE) = ส่วนที่ติดลบของคอลัมน์ก่อนหน้า — ถ้ารายรับไม่เป็นไปตามแผนถึงขั้นไม่มีรายรับเข้าเลยจนถึง '+exMoeTargetLab()+' จะขาดเงินเท่าไหร่\n⛔ เป็นผลการประเมินภายใต้สมมติฐาน ไม่ใช่เม็ดเงินที่ต้องของบจริง\nเม็ดเงินจริงให้ดูคอลัมน์ เงินสนับสนุนที่ต้องใช้ ซึ่งคำนวณจากแบบจำลองที่นับรายรับแล้ว\nใช้จัดลำดับว่า รพ. ใดมีสภาพคล่องเปราะที่สุดหากรายรับสะดุด',
     cash:'เดือนที่เงินสดจะติดลบระหว่างจำลอง (ไม่หมด = ไม่ติดลบตลอดช่วง) · กระแสเงินสด/เดือน = NI + รายการไม่ใช่เงินสด',
     sep0:'ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน "เพิ่ม" อีก — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก + เงินโยกช่วย/เงินเขตที่จัดสรรไว้แล้วในระบบ ถ้ามี — กดที่ระดับเพื่อดูรายละเอียดที่มา)',
-    give:'เงินยกหนี้/คืน จาก Option ตามจ่าย · ยกหนี้: รพช.รับเต็ม, รพศ./รพท.ยกให้ · ยกหนี้เจาะจง: เงินคืนขั้นต่ำให้ระดับ ≤3 · ไม่ใช้/จ่ายจริง: ไม่มี',
+    give:'เงินยกหนี้/คืน จาก Option ตามจ่าย · ยกหนี้: รพช.รับเต็ม, รพศ./รพท.ยกให้ · ยกหนี้เจาะจง: เงินคืนขั้นต่ำให้ระดับ ≤'+EXST.tgt+' · ไม่ใช้/จ่ายจริง: ไม่มี',
     need:'เงินก้อนขั้นต่ำ (เติมครั้งเดียวเดือน 0) ให้ระดับ ณ '+sepLab+' ≤ เป้าที่ตั้ง และเงินสดไม่หมด — หาด้วย Solver (binary search)\nรับรู้เป็นรายได้เงินอุดหนุนจากหน่วยงานภาครัฐ จึงเพิ่มทั้งสภาพคล่อง (CA/QN/เงินสด) และ NI\n⚠️ เป็นยอด "รวม" ที่เล็งระดับคะแนนรวม จึงไม่ใช่ผลบวกของ 6 คอลัมน์ทางซ้าย และไม่จำเป็นต้องเท่าคอลัมน์ที่แพงสุดด้วย\n  — เพราะเป้าเป็นระดับ (เช่น ≤6) ซึ่งอาจไม่ต้องแก้ทุกเกณฑ์ให้ผ่านหมด แค่ลดคะแนนให้ถึงเป้าก็พอ',
     sep1:'ระดับวิกฤต ณ '+sepLab+' หลังเติมเงินสนับสนุนแล้ว',
   };
@@ -4714,7 +4716,7 @@ function exRender(){
           · ⚠️ เป็นข้อสังเกตจากยอดบัญชี <b>ยังไม่ได้ยืนยันคู่หนี้รายตัวกับตารางเคลียร์ริ่งของ สสจ./เขต</b></div>`;
       })()}
       ${EXST.tj.mode==='forgive'&&EXTJ.total>0?`<div class="tgt-row">💛 เงินที่ยกให้รวม (Option ยกหนี้): <b>${fmtM(EXTJ.total)}</b> <span class="tgt-note">— รพช. ${EXTJ.debtors.size} แห่งได้รับการยกหนี้ (รพศ./รพท. ฝั่งเจ้าหนี้ยกให้ตามสัดส่วน)${EXTJ.uncovered>1?` · เกลี่ยไม่ได้ ${fmtM(EXTJ.uncovered)}`:''}</span></div>`
-      :EXST.tj.mode==='smart'&&refundTot>0?`<div class="tgt-row">🎯 เงินคืนเจาะจงรวม (Option ยกหนี้เจาะจง): <b>${fmtM(refundTot)}</b> <span class="tgt-note">— คืนให้ รพช. ${nRefund} แห่งที่ระดับ >3 ณ ${sepLab} หลังจ่าย พอให้ลงถึง ≤3 (ที่ระดับ ≤3 อยู่แล้วไม่ได้รับ)</span></div>`:''}
+      :EXST.tj.mode==='smart'&&refundTot>0?`<div class="tgt-row">🎯 เงินคืนเจาะจงรวม (Option ยกหนี้เจาะจง): <b>${fmtM(refundTot)}</b> <span class="tgt-note">— คืนให้ รพช. ${nRefund} แห่งที่ระดับ >${EXST.tgt} ณ ${sepLab} หลังจ่าย พอให้ลงถึง ≤${EXST.tgt} (ที่ระดับ ≤${EXST.tgt} อยู่แล้วไม่ได้รับ)</span></div>`:''}
       ${EXST.tj.mode==='smart'?`<div class="tgt-row" style="font-weight:600">💵 เขตต้องใช้เงินรวม ≈ คืนเจาะจง ${fmtM(refundTot)} + สนับสนุน ${fmtM(sumNeed)} = <b style="color:var(--blue)">${fmtM(refundTot+sumNeed)}</b></div>`
       :EXST.tj.mode==='forgive'?`<div class="tgt-row" style="font-weight:600">💵 รวมความช่วยเหลือ ≈ ยกหนี้ ${fmtM(EXTJ.total)} + สนับสนุน ${fmtM(sumNeed)} = <b style="color:var(--blue)">${fmtM(EXTJ.total+sumNeed)}</b> <span class="tgt-note" style="font-weight:400">(ยกหนี้ = เคลียร์หนี้ระหว่าง รพ. ในเขต · เงินสดใหม่จากเขต = สนับสนุน ${fmtM(sumNeed)})</span></div>`:''}
       <div class="tgt-row"><button type="button" class="tgt-apply" onclick="exCopyTSV()">📋 คัดลอกแผน (วางใน Excel ได้)</button> <span class="tgt-note" id="exCopyMsg"></span></div>
