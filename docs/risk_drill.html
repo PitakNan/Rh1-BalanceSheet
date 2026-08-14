@@ -3028,20 +3028,21 @@ function exBrkHtml(x, sepLab){
   const down=(mode==='ceiling')?exSolveDown(h,L):null;              // เงินที่ใช้เกินแผนขั้นต่ำถึงจะตกถึง L
   const rDown=(mode==='ceiling'&&down!=null)?exSimPath(h,-down):null;
   // bN = ค่าปัจจุบันจากงบทดลองงวดล่าสุด (ยังไม่จำลองอะไรเลย) · b0 = จำลองถึง ก.ย. โดยไม่ช่วย · b1 = จำลองถึง ก.ย. หลังช่วยตามเป้า L
-  const bN=(bs.cl?{...scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo),ni:bs.ni,mo:bs.mo}:null);
+  // ⭐ 14 ส.ค. 69: แนบ ca/cl/qn/cn ดิบเข้า bN ด้วย (เดิมมีแค่ b0/bX จาก brk()) ให้แผงเจาะเกณฑ์โชว์ที่มาคอลัมน์ "ปัจจุบัน" ได้ด้วย
+  const bN=(bs.cl?{...scoreOf(bs.ca,bs.cl,bs.qn,bs.cn,bs.ni,bs.mo),ni:bs.ni,mo:bs.mo,ca:bs.ca,cl:bs.cl,qn:bs.qn,cn:bs.cn}:null);
   const b0=r0.sepBreak, b1=rL?rL.sepBreak:null;
   const lvlBtns=[0,1,2,3,4,5,6,7].map(l=>`<button type="button" class="lvlbtn${l===L?' on':''}" data-l="${l}" style="background:${riskColor(l)};width:30px;height:30px;font-size:13px;border-radius:8px" onclick="exBrkLvl('${hc}',${l})">${l}</button>`).join('');
   const head=`<div class="brk-head">🔍 <b>${h.name}</b> — เกณฑ์ Risk Score ทั้ง 7 คะแนน: ปัจจุบัน (${nowLab}) → ${sepLab} ก่อนช่วย → ${mode==='ceiling'?`${sepLab} ถ้าใช้เงินเกินแผน`:`${sepLab} หลังช่วย`}</div>
     <div class="brk-lvl"><span class="tgt-note">🎯 เลือกระดับเป้าที่ต้องการดู (เฉพาะ รพ.นี้ ไม่กระทบเป้าทั้งเขต):</span> <span class="lvlbtns" style="margin:0;gap:5px">${lvlBtns}</span></div>`;
   if(!b0||!bN) return `<div class="ovsub-box">${head}<div class="note">งวดนี้ข้อมูลไม่พอสำหรับจำลอง (ไม่มีค่าดิบงบดุล)</div></div>`;
   const suTxt=b=>{ const s=exSuMonths(b); return s&&s.v!=null&&isFinite(s.v)?`${s.lbl} ≈ ${s.v.toFixed(1)} ด.`:(b.nwc>=0&&b.ni>=0?'NWC และ NI เป็นบวกทั้งคู่ = ปลอดภัย':'NWC และ NI ติดลบทั้งคู่ = แย่สุด'); };
-  const cell=(c,b)=>b?`<td class="${c.ok(b)?'brk-ok':'brk-no'}">${c.f(c.v(b))} ${c.ok(b)?'✓':'✗'}</td>`:'<td class="tgt-note">–</td>';
+  const cell=(c,b,extra)=>b?`<td class="${c.ok(b)?'brk-ok':'brk-no'}">${c.f(c.v(b))} ${c.ok(b)?'✓':'✗'}${extra||''}</td>`:'<td class="tgt-note">–</td>';
   // คอลัมน์ "หลังช่วย" แสดงส่วนต่างจากก่อนช่วยด้วย — คำนวณจากค่าจริง ไม่ใช่จากค่าที่ปัดแล้ว
   // (ปัด 2 ตำแหน่งทำให้ CR/QR/Cash ที่เพิ่มเท่ากันเป๊ะดูเหมือนต่างกัน 0.01)
-  const cellD=(c,bA,bB)=>{ if(!bB) return '<td class="tgt-note">–</td>';
+  const cellD=(c,bA,bB,extra)=>{ if(!bB) return '<td class="tgt-note">–</td>';
     const d=c.v(bB)-c.v(bA), dz=Math.abs(d)<1e-9;
     return `<td class="${c.ok(bB)?'brk-ok':'brk-no'}">${c.f(c.v(bB))} ${c.ok(bB)?'✓':'✗'}
-      <span class="brk-d">${dz?'เท่าเดิม':(d>0?'+':'−')+c.f(Math.abs(d))}</span></td>`; };
+      <span class="brk-d">${dz?'เท่าเดิม':(d>0?'+':'−')+c.f(Math.abs(d))}</span>${extra||''}</td>`; };
   const suCell=b=>b?`<td class="${b.su===0?'brk-ok':'brk-no'}">${suTxt(b)}</td>`:'<td class="tgt-note">–</td>';
   const pt=ok=>ok?'0':'1';
   const noFit=(mode==='plan'&&(injL==null||!b1));   // เป้านี้เงินก้อนอย่างเดียวไม่พอ — คอลัมน์ที่ 5 เป็น –
@@ -3049,14 +3050,36 @@ function exBrkHtml(x, sepLab){
   const bX=(mode==='ceiling')?(rDown?rDown.sepBreak:null):b1;
   const col5=(mode==='ceiling')?`ณ ${sepLab}<br>ถ้าใช้เงินเกินแผน`:(mode==='atlevel'?`ณ ${sepLab}<br>หลังช่วย`:`ณ ${sepLab}<br>หลังช่วย+มาตรการ`);
   const scoreHd=(mode==='ceiling')?'คะแนน<br>ปัจจุบัน→ก่อน→ถ้าเกินแผน':'คะแนน<br>ปัจจุบัน→ก่อน→หลัง';
+  // ⭐ 14 ส.ค. 69: โชว์ "ตัวเลขที่มา" ดิบใต้ค่าอัตราส่วน/บาทของแต่ละเกณฑ์ (เจ้าของงานสั่ง)
+  //   CR/QR/Cash = ตัวเศษ ÷ ตัวส่วน (หนี้สินหมุนเวียนเดียวกันทั้งสาม) · NWC = สินทรัพย์ − หนี้สิน
+  //   ทั้งหมดดึงจาก b.ca/b.cl/b.qn/b.cn ที่แนบมากับ sepBreak อยู่แล้ว (ดู exSimPath บรรทัด brk())
+  const srcDetail=(c,b)=>{
+    if(!b) return '';
+    if(c.n==='CR') return `<br><span class="tgt-note">${fmtM(b.ca)} ÷ ${fmtM(b.cl)}</span>`;
+    if(c.n==='QR') return `<br><span class="tgt-note">${fmtM(b.qn)} ÷ ${fmtM(b.cl)}</span>`;
+    if(c.n==='Cash ratio') return `<br><span class="tgt-note">${fmtM(b.cn)} ÷ ${fmtM(b.cl)}</span>`;
+    if(c.n==='NWC') return `<br><span class="tgt-note">${fmtM(b.ca)} − ${fmtM(b.cl)}</span>`;
+    return '';
+  };
+  // NI เป็นตัวเงินอยู่แล้ว (ไม่ใช่อัตราส่วน) — ที่มาคือ "สะสมจากค่าก่อนหน้า + ส่วนที่ขยับ" แทน
+  //   ก่อนช่วย = ปัจจุบัน + ที่คาดว่าจะเพิ่ม/ลดถึงเดือนเป้า (ผลของ niM ที่จำลอง)
+  //   หลังช่วย = ก่อนช่วย + เงินสนับสนุน/ใช้เกินแผน (บวกตรงเข้า NI ตามกลไก exSimPath: st.ni+=inj)
+  const niDetail=(prev,curr,label)=>{
+    if(!prev||!curr) return '';
+    const d=curr.ni-prev.ni, dz=Math.abs(d)<1e-6;
+    return `<br><span class="tgt-note">${fmtM(prev.ni)} ${dz?'':(d>0?'+':'−')+fmtM(Math.abs(d))+' '}(${label}) = ${fmtM(curr.ni)}</span>`;
+  };
   const rows=EX_CRIT.map(c=>{
     const okN=c.ok(bN), ok0=c.ok(b0), okX=bX?c.ok(bX):null;
     const scoreTxt=bX?`${pt(okN)} → ${pt(ok0)} → ${pt(okX)}${ok0!==okX?(okX?' <span class="brk-ok">✅ −1</span>':' <span class="brk-no">⚠️ +1</span>'):''}`
                      :`${pt(okN)} → ${pt(ok0)} → –`;
+    const isNI=c.n==='NI';
+    const ex0=isNI?niDetail(bN,b0,'คาดเปลี่ยนถึง '+sepLab):srcDetail(c,b0);
+    const exX=isNI?niDetail(b0,bX,mode==='ceiling'?'ใช้เงินเกินแผน':'เงินสนับสนุน'):srcDetail(c,bX);
     return `<tr>
       <td class="l"><b>${c.n}</b> <span class="tgt-note">${c.d}</span></td>
       <td>${c.th}</td>
-      ${cell(c,bN)}${cell(c,b0)}${cellD(c,b0,bX)}
+      ${cell(c,bN,isNI?'':srcDetail(c,bN))}${cell(c,b0,ex0)}${cellD(c,b0,bX,exX)}
       <td>${scoreTxt}</td></tr>`;
   }).join('');
   const suRow=`<tr>
