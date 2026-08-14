@@ -278,6 +278,30 @@ def main():
     m = pd.read_parquet(MASTER, columns=["org5", "t", "acc", "bs"])
     m = m[m["org5"].isin(orgs)].copy()
     tmax = int(m["t"].max())
+    # ── ค่าเฉลี่ยย้อนหลังของหนี้ตามจ่าย (เจ้าของงานสั่ง 13 ส.ค. 69 · คู่มือ 7.32) ────────────
+    # ใช้ตอบคำถาม "ยอดงวดนี้ผิดปกติไหม" — เทียบยอดคงเหลือปัจจุบันกับค่าเฉลี่ยของตัวเอง
+    # ⚠️ หน้าต่าง 12 งวด: วัดแล้วนิ่งพอ ๆ กับ 3/6 งวด แต่ 24 งวดยาวเกินจนโดนเทรนด์ขาขึ้นลาก
+    #    (ทั้งเขต: ฐาน 3 งวด +31.2M · 6 งวด +44.5M · 12 งวด +48.8M · แต่ 24 งวด +87.0M)
+    # ⚠️ รวม "ต่างจังหวัด" ด้วย (payOut/arOut) ต่างจากคอลัมน์สายเลขคณิตที่ใช้เฉพาะในจังหวัด
+    #    → เป็นภาพ "สังกัด สธ. ทั้งหมด" ตามที่เจ้าของงานถาม
+    TJ_HIST_WIN = 12
+    tj_hist = {}
+    try:
+        _r = m["acc"].map(acc_root)
+        _ap, _ar = TJ_PAY_IN | TJ_PAY_OUT, TJ_AR_IN | TJ_AR_OUT
+        _d = m[_r.isin(_ap | _ar)].copy()
+        _d["k"] = _r[_d.index].map(lambda x: "ap" if x in _ap else "ar")
+        _ts = sorted(t for t in _d["t"].unique() if int(t) < tmax)[-TJ_HIST_WIN:]
+        _d = _d[_d["t"].isin(_ts)]
+        _g = _d.pivot_table(index=["org5", "t"], columns="k", values="bs", aggfunc="sum").fillna(0.0)
+        for _o, _gg in _g.groupby(level=0):
+            tj_hist[_o] = {"apAvg": round(float(_gg["ap"].mean()) if "ap" in _gg else 0.0, 0),
+                           "arAvg": round(float(_gg["ar"].mean()) if "ar" in _gg else 0.0, 0),
+                           "avgN": int(len(_gg))}
+        print(f"  tj history: {len(tj_hist)} แห่ง × {len(_ts)} งวด ({_ts[0]}–{_ts[-1]})" if _ts else "  tj history: ไม่มีงวดย้อนหลัง")
+    except Exception as e:                      # ⛔ ห้ามล้มไพป์ไลน์เพราะฟีเจอร์เสริม (CLAUDE.md ข้อ 3)
+        print(f"  ⚠️ tj history ไม่สำเร็จ ({e}) — คอลัมน์จำลองจะว่าง ส่วนอื่นไม่กระทบ")
+        tj_hist = {}
     m = m[m["t"] == tmax].copy()
     m["root"] = m["acc"].map(acc_root)
 
@@ -320,6 +344,7 @@ def main():
             return round(float(g.loc[g["root"].isin(roots), "bs"].sum()), 0)
         tj = {"payIn": bal(TJ_PAY_IN), "payOut": bal(TJ_PAY_OUT),
               "arIn": bal(TJ_AR_IN),  "arOut": bal(TJ_AR_OUT)}
+        tj.update(tj_hist.get(org5, {"apAvg": None, "arAvg": None, "avgN": 0}))
         # ── เงินรับโอนจากหน่วยงานในสังกัด (แท็กจาก rev ที่มีอยู่แล้ว ไม่บวกซ้ำ) ──
         trf = {"op": bal(TRF_OP), "inv": bal(TRF_INV)}
         # ── หนี้สินหมุนเวียนแยก 4 ถัง (ฐานคำนวณเงินสำรอง MOE — ดู cl_bucket ด้านบน) ──
