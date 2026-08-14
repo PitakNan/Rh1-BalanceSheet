@@ -2335,14 +2335,25 @@ function exBrkClose(){ EXBRK={}; const el=document.getElementById('exBrkOverlay'
 // ⚠️ ใช้กติกาปัด 2 ตำแหน่งแบบเดียวกับ scoreOf/HFO → เกณฑ์ที่ตัดสินจริงคือ th−0.005 (ดู 3.11)
 //    จงใจไม่ใช้ EX_CRIT.ok ตรงนี้ เพราะ EX_CRIT ไม่ปัด จะขัดกับคะแนนที่ badge แสดง
 const EX_NOW_R2=0.005;                       // เผื่อการปัด 2 ตำแหน่ง: r2(x)>=th ⟺ x>=th−0.005
+// ⭐ 14 ส.ค. 69: ตัวเลขดิบเบื้องหลังอัตราส่วน (ตัวเศษ ÷/− ตัวส่วน) — ใช้ร่วมกันทุกป็อปอัปที่โชว์
+// CR/QR/Cash/NWC (exNowPop "ปัจจุบัน" · exWhyPop/exCmpTable "ก่อนช่วย"+สายเงินจริง · exBrkHtml "หลังช่วย")
+// เจ้าของงานขอให้เห็นตัวเลขที่ใช้คำนวณจริง ไม่ใช่แค่อัตราส่วนสำเร็จรูป — ต้อง b มี ca/cl/qn/cn ดิบติดมาด้วย
+function exRatioSrc(kind,b){
+  if(!b) return '';
+  if(kind==='CR')   return `<br><span class="tgt-note">${fmtM(b.ca)} ÷ ${fmtM(b.cl)}</span>`;
+  if(kind==='QR')   return `<br><span class="tgt-note">${fmtM(b.qn)} ÷ ${fmtM(b.cl)}</span>`;
+  if(kind==='Cash') return `<br><span class="tgt-note">${fmtM(b.cn)} ÷ ${fmtM(b.cl)}</span>`;
+  if(kind==='NWC')  return `<br><span class="tgt-note">${fmtM(b.ca)} − ${fmtM(b.cl)}</span>`;
+  return '';
+}
 const EX_NOW_ROWS=[
-  {n:'CR (Current ratio)', d:'สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน', thL:'≥ 1.50', grp:'LI',
+  {n:'CR (Current ratio)', d:'สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน', thL:'≥ 1.50', grp:'LI', kind:'CR',
    val:b=>b.ca/b.cl, fmt:fmtR, gap:b=>b.ca-(1.5-EX_NOW_R2)*b.cl, lift:'สินทรัพย์หมุนเวียน'},
-  {n:'QR (Quick ratio)', d:'สินทรัพย์เร็ว (ไม่รวมสินค้าคงเหลือ) ÷ หนี้สินหมุนเวียน', thL:'≥ 1.00', grp:'LI',
+  {n:'QR (Quick ratio)', d:'สินทรัพย์เร็ว (ไม่รวมสินค้าคงเหลือ) ÷ หนี้สินหมุนเวียน', thL:'≥ 1.00', grp:'LI', kind:'QR',
    val:b=>b.qn/b.cl, fmt:fmtR, gap:b=>b.qn-(1.0-EX_NOW_R2)*b.cl, lift:'สินทรัพย์เร็ว'},
-  {n:'Cash ratio', d:'เงินสด+เทียบเท่า ÷ หนี้สินหมุนเวียน', thL:'≥ 0.80', grp:'LI',
+  {n:'Cash ratio', d:'เงินสด+เทียบเท่า ÷ หนี้สินหมุนเวียน', thL:'≥ 0.80', grp:'LI', kind:'Cash',
    val:b=>b.cn/b.cl, fmt:fmtR, gap:b=>b.cn-(0.8-EX_NOW_R2)*b.cl, lift:'เงินสด+เทียบเท่า'},
-  {n:'NWC (เงินทุนหมุนเวียน)', d:'สินทรัพย์หมุนเวียน − หนี้สินหมุนเวียน', thL:'≥ 0', grp:'ST',
+  {n:'NWC (เงินทุนหมุนเวียน)', d:'สินทรัพย์หมุนเวียน − หนี้สินหมุนเวียน', thL:'≥ 0', grp:'ST', kind:'NWC',
    val:b=>b.ca-b.cl, fmt:fmtM, gap:b=>b.ca-b.cl, lift:'สินทรัพย์หมุนเวียน'},
   {n:'NI (กำไร/ขาดทุนสะสม)', d:'กำไร/ขาดทุนสุทธิสะสมทั้งปีงบ (รวมค่าเสื่อม)', thL:'≥ 0', grp:'ST',
    val:b=>b.ni, fmt:fmtM, gap:b=>b.ni, lift:'กำไรสะสม'},
@@ -2361,7 +2372,7 @@ function exNowPop(hc){
       const g=c.gap(b), pass=g>=0, pt=pass?0:1;
       if(!pass) worst=Math.max(worst,-g);
       return `<tr><td class="l"><b>${c.n}</b><div class="note">${c.d}</div></td>
-        <td>${c.thL}</td><td>${c.fmt(c.val(b))}</td>
+        <td>${c.thL}</td><td>${c.fmt(c.val(b))}${c.kind?exRatioSrc(c.kind,b):''}</td>
         <td class="${pass?'brk-ok':'brk-no'}"><b>${pass?'+ เกิน '+fmtM(g):'− ขาด '+fmtM(-g)}</b>
           <div class="note">${pass?'ลด'+c.lift+'ได้อีก '+fmtM(g)+' ก่อนตก':'ต้องเพิ่ม'+c.lift+'อีก '+fmtM(-g)}</div></td>
         <td class="${pass?'brk-ok':'brk-no'}">${pt} คะแนน ${pass?'✓':'✗'}</td></tr>`;
@@ -2434,7 +2445,7 @@ function exCmpTable(b0,b1,labA,labB,noteB){
     const dTxt=!moved?'<span class="tgt-note">ไม่ขยับ</span>'
       :(v1>v0?'<b class="brk-ok">↑ '+dFmt(v1-v0)+'</b>':'<b class="brk-no">↓ '+dFmt(v0-v1)+'</b>');
     return `<tr${!moved?' class="pass-row"':''}><td class="l"><b>${c.n}</b><div class="note">${c.d}</div></td>
-      <td>${c.thL}</td><td>${c.fmt(v0)}</td><td${moved?' style="font-weight:700"':''}>${c.fmt(v1)}</td><td>${dTxt}</td>
+      <td>${c.thL}</td><td>${c.fmt(v0)}${c.kind?exRatioSrc(c.kind,b0):''}</td><td${moved?' style="font-weight:700"':''}>${c.fmt(v1)}${c.kind?exRatioSrc(c.kind,b1):''}</td><td>${dTxt}</td>
       <td class="${p1?'brk-ok':'brk-no'}"><b>${gapTxt(g1)}</b><div class="note">เดิม ${gapTxt(g0)}</div></td>
       <td class="${p1?'brk-ok':'brk-no'}">${p0?0:1} → <b>${p1?0:1}</b> ${p0===p1?(p1?'✓':'✗'):(p1?'🎉':'⚠️')}</td></tr>`;
   }).join('');
@@ -2931,7 +2942,10 @@ function exWhyPop(hc){
    +'<div class="tgt-row" style="font-weight:600;margin-top:12px">③ เติมเงินให้พอจ่าย MOE ถึง '+lab+'</div>'
    +'<div class="note">'+moeTxt+'</div>'
    +'<div class="tgt-row" style="font-weight:600;margin-top:12px">④ ผลลัพธ์ ณ '+lab+'</div>'
-   +'<div class="note">CR '+fmtR(b1.cr)+' · QR '+fmtR(b1.qr)+' · Cash '+fmtR(b1.cash)+' · NWC '+fmtM(b1.nwc)
+   +'<div class="note">CR '+fmtR(b1.cr)+' <span class="tgt-note">('+fmtM(b1.ca)+' ÷ '+fmtM(b1.cl)+')</span>'
+   +' · QR '+fmtR(b1.qr)+' <span class="tgt-note">('+fmtM(b1.qn)+' ÷ '+fmtM(b1.cl)+')</span>'
+   +' · Cash '+fmtR(b1.cash)+' <span class="tgt-note">('+fmtM(b1.cn)+' ÷ '+fmtM(b1.cl)+')</span>'
+   +' · NWC '+fmtM(b1.nwc)+' <span class="tgt-note">('+fmtM(b1.ca)+' − '+fmtM(b1.cl)+')</span>'
    +' · NI สะสม '+fmtM(b1.ni)+' · SU '+b1.su+' → รวม <b>'+(b1.li+b1.st+b1.su)+'</b> คะแนน '
    +'(แสดงเป็นระดับ '+badge(at)+' หลัง anchor กับคะแนนงวดปัจจุบัน)</div>'
    +'<div class="tgt-row" style="font-weight:600;margin-top:14px">⑤ 🔗 อีกวิธีวัด — เดินตาม<b>สายเงินจริง</b>จากระดับ ณ ปัจจุบัน</div>'
@@ -3091,16 +3105,8 @@ function exBrkHtml(x, sepLab){
   const col5=(mode==='ceiling')?`ณ ${sepLab}<br>ถ้าใช้เงินเกินแผน`:(mode==='atlevel'?`ณ ${sepLab}<br>หลังช่วย`:`ณ ${sepLab}<br>หลังช่วย+มาตรการ`);
   const scoreHd=(mode==='ceiling')?'คะแนน<br>ปัจจุบัน→ก่อน→ถ้าเกินแผน':'คะแนน<br>ปัจจุบัน→ก่อน→หลัง';
   // ⭐ 14 ส.ค. 69: โชว์ "ตัวเลขที่มา" ดิบใต้ค่าอัตราส่วน/บาทของแต่ละเกณฑ์ (เจ้าของงานสั่ง)
-  //   CR/QR/Cash = ตัวเศษ ÷ ตัวส่วน (หนี้สินหมุนเวียนเดียวกันทั้งสาม) · NWC = สินทรัพย์ − หนี้สิน
-  //   ทั้งหมดดึงจาก b.ca/b.cl/b.qn/b.cn ที่แนบมากับ sepBreak อยู่แล้ว (ดู exSimPath บรรทัด brk())
-  const srcDetail=(c,b)=>{
-    if(!b) return '';
-    if(c.n==='CR') return `<br><span class="tgt-note">${fmtM(b.ca)} ÷ ${fmtM(b.cl)}</span>`;
-    if(c.n==='QR') return `<br><span class="tgt-note">${fmtM(b.qn)} ÷ ${fmtM(b.cl)}</span>`;
-    if(c.n==='Cash ratio') return `<br><span class="tgt-note">${fmtM(b.cn)} ÷ ${fmtM(b.cl)}</span>`;
-    if(c.n==='NWC') return `<br><span class="tgt-note">${fmtM(b.ca)} − ${fmtM(b.cl)}</span>`;
-    return '';
-  };
+  //   ใช้ exRatioSrc ตัวเดียวกับ exNowPop/exCmpTable (ปัจจุบัน/ก่อนช่วย) ให้หน้าตาตรงกันทั้ง 3 ป็อปอัป
+  const srcDetail=(c,b)=>c.n==='Cash ratio'?exRatioSrc('Cash',b):exRatioSrc(c.n,b);
   // NI เป็นตัวเงินอยู่แล้ว (ไม่ใช่อัตราส่วน) — ที่มาคือ "สะสมจากค่าก่อนหน้า + ส่วนที่ขยับ" แทน
   //   ก่อนช่วย = ปัจจุบัน + ที่คาดว่าจะเพิ่ม/ลดถึงเดือนเป้า (ผลของ niM ที่จำลอง)
   //   หลังช่วย = ก่อนช่วย + เงินสนับสนุน/ใช้เกินแผน (บวกตรงเข้า NI ตามกลไก exSimPath: st.ni+=inj)
