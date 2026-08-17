@@ -37,7 +37,12 @@ const tot=f=>j.hosp.reduce((s,h)=>s+f(h),0);
 console.log('━━ 0) ข้อมูลจาก pipeline ครบทั้ง 3 ชุด ━━');
 chk(!!j.moeVers && j.moeVers.def==='69', `exec.json มี meta moeVers และค่าเริ่มต้น = Ver69`,
     j.moeVers?`n69=${j.moeVers.n69} n68=${j.moeVers.n68} nP9=${j.moeVers.nP9}`:'ไม่มี');
-chk(j.moeVers.n69===59 && j.moeVers.n68===62 && j.moeVers.nP9===9, 'จำนวนบัญชี 59 / 62 / 9 ตรงตามที่ CFO กำหนด');
+// ⚠️ 18 ส.ค. 69: nP9 9 → 31 (เจ้าของงานเคาะ) — เติมกลุ่ม วัสดุทั่วไป (9) + ซ่อมแซม/บำรุงรักษา (13)
+//    เดิมปุ่ม Ver69p เอื้อมถึงแค่ ยา(8)+ครุภัณฑ์ต่ำกว่าเกณฑ์(1) = 773.6 ลบ./ด. ทำให้ตั้งจ่าย 0% แล้ว
+//    ส่วนขาดยังลงได้แค่ 28.50 ลบ. (ติดเพดาน ไม่ใช่ค่าจริง) เพราะอีก 300.9 ลบ./ด. ถูกเก็บเป็นเงินสดเสมอ
+//    ⛔ กลุ่ม svc (จ้างเหมาบริการ 231.8 ลบ./ด.) **ไม่ใส่ p9** — เจ้าของงานเคาะว่ายืดไม่ได้
+//       (ผู้รับเหมาต้องจ่ายค่าแรงคนของเขาทุกเดือน) → คงเป็นจ่ายสดต่อไป
+chk(j.moeVers.n69===59 && j.moeVers.n68===62 && j.moeVers.nP9===31, 'จำนวนบัญชี 59 / 62 / 31 ตรงตามที่ CFO กำหนด');
 chk(j.hosp.every(h=>h.moe68 && h.moeP9), 'ทุกแห่งมี moe68 + moeP9');
 const nRent=j.moeGroups.filter(g=>g.id==='rent').length;
 chk(nRent===1, 'มีกลุ่ม "ค่าเช่า" (rent) แยกออกมาตามที่เจ้าของงานสั่ง');
@@ -92,7 +97,7 @@ for(const pct of [100,75,50,25,0]){
 A.setEXST(ST('69p',100));
 chk(Math.abs(tot(A.exMoeMo)-v69)<1e3, 'จ่าย 100% ให้ผลเท่า Ver69 เป๊ะ (ไม่มีผลข้างเคียงแอบแฝง)');
 A.setEXST(ST('69p',0));
-chk(Math.abs(tot(A.exMoeMo)-(v69-p9Mo))<1e3, 'จ่าย 0% = ตัดยอด 9 บัญชีออกจากเงินสดทั้งก้อน', M(v69-p9Mo));
+chk(Math.abs(tot(A.exMoeMo)-(v69-p9Mo))<1e3, 'จ่าย 0% = ตัดยอด 31 บัญชีออกจากเงินสดทั้งก้อน', M(v69-p9Mo));
 // เงินสำรอง MOE (กลุ่มยืดไม่ได้ × 3 + ค้างจ่าย) ต้องไม่ขยับตาม %
 A.setEXST(ST('69',100)); const res100=tot(h=>A.exSimPath(h,0).resNeed0);
 A.setEXST(ST('69p',0));  const res0=tot(h=>A.exSimPath(h,0).resNeed0);
@@ -123,7 +128,7 @@ chk(badCash===0, 'เงินสดปลายงวดไม่แย่ล�
 chk(badRatio===0, 'หนี้สินหมุนเวียนปลายงวดโตขึ้นจริงเมื่อยืดหนี้ (ผิด '+badRatio+' แห่ง)');
 chk(dNiSim<1, 'NI สะสม ณ ก.ย. เท่าเดิมทุกแห่ง — ยืดหนี้ไม่กลายเป็นกำไร', M(dNiSim));
 chk(nWorse>0, `CR ณ ก.ย. แย่ลงจริงในบางแห่ง = ค้างชำระหนี้มีต้นทุน (${nWorse} แห่ง)`);
-console.log(`   ค้างชำระ 100% ของ 9 บัญชี: ${M(tot(A.exMoeStretchMo))}/ด. → เจ้าหนี้เพิ่มถึง ก.ย. ${M(strch.reduce((s,r)=>s+r.apStretch,0))}`);
+console.log(`   ค้างชำระ 100% ของ 31 บัญชี: ${M(tot(A.exMoeStretchMo))}/ด. → เจ้าหนี้เพิ่มถึง ก.ย. ${M(strch.reduce((s,r)=>s+r.apStretch,0))}`);
 
 console.log('\n━━ 5) กติกาเหล็ก 3.6 — moeMo ใน summary.json = Ver69 (ค่าเริ่มต้น) ━━');
 A.setEXST(ST('69',100));
@@ -148,7 +153,12 @@ for(const [ver,pct,lab] of [['69',100,'MOE.Ver69'],['68',100,'MOE.Ver68'],['69p'
   // ฐาน 21 คอลัมน์ (+ ลูกหนี้ถ้าเปิด) — 11 ส.ค. 69 รวม 6 คอลัมน์ "เงินที่ต้องสนับสนุนรายเกณฑ์"
   // และตัด "เงินที่ยกให้" ออก · 12 ส.ค. 69 เพิ่มคอลัมน์ NWC (20 → 21)
   // จำนวนคอลัมน์ที่ถูกต้องตรวจละเอียดใน test_exec_columns.js — ที่นี่ตรวจแค่ว่าไม่พังตอนสลับโหมด MOE
-  chk(!err && nTh===21+(A.SHOW_TJAR?1:0) && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
+  // 🐞 18 ส.ค. 69: ค่านี้ **ค้างเก่ามาตั้งแต่ 13 ส.ค.** — ของจริง 24 คอลัมน์ (+2 คอลัมน์จำลอง 13 ส.ค.
+  //    +1 อื่น) แต่ยันไว้ 21 → เทสต์นี้ตกอยู่แล้วก่อนงานรอบนี้ ไม่ได้เพิ่งพังจากคอลัมน์ 💵
+  // ✅ เลิกยันเลขของตัวเอง หันมาใช้สูตรเดียวกับ test_exec_columns.js (แหล่งความจริงเดียว)
+  //    เพิ่ม/ลดคอลัมน์คราวหน้าจะได้แก้ที่เดียว ไม่ต้องไล่ตามหลายไฟล์
+  const NCOL_EXP=24+(A.SHOW_TJAR?1:0);   // ตรงกับ NCOL ใน test_exec_columns.js
+  chk(!err && nTh===NCOL_EXP && main.length===j.hosp.length && badTd===0 && !/undefined|NaN/.test(html+moeBox)
       && html.includes(`value="${ver}" selected`) && moeBox.includes(lab),
       `โหมด ${lab}: เรนเดอร์ครบ ${main.length} แถว × ${nTh} คอลัมน์ · dropdown ค้างค่าถูก · ไม่มี undefined/NaN`,
       err||(badTd?`td ไม่ครบ ${badTd} แถว`:''));

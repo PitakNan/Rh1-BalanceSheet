@@ -192,6 +192,23 @@ table.wltbl td.exneed{background-image:linear-gradient(var(--exneed),var(--exnee
 :root{--exsim:rgba(160,120,255,.10)}
 table.wltbl th.exsim{background-color:var(--th-bg);background-image:linear-gradient(var(--exsim),var(--exsim))}
 table.wltbl td.exsim{background-image:linear-gradient(var(--exsim),var(--exsim))}
+/* 🎛 แถบสมมติฐานที่ใช้อยู่ (18 ส.ค. 69) — ต้องเห็นก่อนอ่านตัวเลขทุกครั้ง
+   ⚠️ ใช้ token สีเดิมของหน้า (--gold/--green/--line) เพื่อให้อ่านออกทั้งธีมสว่างและมืด */
+.exassume{display:flex;gap:9px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;
+  padding:8px 11px;margin:0 0 8px;font-size:13px;line-height:1.5}
+.exassume.warn{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent)}
+.exassume.ok{background:var(--hover)}
+.exassume.ok .exassume-i{color:var(--green)}
+.exassume-i{flex-shrink:0;font-size:14px;line-height:1.4}
+.exassume-l{margin:3px 0 0;padding-left:19px;display:flex;flex-direction:column;gap:1px}
+.exassume-l li{font-size:12.5px}
+.exassume-b{margin:0;flex-shrink:0;align-self:center;white-space:nowrap}
+@media(max-width:620px){.exassume{flex-wrap:wrap}.exassume-b{align-self:flex-start}}
+/* 💵 คอลัมน์ "เงินที่ต้องใช้จริง" = max(ขาด, สนับสนุน) (18 ส.ค. 69) — เป็นยอดตั้งงบ จึงเน้นกว่าอีก 2 ชุด
+   หลักเดียวกับ .exneed/.exsim (rgba ทับพื้นเดิม · th ต้องทึบเพราะ sticky) แต่เข้มขึ้นให้สะดุดตา */
+:root{--exreal:rgba(255,176,64,.16)}
+table.wltbl th.exreal{background-color:var(--th-bg);background-image:linear-gradient(var(--exreal),var(--exreal))}
+table.wltbl td.exreal{background-image:linear-gradient(var(--exreal),var(--exreal))}
 /* 📂 แผงยุบ/ขยายในแท็บผู้บริหาร (12 ส.ค. 69) — เนื้อในยังเรนเดอร์อยู่ แค่ซ่อนด้วย CSS */
 .exsec-h{display:flex;align-items:flex-start;gap:8px;cursor:pointer;user-select:none;border-radius:8px;margin:-4px -6px 0;padding:4px 6px}
 .exsec-h:hover{background:var(--hover)}
@@ -1573,6 +1590,14 @@ function exMoeLeft(x){ return exNetAfterDebt(x.h) - (x.r0.moeMo||0)*exHorMonths(
 //    · บรรทัด "ยังขาดอยู่ N แห่ง" · คอลัมน์ที่ export ออก TSV/Excel — จึงแก้ที่ต้นทางให้ทุกจุดตรงกัน
 //    (งวด 256909 ไม่เจอเพราะเลขลงตัวพอดี — ห้ามกลับไปเทียบ v<0 ตรงๆ อีก)
 const exShortFloor=v=>v<-1?-v:0;   // ขาดจริงต้องเกิน 1 บาท — หน่วยที่แสดงคือ ลบ. ทศนิยม 2 (= หลักหมื่นบาท)
+// ── ปัด 2 ตำแหน่งก่อนเทียบเกณฑ์ ให้ตรงกับ scoreOf/HFO (แก้บั๊ก 18 ส.ค. 69) ────────────────
+// 🐞 ของเดิม EX_CRIT/EX_NEEDC เทียบด้วยค่า **ไม่ปัด** ขณะที่ scoreOf (สูตรทางการ) ปัด 2 ตำแหน่งก่อน
+//    → รพ. ที่อัตราส่วนอยู่ปลายเส้นพอดี เห็น ✗ ในป็อปอัปแต่คะแนนไม่ถูกหัก = ขัดกันในหน้าเดียว
+//    วัดจริงงวด 256910: กระทบ 2 แห่ง และเป็นเกณฑ์ QR ทั้งคู่
+//      แม่ออน QR 0.9953 · วัดจันทร์เฉลิมพระเกียรติ ๘๐ พรรษา QR 0.9971 → ปัดแล้ว = 1.00 ผ่านเกณฑ์
+// ⚠️ ใช้ตัวนี้เฉพาะ "การตัดสินผ่าน/ไม่ผ่าน" เท่านั้น — การแสดงค่าและการคิดส่วนต่าง (Δ) ยังใช้ค่าจริง
+//    ไม่ปัด เพื่อไม่ให้ Δ ของ CR/QR/Cash ที่ขยับเท่ากันเป๊ะ อ่านได้ต่างกัน 0.01
+const EX_R2=v=>Math.round(v*100)/100;
 function exTopUp(x){ return exShortFloor(exMoeLeft(x)); }
 // ── ส่วนขาด "ตั้งต้น" ก่อนได้รับเงินโยกช่วย (เจ้าของงานสั่ง 6 ส.ค. 69) ──────────────
 // เดิมพอโยกเงินเข้าไปแล้วตัวเลขส่วนขาดลดจนหายไป ทำให้ไม่รู้ว่า รพ. นี้เคย "ต้องการเติมเงิน" เท่าไหร่
@@ -1582,12 +1607,30 @@ function exTopUpGross(x){
   const v=exMoeLeft(x)-exXferIn(x.h);   // ถอดเฉพาะเงินที่ "รับโยกมา" ออก (เงินที่โยกออกไปยังนับเป็นภาระจริง)
   return exShortFloor(v);               // เศษต่ำกว่า 1 บาท = 0 เหมือน exTopUp (ไม่งั้นเซลล์โชว์แถวที่ควรเป็น "–")
 }
+// ── 💵 เงินที่ต้องใช้จริง = max(ส่วนขาดสภาพคล่อง, เงินสนับสนุน) ราย รพ. (18 ส.ค. 69) ────────
+// ⛔ ห้ามบวก 2 คอลัมน์รวมกัน — เงินสนับสนุนลงบัญชีเป็น "รายได้เงินอุดหนุนจากหน่วยงานภาครัฐ"
+//    จึงเข้า 2 ที่พร้อมกันด้วยเงินก้อนเดียว: ①เงินสด (จ่าย MOE ได้) ②NI + CR/QR/Cash/NWC (คะแนนดีขึ้น)
+//    รพ. ที่ขาดทั้ง 2 มิติไม่ต้องใช้เงิน 2 ก้อน — การบวกคือนับเงินก้อนเดิมซ้ำ
+// ตรวจจริงงวด 256910 ทั้ง 103 แห่ง (สถานะเริ่มต้น เป้า ≤6):
+//    Σ max()      = 166.75 ลบ. → เติมแล้วปิดได้ทั้ง 2 มิติ ครบ 103/103 แห่ง ✓
+//    Σ บวกกัน     = 194.74 ลบ. → เกินจริง 27.99 ลบ. (= Σ min() ของ 7 แห่งที่ขาดทั้งคู่ พอดี)
+//    Solver เดี่ยว = 107.70 ลบ. → 19 แห่งเงินไม่พอจ่าย MOE
+//    ส่วนขาดเดี่ยว =  87.04 ลบ. → 15 แห่งระดับวิกฤตไม่ถึงเป้า
+// ✅ ปลอดภัยเพราะระดับเป็น monotonic ตามเงินที่เติม (ทดสอบ 0→80 ลบ. ทั้ง 103 แห่ง ไม่มีแห่งใดแย่ลง)
+//    → เติมยอดที่มากกว่า จะได้ผลของตัวที่น้อยกว่าติดมาฟรีเสมอ
+// ⚠️ ใช้ x.inj (ยอดที่จะเติมจริง รวมค่าที่กรอกเอง) ไม่ใช่ need ดิบ — ให้ตรงกับคอลัมน์ที่ผู้ใช้เห็น
+function exNeedReal(x){
+  const sh=exTopUp(x);
+  const nd=(x.inj!=null&&x.inj>0)?x.inj:0;
+  return Math.max(sh,nd);
+}
 // ── 6 เกณฑ์ของคอลัมน์ "เงินที่ต้องสนับสนุน" (เรียงตามที่เจ้าของงานสั่ง 11 ส.ค. 69: Cash→QR→CR→NWC→NI→SU) ──
 // ok() ชุดเดียวกับแผงเจาะเกณฑ์ 7 คะแนน (EX_CRIT) — ดูรายละเอียด + ข้อห้ามบวกกัน ที่ exSolveCrit
+// ⚠️ ต้องปัด 2 ตำแหน่งเหมือน scoreOf (แก้ 18 ส.ค. 69) — ดูเหตุผลที่ EX_R2
 const EX_NEEDC=[
-  {k:'cash',n:'Cash',th:'≥ 0.80',ok:b=>b.cash>=0.8},
-  {k:'qr',  n:'QR',  th:'≥ 1.00',ok:b=>b.qr>=1.0},
-  {k:'cr',  n:'CR',  th:'≥ 1.50',ok:b=>b.cr>=1.5},
+  {k:'cash',n:'Cash',th:'≥ 0.80',ok:b=>EX_R2(b.cash)>=0.8},
+  {k:'qr',  n:'QR',  th:'≥ 1.00',ok:b=>EX_R2(b.qr)>=1.0},
+  {k:'cr',  n:'CR',  th:'≥ 1.50',ok:b=>EX_R2(b.cr)>=1.5},
   {k:'nwc', n:'NWC', th:'≥ 0',   ok:b=>b.nwc>=0},
   {k:'ni',  n:'NI',  th:'≥ 0',   ok:b=>b.ni>=0},
   // SU คิดได้ 0–2 คะแนน ไม่ใช่ผ่าน/ไม่ผ่าน → เจ้าของงานเคาะ "ให้ลดลง 1 คะแนนจากที่จะเป็น ณ เดือนเป้า"
@@ -1610,6 +1653,7 @@ const EX_SORT_GETTERS={
   // เงินสด+เทียบเท่าหลังจัดการหนี้สิน = ตัวกลางของ exMoeLeft (ก่อนหักภาระ MOE) — สูตรต้องตรงกันเป๊ะ
   net:x=>exNetAfterDebt(x.h),
   sep0:x=>x.r0.sepRisk??-1, give:x=>x.give||0, need:x=>x.inj||0, sep1:x=>x.r1.sepRisk??-1,
+  needreal:x=>exNeedReal(x),
   // เงินที่ต้องใช้รายเกณฑ์ — null (เงินก้อนอย่างเดียวไม่พอ) ต้องไปอยู่ท้ายสุดเวลาเรียงมาก→น้อย
   ...Object.fromEntries(EX_NEEDC.map(c=>['n_'+c.k,x=>{const v=exSolveCrit(x.h,c,x.r0); return v==null?9e15:v;}])),
 };
@@ -1809,7 +1853,12 @@ function exMoeVer(){ const v=EXST&&EXST.moeVer; return (v==='68'||v==='69'||v===
 function exMoeVerLab(){ const v=exMoeVer(); return v==='68'?'MOE.Ver68':(v==='69'?'MOE.Ver69':'MOE.Ver69 + จ่ายหนี้การค้า '+exPayPct()+'%'); }
 function exMoeVerShort(){ const v=exMoeVer(); return v==='68'?'Ver68':(v==='69'?'Ver69':'Ver69+'+exPayPct()+'%'); }
 // % ที่จ่ายเงินสดให้ 9 บัญชีเจ้าหนี้การค้า (0 = ไม่จ่ายเลย · 100 = จ่ายเต็มเท่า Ver69)
-const EX_PAYPCT_DEF=50;
+// ⚠️ 18 ส.ค. 69: เปลี่ยน 50 → 100 (เจ้าของงานเคาะ)
+//    ของเดิม 50 ทำให้แค่สลับ "นิยาม" จาก Ver69 → Ver69p โดยไม่แตะสไลด์เลย ส่วนขาดทั้งเขตร่วง
+//    87.04 → 50.65 ลบ. (−36.4 ลบ.) ทันที = ตัวเลขเปลี่ยนเองโดยผู้ใช้ไม่ได้สั่ง
+//    100% = "จ่ายหนี้การค้าเป็นเงินสดเต็มจำนวน" ซึ่งให้ผลเท่ากับ Ver69 เป๊ะ → สลับโมเดลแล้วเลขนิ่ง
+//    แล้วผู้ใช้ค่อยลด % ลงเองเพื่อจำลองการยืดหนี้ = เจตนาชัดเจนทุกครั้ง
+const EX_PAYPCT_DEF=100;
 function exPayPct(){ const v=+(EXST&&EXST.payPct); return (isFinite(v)&&v>=0&&v<=100)?v:EX_PAYPCT_DEF; }
 // ยอดจ่ายจริงสะสมรายกลุ่ม ตามเวอร์ชันที่เลือก (บาท · ยังไม่หาร mo และยังไม่คิด %ปรับ)
 function exMoeGrpRaw(h,gid){ return ((exMoeVer()==='68' ? (h.moe68&&h.moe68[gid]) : (h.moe&&h.moe[gid]))||0); }
@@ -2209,8 +2258,8 @@ function exSolveFor(h, L){
 //    (จึงเป็นเหตุให้ CR = NWC + 0.5×CL เสมอ — CR แพงกว่า NWC อยู่ครึ่งหนึ่งของหนี้สินหมุนเวียนตายตัว)
 // ⚠️ เดินด้วย Solver จริงบน exSimPath (เจ้าของงานเลือก 11 ส.ค. 69) ไม่ใช่สูตรปิดจากงบงวดล่าสุด
 //    จึงนับผลของเจ้าหนี้ค้างจ่ายที่จะก่อขึ้นระหว่างทาง + หนี้สินหมุนเวียนที่เดินตาม run-rate ครบ
-// ⚠️ เกณฑ์ผ่านใช้ ok() ชุดเดียวกับแผงเจาะเกณฑ์ 7 คะแนน (EX_CRIT) ไม่ใช่ค่าที่ปัด 2 ตำแหน่งใน scoreOf
-//    เพื่อให้เซลล์นี้ไม่ขัดกับเครื่องหมาย ✓/✗ ที่ผู้ใช้เห็นในแผงเดียวกัน (ต่างกันไม่เกิน 0.005×CL)
+// ⚠️ เกณฑ์ผ่านใช้ ok() ชุดเดียวกับแผงเจาะเกณฑ์ 7 คะแนน (EX_CRIT) ซึ่ง**ปัด 2 ตำแหน่งเหมือน scoreOf**
+//    แล้วตั้งแต่ 18 ส.ค. 69 (ดู EX_R2) — เซลล์นี้ เครื่องหมาย ✓/✗ และคะแนน จึงตรงกันทั้งหมด
 // (นิยาม EX_NEEDC อยู่เหนือ EX_SORT_GETTERS เพราะ getter ชุดนั้นวนสร้างคีย์จากมันตอน eval)
 // cache ผูกกับ "สถานะที่มีผลต่อ exSimPath ทั้งชุด" — 6 เกณฑ์ × 103 แห่ง คือ Solver 618 ตัวต่อการเรนเดอร์
 // ถ้าไม่แคช การคลิกเรียงลำดับ/กางแถวจะคำนวณใหม่ทั้งหมดทุกครั้ง
@@ -3000,6 +3049,73 @@ function exSetArOvr(hc,v){
   delete EXAR[hc]; exSave(); exRender();
 }
 function exArClear(){ EXST.arOvr={}; EXST.arPct=100; exSave(); exRender(); }
+// ══ 🎛 แถบสมมติฐานที่ใช้อยู่ + รีเซ็ต (เจ้าของงานสั่ง 18 ส.ค. 69) ══════════════════════════
+// 🐞 ปัญหาที่ทำให้ต้องมี: ค่าที่ปรับไว้ทุกตัวถูกเซฟลง localStorage และ**ค้างข้ามวันข้ามเครื่อง**
+//    โดยไม่มีอะไรบอกบนหน้าจอ → เปิดมาอีกวันเห็นตัวเลขที่ไม่ใช่ค่าฐาน แล้วอ่านเป็นค่าฐาน
+//    เกิดจริง 17 ส.ค. 69: ป่าซางโชว์เงินสนับสนุน 20.20 ลบ. ขณะที่ค่าฐานคือ 13.40 ลบ.
+//    ไล่หาสาเหตุย้อนหลังต้องรันสูตรทั้งเขตเทียบทีละสวิตช์ ทั้งที่ควรเห็นได้จากหน้าจอทันที
+// ⚠️ แยก "สมมติฐาน" (เปลี่ยนตัวเลข) ออกจาก "มุมมอง" (ตัวกรอง/ย่อคอลัมน์ ไม่เปลี่ยนตัวเลขรายแห่ง)
+//    รีเซ็ตต้องไม่ล้างมุมมอง เพราะไม่ใช่สาเหตุของการอ่านเลขผิด
+// ⚠️ xfer/rgAlloc = **แผนจัดสรรจริง** ไม่ใช่สมมติฐานทดลอง → ต้องถามก่อนล้างเสมอ
+function exAssumeList(){
+  const D=exDefaultState(), out=[];
+  const nk=o=>Object.keys(o||{}).length;
+  if(exMoeVer()!=='69') out.push({t:'นิยาม MOE = '+(exMoeVer()==='68'?'Ver68':'Ver69 + จ่ายหนี้การค้า'),k:'moe'});
+  if(exMoeVer()==='69p'&&exPayPct()!==100) out.push({t:'จ่ายหนี้การค้าเพียง '+exPayPct()+'%',k:'moe'});
+  { const g=(EX.moeGroups||[]).filter(x=>exMoePct(x.id)!==0);
+    if(g.length) out.push({t:'ปรับ % รายจ่าย MOE '+g.length+' กลุ่ม ('+g.map(x=>x.id+' '+(exMoePct(x.id)>0?'+':'')+exMoePct(x.id)+'%').join(', ')+')',k:'moe'}); }
+  if(nk(EXST.moeOvr)) out.push({t:'ปรับ % MOE เฉพาะบางแห่ง '+nk(EXST.moeOvr)+' แห่ง',k:'moe'});
+  if(nk(EXST.moeOff)) out.push({t:'ปิดกลุ่มรายจ่าย MOE '+nk(EXST.moeOff)+' กลุ่ม',k:'moe'});
+  if(EXST.xmoe===false) out.push({t:'ปิดค่าใช้จ่ายนอกนิยาม MOE — ทำให้ทุกแห่งดูดีขึ้นมาก',k:'sim'});
+  if(EXST.seas===false) out.push({t:'ปิดทิศทาง NI รายเดือน',k:'sim'});
+  if(EXST.clGrow===false) out.push({t:'ปิดหนี้สินเดินตามจริง',k:'sim'});
+  if(EXST.tgt!==D.tgt) out.push({t:'เป้าระดับ ≤'+EXST.tgt+' (ค่าฐาน ≤'+D.tgt+')',k:'tgt'});
+  if(+EXST.mmo>=1&&+EXST.mmo<=EX_MMO_MAX&&+EXST.mmo!==exMoeMonthsDefault()) out.push({t:'เดือนเป้า '+exMoeTargetLab()+' (ค่าฐาน = สิ้นปีงบ)',k:'tgt'});
+  if(exArPct()!==100) out.push({t:'ลูกหนี้ที่คาดว่าเก็บได้ '+exArPct()+'%',k:'ar'});
+  if(nk(EXST.arOvr)) out.push({t:'กำหนดยอดลูกหนี้เอง '+nk(EXST.arOvr)+' แห่ง',k:'ar'});
+  { const n=(EX.revOrder||[]).length?nk(EXST.revOff):0;
+    if(n) out.push({t:'ปิดกองทุนรายรับ '+n+' รายการ',k:'rev'}); }
+  if(nk(EXST.ovr)) out.push({t:'ปรับ % รายรับเฉพาะบางแห่ง '+nk(EXST.ovr)+' แห่ง',k:'rev'});
+  if(nk(EXST.adj)) out.push({t:'ปรับ % รายรับรายกองทุน '+nk(EXST.adj)+' รายการ',k:'rev'});
+  if(EXST.tj&&EXST.tj.mode!=='off') out.push({t:'เปิด Option หนี้ตามจ่าย ('+({pay:'จ่ายเป็นเงินสด',forgive:'ยกหนี้',smart:'จ่ายก่อนแล้วคืนบางส่วน'}[EXST.tj.mode]||EXST.tj.mode)+')',k:'tj'});
+  if(nk(EXST.inj)) out.push({t:'กำหนดยอดเงินสนับสนุนเอง '+nk(EXST.inj)+' แห่ง — ทับค่าที่ Solver คำนวณ',k:'inj'});
+  return out;
+}
+function exPlanList(){
+  const n1=(exXferList()||[]).length, n2=(exRgList()||[]).length, out=[];
+  if(n1) out.push('แผนโยกเงินช่วยกัน '+n1+' รายการ');
+  if(n2) out.push('แผนเติมจากเงินเขตที่ฝากไว้ '+n2+' รายการ');
+  return out;
+}
+function exAssumeBanner(){
+  const a=exAssumeList(), p=exPlanList();
+  if(!a.length&&!p.length)
+    return `<div class="exassume ok"><span class="exassume-i">✓</span><div><b>ใช้ค่าฐานทั้งหมด</b>
+      <span class="tgt-note">— ตัวเลขในตารางนี้คือค่าตั้งต้นตามงบทดลองงวด ${EX.periodLabel} ไม่มีสมมติฐานที่ปรับไว้</span></div></div>`;
+  return `<div class="exassume warn"><span class="exassume-i">🎛</span><div style="flex:1;min-width:0">
+    <b>ตัวเลขในตารางนี้อยู่ใต้สมมติฐานที่ปรับไว้ ${a.length} ข้อ</b>
+    <span class="tgt-note">— ไม่ใช่ค่าฐาน อ่านเทียบกับรอบก่อนต้องระวัง</span>
+    ${a.length?`<ul class="exassume-l">${a.map(x=>`<li>${x.t}</li>`).join('')}</ul>`:''}
+    ${p.length?`<div class="tgt-note" style="margin-top:3px">📋 แผนที่บันทึกไว้ (ไม่ใช่สมมติฐาน): ${p.join(' · ')}</div>`:''}
+  </div>
+  ${a.length?`<button type="button" class="tgt-apply exassume-b" onclick="exResetAssume()"
+    title="กลับไปใช้ค่าฐานทั้งหมด — ไม่แตะแผนโยกเงิน/เงินเขต และไม่แตะตัวกรองที่เลือกไว้">↺ กลับค่าฐาน</button>`:''}</div>`;
+}
+function exResetAssume(){
+  const a=exAssumeList();
+  if(!a.length) return;
+  if(!confirm('กลับไปใช้ค่าฐานทั้งหมด ('+a.length+' ข้อที่ปรับไว้จะถูกล้าง)\n\n'
+    +a.map((x,i)=>(i+1)+'. '+x.t.replace(/<[^>]*>/g,'')).join('\n')
+    +'\n\n✅ ไม่แตะแผนโยกเงิน/แผนเงินเขต และไม่แตะตัวกรองที่เลือกไว้')) return;
+  const D=exDefaultState();
+  // คงไว้: มุมมอง (ตัวกรอง/ย่อคอลัมน์/ลำดับ/แผงยุบ) + แผนจัดสรรจริง (xfer/rgAlloc)
+  const keep={prov:EXST.prov,types:EXST.types,crisis:EXST.crisis,wide:EXST.wide,
+              sect:EXST.sect,provSort:EXST.provSort,open:EXST.open,
+              xfer:EXST.xfer,rgAlloc:EXST.rgAlloc};
+  EXST=Object.assign(D,keep);
+  _exCritCache={sig:null,map:null};   // ⚠️ ต้องล้าง cache Solver ด้วย ไม่งั้นเซลล์รายเกณฑ์ยังโชว์ค่าเดิม
+  exSave(); exRender();
+}
 function exSetWide(v){ EXST.wide=!!v; exSave(); exRender(); }
 function exSetClGrow(v){ EXST.clGrow=!!v; exSave(); exRender(); }
 function exSetSeas(v){ EXST.seas=!!v; exSave(); exRender(); }
@@ -3051,9 +3167,9 @@ function exXfSubmit(hc, fill){
 function exBrkLvl(hc,L){ EXBRK[hc]=L; exBrkOpen(hc); }   // วาดเฉพาะป็อปอัป ไม่แตะตาราง
 // เกณฑ์ทั้ง 7 คะแนน: LI 3 (CR/QR/Cash) + ST 2 (NWC/NI) + SU 0-2 = เต็ม 7 ตรงสูตรทางการ
 const EX_CRIT=[
-  {g:'LI',n:'CR',d:'สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน',th:'≥ 1.50',v:b=>b.cr,f:fmtR,ok:b=>b.cr>=1.5},
-  {g:'LI',n:'QR',d:'สินทรัพย์เร็ว (ไม่รวมสินค้าคงเหลือ) ÷ หนี้สินหมุนเวียน',th:'≥ 1.00',v:b=>b.qr,f:fmtR,ok:b=>b.qr>=1.0},
-  {g:'LI',n:'Cash ratio',d:'เงินสด+เทียบเท่า ÷ หนี้สินหมุนเวียน',th:'≥ 0.80',v:b=>b.cash,f:fmtR,ok:b=>b.cash>=0.8},
+  {g:'LI',n:'CR',d:'สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน',th:'≥ 1.50',v:b=>b.cr,f:fmtR,ok:b=>EX_R2(b.cr)>=1.5},
+  {g:'LI',n:'QR',d:'สินทรัพย์เร็ว (ไม่รวมสินค้าคงเหลือ) ÷ หนี้สินหมุนเวียน',th:'≥ 1.00',v:b=>b.qr,f:fmtR,ok:b=>EX_R2(b.qr)>=1.0},
+  {g:'LI',n:'Cash ratio',d:'เงินสด+เทียบเท่า ÷ หนี้สินหมุนเวียน',th:'≥ 0.80',v:b=>b.cash,f:fmtR,ok:b=>EX_R2(b.cash)>=0.8},
   {g:'ST',n:'NWC',d:'สินทรัพย์หมุนเวียน − หนี้สินหมุนเวียน',th:'≥ 0',v:b=>b.nwc,f:fmtM,ok:b=>b.nwc>=0},
   {g:'ST',n:'NI',d:'กำไร/ขาดทุนสุทธิสะสมทั้งปีงบ (มีค่าเสื่อม)',th:'≥ 0',v:b=>b.ni,f:fmtM,ok:b=>b.ni>=0},
 ];
@@ -3076,7 +3192,13 @@ function exBrkHtml(x, sepLab){
   //   L = sep0 : อยู่ระดับนี้พอดีอยู่แล้ว → ไม่ต้องเติมเงิน
   //   L > sep0 : เพดาน — ใช้เงินเกินแผนได้เท่าไหร่ก่อนตกถึงระดับนั้น (เงินก้อน "ติดลบ")
   const mode=(sep0==null)?'plan':(L<sep0?'plan':(L===sep0?'atlevel':'ceiling'));
-  const injL=(mode==='plan')?exSolveFor(h,L):0, rL=(mode==='plan'&&injL!=null?exSimPath(h,injL):null);
+  // 🐞 บั๊กที่แก้ 18 ส.ค. 69: ป็อปอัปนี้เคยคำนวณ Solver ใหม่เองล้วน ๆ โดย**ไม่สนค่าที่กรอกเองในตาราง**
+  //    (EXST.inj) → ตารางกับป็อปอัปโชว์คนละระดับในหน้าเดียว พิสูจน์จริง: กรอกเอง 20.2 ลบ. ที่ ป่าซาง
+  //    badge ในตาราง = 3 (คิดจาก 20.2) แต่ป็อปอัปบอก 6 (คิดจาก Solver 13.4) — ผู้ใช้เห็นสองเลขขัดกัน
+  // ✅ ใช้ค่าที่กรอกเองเฉพาะเมื่อระดับที่กำลังดู (L) ตรงกับเป้าของตาราง (EXST.tgt) เท่านั้น
+  //    ถ้าผู้ใช้กดดูระดับอื่นในป็อปอัป = กำลังถามคำถามใหม่ ("ระดับ L ต้องใช้เท่าไหร่") → ต้องใช้ Solver
+  const injManual=(mode==='plan'&&L===EXST.tgt&&EXST.inj[hc]!=null)?EXST.inj[hc]:null;
+  const injL=(mode==='plan')?(injManual!=null?injManual:exSolveFor(h,L)):0, rL=(mode==='plan'&&injL!=null?exSimPath(h,injL):null);
   const down=(mode==='ceiling')?exSolveDown(h,L):null;              // เงินที่ใช้เกินแผนขั้นต่ำถึงจะตกถึง L
   const rDown=(mode==='ceiling'&&down!=null)?exSimPath(h,-down):null;
   // bN = ค่าปัจจุบันจากงบทดลองงวดล่าสุด (ยังไม่จำลองอะไรเลย) · b0 = จำลองถึง ก.ย. โดยไม่ช่วย · b1 = จำลองถึง ก.ย. หลังช่วยตามเป้า L
@@ -3248,7 +3370,11 @@ function exBrkHtml(x, sepLab){
     modeBox=`<div class="note tgt-warn">⚠️ เป้าระดับ ${L} — เงินก้อนอย่างเดียวไม่พอ (แม้เติมเต็มเพดาน Solver ก็ยังไม่ถึง) ต้องแก้ NI/รายรับควบคู่ ดูปุ่ม "ปรับรายแห่ง"</div>
       <div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">เงินก้อนอย่างเดียวไม่พอ</b></div>`;
   } else {
-    modeBox=`<div class="tgt-row" style="font-weight:600">💰 เงินก้อนขั้นต่ำเพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)'}</b>${injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL&&rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>`;
+    // ป้าย (กำหนดเอง) ต้องมี ไม่งั้นผู้ใช้อ่านยอดที่ตัวเองพิมพ์ไว้เป็น "ยอดขั้นต่ำที่ระบบคำนวณ"
+    const solvL=(injManual!=null)?exSolveFor(h,L):null;
+    modeBox=`<div class="tgt-row" style="font-weight:600">💰 ${injManual!=null?'เงินก้อนที่กำหนดเองไว้':'เงินก้อนขั้นต่ำ'}เพื่อให้ถึงเป้าระดับ ${L} ภายใน ${sepLab}: <b style="color:var(--blue)">${injL>0?fmtM(injL):'ไม่ต้องเติม (ถึงเป้าอยู่แล้ว)'}</b>${
+      injManual!=null?` <span class="tgt-note">(กำหนดเอง)</span>`:''}${injL>0?` <span class="tgt-note">— เติมครั้งเดียวเดือน 0 เข้าสินทรัพย์หมุนเวียน + สินทรัพย์เร็ว + เงินสดพร้อมกัน${rL&&rL.cashOut!=null?'':' · เงินสดไม่หมดตลอดช่วง'}</span>`:''}</div>${
+      injManual!=null?`<div class="note">✎ ยอดนี้เป็นค่าที่<b>กรอกเองไว้ในแผง "ปรับรายแห่ง"</b> ไม่ใช่ยอดที่ Solver คำนวณ — ยอดขั้นต่ำที่ระบบคำนวณได้คือ <b>${solvL==null?'เงินก้อนอย่างเดียวไม่พอ':fmtM(solvL)}</b>${solvL!=null&&solvL!==injManual?` (${injManual>solvL?'กรอกไว้เกินไป '+fmtM(injManual-solvL):'กรอกไว้ขาดไป '+fmtM(solvL-injManual)})`:''} · ล้างค่าที่กรอกเองได้ที่ปุ่ม "ปรับรายแห่ง" ในแถวนั้น</div>`:''}`;
   }
   return `<div class="ovsub-box">${head}
     <div class="acctbl-wrap" style="max-height:none">
@@ -4370,6 +4496,12 @@ function exRender(){
     sep0:'ระดับวิกฤต ณ '+sepLab+' ถ้าไม่เติมเงินสนับสนุน "เพิ่ม" อีก — จำลองจากสภาพคล่องปัจจุบัน + NI/เดือน (รวมผล Option ตามจ่ายถ้าเลือก + เงินโยกช่วย/เงินเขตที่จัดสรรไว้แล้วในระบบ ถ้ามี — กดที่ระดับเพื่อดูรายละเอียดที่มา)',
     give:'เงินยกหนี้/คืน จาก Option ตามจ่าย · ยกหนี้: รพช.รับเต็ม, รพศ./รพท.ยกให้ · ยกหนี้เจาะจง: เงินคืนขั้นต่ำให้ระดับ ≤'+EXST.tgt+' · ไม่ใช้/จ่ายจริง: ไม่มี',
     need:'เงินก้อนขั้นต่ำ (เติมครั้งเดียวเดือน 0) ให้ระดับ ณ '+sepLab+' ≤ เป้าที่ตั้ง และเงินสดไม่หมด — หาด้วย Solver (binary search)\nรับรู้เป็นรายได้เงินอุดหนุนจากหน่วยงานภาครัฐ จึงเพิ่มทั้งสภาพคล่อง (CA/QN/เงินสด) และ NI\n⚠️ เป็นยอด "รวม" ที่เล็งระดับคะแนนรวม จึงไม่ใช่ผลบวกของ 6 คอลัมน์ทางซ้าย และไม่จำเป็นต้องเท่าคอลัมน์ที่แพงสุดด้วย\n  — เพราะเป้าเป็นระดับ (เช่น ≤6) ซึ่งอาจไม่ต้องแก้ทุกเกณฑ์ให้ผ่านหมด แค่ลดคะแนนให้ถึงเป้าก็พอ',
+    needreal:'💵 **ยอดตั้งงบก้อนเดียวที่ปลอดภัยทั้ง 2 มิติ** = max(ส่วนขาดสภาพคล่อง(MOE), เงินสนับสนุนที่ต้องใช้) ของ รพ. แห่งนั้น'
+      +'\n\n⛔ **ห้ามบวก 2 คอลัมน์นั้นรวมกัน** — เงินสนับสนุนลงบัญชีเป็น "รายได้เงินอุดหนุนจากหน่วยงานภาครัฐ"'
+      +'\n   จึงเข้า 2 ที่พร้อมกันด้วยเงินก้อนเดียว: ①เงินสด (จ่าย MOE ได้) ②NI + CR/QR/Cash/NWC (คะแนนดีขึ้น)'
+      +'\n   รพ. ที่ขาดทั้ง 2 มิติไม่ต้องใช้เงิน 2 ก้อน — การบวกคือนับเงินก้อนเดิมซ้ำ'
+      +'\n\nตรวจจริงทั้ง 103 แห่ง (งวดนี้ เป้า ≤'+EXST.tgt+'): เติมยอด max() แล้วปิดได้ทั้ง 2 มิติครบทุกแห่ง'
+      +'\n   ส่วนถ้าให้ตามคอลัมน์เดียว จะมีแห่งที่ยังขาดอีกด้านเสมอ',
     sep1:'ระดับวิกฤต ณ '+sepLab+' หลังเติมเงินสนับสนุนแล้ว',
   };
   // แถวหัวตาราง — สร้างก่อนแถวข้อมูล เพื่อนับจำนวนคอลัมน์จริงไปใช้เป็น colspan ของแถวย่อย
@@ -4404,6 +4536,9 @@ function exRender(){
     exSortTh('ระดับ '+sepLab+'<br>ก่อนช่วย','sep0'),
     ...EX_NEEDC.map(c=>exSortTh('<span class="ndgrp">💰 ต้องใช้ให้ผ่าน</span>'+c.n+'<br><span class="thsub">'+c.th+'</span>','n_'+c.k,null,'exneed')),
     exSortTh('เงินสนับสนุน<br>ที่ต้องใช้<br><span class="thsub">รวม (Solver)</span>','need'),
+    // ⭐ 18 ส.ค. 69 (เจ้าของงานสั่ง): คอลัมน์ยอดตั้งงบก้อนเดียวที่ปลอดภัยทั้ง 2 มิติ
+    //    = max(ส่วนขาดสภาพคล่อง, เงินสนับสนุน) รายแห่ง — ดูเหตุผลเต็มที่ exNeedRealAll()
+    exSortTh('💵 เงินที่ต้องใช้จริง<br><span class="thsub">max(ขาด, สนับสนุน)</span>','needreal',null,'exreal'),
     exSortTh('ระดับ '+sepLab+'<br>หลังช่วย','sep1'),
     '<th></th>',
   ];
@@ -4581,6 +4716,17 @@ function exRender(){
         }).join('');
       })()}
       <td>${need==null?`<span class="tgt-warn">เงินก้อนอย่างเดียวไม่พอ</span>`:(inj>0?`<b>${fmtM(inj)}</b>${x.manual?' <span class="tgt-note">(กำหนดเอง)</span>':''}`:'<span class="tgt-note">–</span>')}</td>
+      ${(()=>{
+        // 💵 ยอดตั้งงบก้อนเดียว = max(ส่วนขาดสภาพคล่อง, เงินสนับสนุน) — ห้ามบวกกัน (นับซ้ำ)
+        const sh=exTopUp(x), nd=(need==null?null:inj);
+        const real=exNeedReal(x);
+        if(real<=0) return '<td class="exreal"><span class="tgt-note">–</span></td>';
+        const which=(nd!=null&&nd>=sh)?'เงินสนับสนุน':'ส่วนขาดสภาพคล่อง';
+        const other=(nd!=null&&nd>=sh)?sh:(nd==null?0:nd);
+        return `<td class="exreal" title="ยอดที่ต้องเติมเพื่อปิดทั้ง 2 มิติพร้อมกัน&#10;ตัวที่ใหญ่กว่าคือ ${which}&#10;⛔ ห้ามบวก 2 คอลัมน์ซ้ายรวมกัน — เงินก้อนเดียวแก้ทั้งสภาพคล่องและคะแนนพร้อมกัน จึงนับซ้ำ"><b>${fmtM(real)}</b>`
+          +`<span class="cellsub">คุมโดย ${which}</span>`
+          +(other>0?`<span class="cellsub tgt-note">อีกตัว ${fmtM(other)} ได้ฟรี</span>`:'')+'</td>';
+      })()}
       <td><span class="badge brkbadge${brkOpen?' on':''}" style="background:${riskColor(r1.sepRisk)}" title="คลิกดูเกณฑ์ทั้ง 7 คะแนน ก่อน/หลังช่วย ณ ${sepLab} — เลือกดูระดับเป้าอื่นได้" onclick="exBrkToggle('${hc}')">${r1.sepRisk!=null?r1.sepRisk:'–'}</span>${exMoeMonths()!==exMoeMonthsDefault()?` <span class="tgt-note" title="ระดับ ณ สิ้นปีงบ (${horLab}) หลังช่วย — Solver คุมจุดนี้เป็นพื้นเสมอ ไม่ว่าจะเลือกเดือนเป้าเป็นเดือนไหน&#10;ถ้าเลขนี้แตะเป้าพอดีขณะที่ระดับ ณ เดือนเป้าดีเกินเป้า = เงินก้อนนี้ถูกกำหนดโดยสิ้นปีงบ ไม่ใช่เดือนที่เลือก">→ สิ้นปีงบ ${horLab}: </span><span class="badge" style="background:${riskColor(r1.endRisk)}">${r1.endRisk}</span>`:''}</td>
       <td><button type="button" class="ovtgl" onclick="exToggle('${hc}')">${open?'▾':'▸'} ปรับรายแห่ง</button></td>
     </tr>`;
@@ -4629,7 +4775,9 @@ function exRender(){
     ['tjarsim','🔬 จำลองลูกหนี้ UC-OP นอก CUP (สธ. รวมต่างจังหวัด) — เทียบค่าเฉลี่ยตัวเอง '+exTjSimWin()+' งวด · ไม่เข้าสมการ'],
     ['sep0','ระดับ '+sepLab+' ก่อนช่วย'],
     ...EX_NEEDC.map(c=>['n_'+c.k,'💰 เงินที่ต้องสนับสนุนให้ผ่านเกณฑ์ '+c.n+' ('+c.th+')']),
-    ['need','เงินสนับสนุนที่ต้องใช้ (รวม)'],['sep1','ระดับ '+sepLab+' หลังช่วย']];
+    ['need','เงินสนับสนุนที่ต้องใช้ (รวม)'],
+    ['needreal','💵 เงินที่ต้องใช้จริง = max(ส่วนขาดสภาพคล่อง, เงินสนับสนุน) — ยอดตั้งงบก้อนเดียวที่ปิดได้ทั้ง 2 มิติ · ⛔ ห้ามบวก 2 คอลัมน์ซ้ายรวมกัน เพราะเงินก้อนเดียวแก้ทั้งสภาพคล่องและคะแนนพร้อมกัน จึงนับซ้ำ'],
+    ['sep1','ระดับ '+sepLab+' หลังช่วย']];
   document.getElementById('exResBox').innerHTML=`
     <h3 style="margin:0 0 6px">📊 ผลจำลอง + เงินสนับสนุนที่ต้องใช้ (${rows.length} แห่ง · เป้าไม่เกินระดับ ${EXST.tgt} ภายใน ${sepLab}${sepLab!==horLab?` และที่ปลายช่วงจำลอง ${horLab}`:''})<span class="sp"></span>
       <span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end" onclick="event.stopPropagation()">
@@ -4666,6 +4814,7 @@ function exRender(){
         return `<span style="font-size:13px;font-weight:600" title="${t}">💧 รวมเงินเติมตามสภาพคล่อง ถึง ${exMoeTargetLab()}: <span style="font-size:16px;color:${sumTopUp>0?'var(--green)':'var(--mut)'}">${fmtM(sumTopUp)}</span> <span class="tgt-note" style="font-weight:400">(${nTopUp} แห่ง${sumGross>0?` · จากที่ต้องการ ${fmtM(sumGross)}`:''})</span>${exp}</span>`;
       })()}
       <span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;เจ้าหนี้ OP-UC นอก CUP&quot; (บัญชี 2101020199.202) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว ไม่ขึ้นกับเดือนที่เลือกใน 🗓️ ประเมิน/ตัดสินผล ณ เดือน&#10;⚠️ ห้ามบวกรวมกับสองก้อนซ้ายเป็นคำของบก้อนเดียว — คนละฐานกัน">🧾 รวมเจ้าหนี้ OP-UC นอก CUP: <span style="font-size:16px;color:var(--gold)">${fmtM(sumPayIn)}</span> <span class="tgt-note" style="font-weight:400">(${nPayIn} แห่ง)</span></span>${EX_SHOW_TJAR?`<span style="font-size:13px;font-weight:600" title="ผลรวมคอลัมน์ &quot;ลูกหนี้ UC-OP นอก CUP&quot; (บัญชี 1102050101.203 + 1102050194.204) ของ รพ. ที่แสดงอยู่ (${EXST.prov==='all'?'ทุกจังหวัด':EXST.prov})&#10;เป็นลูกหนี้จริงที่บันทึกในงบทดลองงวด ${EX.periodLabel} แล้ว — นับรวมเข้าคอลัมน์ &quot;เงินสดคงเหลือหลังภาระ MOE&quot; แล้ว (สมมติเก็บได้เต็มจำนวน)&#10;⚠️ ทั้งเขตลูกหนี้ (${fmtM(exTjGapAll().ar)}) มากกว่าเจ้าหนี้ (${fmtM(exTjGapAll().pay)}) อยู่ ${fmtM(exTjGapAll().gap)} → คู่หนี้บางส่วนอยู่นอกชุด 103 แห่งนี้ เกลี่ยกันเองในเขตไม่ได้&#10;⚠️ ห้ามบวกรวมกับก้อนอื่นเป็นคำของบก้อนเดียว — คนละฐานกัน">📥 รวมลูกหนี้ UC-OP นอก CUP: <span style="font-size:16px;color:var(--green)">${fmtM(sumArIn)}</span> <span class="tgt-note" style="font-weight:400">(${nArIn} แห่ง)</span></span>`:''}</span></h3>
+    ${exAssumeBanner()}
     <div class="exctl" style="margin:0 0 8px 0">
       <label title="เลือกชุดบัญชีที่นับเป็น &quot;ค่าใช้จ่ายจำเป็น (MOE)&quot; — เปลี่ยนแค่ตัวเลข MOE/เดือน ทุกสูตรในตารางนี้ยังผูกกันเหมือนเดิม&#10;• MOE.Ver69 (ค่าเริ่มต้น) = นิยามล่าสุด ตรงกับคอลัมน์ &quot;เงินสดพอจ่าย MOE&quot; ในหน้า Watchlist&#10;• MOE.Ver68 = ชุดเดิม (มีค่าจ้างชั่วคราว(บริการ) แต่ไม่มีค่าเช่า)&#10;• Ver69 + จ่ายหนี้การค้า X% = จ่ายเงินสดให้ยา/เวชภัณฑ์+ครุภัณฑ์ต่ำกว่าเกณฑ์ (9 บัญชี) แค่ X% ที่เหลือค้างเป็นเจ้าหนี้การค้า&#10;  → MOE เงินสดลดลง แต่ NI ไม่เปลี่ยน และเจ้าหนี้การค้าโตทุกเดือน (CR/QR/Cash แย่ลง)">💸 นิยาม MOE:
         <select onchange="exSetMoeVer(this.value)">
