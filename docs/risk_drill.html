@@ -2859,8 +2859,7 @@ function exWhyPop(hc){
   const tjLab={pay:'ตามจ่ายเป็นเงินสด',forgive:'ยกหนี้ (รับรู้เป็นรายได้)',smart:'จ่ายก่อนแล้วคืนบางส่วน'}[EXST.tj?EXST.tj.mode:'']||'';
   const x={h,r0:base};
   const xin=exXferIn(h), xout=exXferOut(h), rin=exRgIn(h), short=exTopUp(x);
-  const need=exSolveFor(h,EXST.tgt), inj=exInjOf(h,need)||0;
-  const rAfter=exSimPath(h,inj);
+  const need=exSolveFor(h,EXST.tgt);
   const acts=[];
   if(tjOn){ const off=sim({tj:{mode:'off',scope:(EXST.tj||{}).scope||'crisis'}});
     acts.push({n:'Option หนี้ค่ารักษาตามจ่าย: <b>'+tjLab+'</b>',
@@ -2928,8 +2927,7 @@ function exWhyPop(hc){
    +'<div class="nip-body" style="display:block">'
    +'<div class="tgt-row" style="font-size:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
    +'<span>คะแนนงวด '+tLab(bs.t)+' '+badge(now)+'</span><span>→</span>'
-   +'<span>ก่อนช่วย ณ '+lab+' '+badge(at)+'</span>'
-   +(inj>0?'<span>→</span><span>หลังเติมเงิน '+fmtM(inj)+' '+badge(rAfter.sepRisk)+'</span>':'')+'</div>'
+   +'<span>ก่อนช่วย ณ '+lab+' '+badge(at)+'</span></div>'
    +'<div class="note">'+(now===at?'ระดับไม่เปลี่ยนระหว่างทาง':(at>now?'<b class="brk-no">แย่ลง '+(at-now)+' ระดับ</b>':'<b class="brk-ok">ดีขึ้น '+(now-at)+' ระดับ</b>'))
    +(flipBad.length?' · เกณฑ์ที่พลิกเป็น<b>ไม่ผ่าน</b>: <b class="brk-no">'+flipBad.join(' · ')+'</b>':'')
    +(flipGood.length?' · เกณฑ์ที่พลิกเป็น<b>ผ่าน</b>: <b class="brk-ok">'+flipGood.join(' · ')+'</b>':'')+'</div>'
@@ -2948,11 +2946,6 @@ function exWhyPop(hc){
    +' · NWC '+fmtM(b1.nwc)+' <span class="tgt-note">('+fmtM(b1.ca)+' − '+fmtM(b1.cl)+')</span>'
    +' · NI สะสม '+fmtM(b1.ni)+' · SU '+b1.su+' → รวม <b>'+(b1.li+b1.st+b1.su)+'</b> คะแนน '
    +'(แสดงเป็นระดับ '+badge(at)+' หลัง anchor กับคะแนนงวดปัจจุบัน)</div>'
-   // ⭐ 14 ส.ค. 69: เติมตารางที่มา "หลังช่วย" (หลังเติมเงิน) ด้วย — เดิมมีแค่ badge หัวป็อปอัป
-   //   ไม่มีตารางรองรับเลย ต่างจาก ④ (ก่อนช่วย) ที่มีครบ — ใช้ exCmpTable ตัวเดียวกับที่แก้ไปแล้ว
-   //   จึงได้ตัวเลขที่มา (ca÷cl ฯลฯ) ติดมาด้วยโดยอัตโนมัติ ไม่ต้องเขียนซ้ำ
-   +(inj>0?('<div class="tgt-row" style="font-weight:600;margin-top:12px">เทียบก่อน→หลังเติมเงิน '+fmtM(inj)+' ณ '+lab+'</div>'
-     +exCmpTable(b1, rAfter.sepBreak, 'ก่อนช่วย', 'หลังเติมเงิน '+fmtM(inj))):'')
    +'<div class="tgt-row" style="font-weight:600;margin-top:14px">⑤ 🔗 อีกวิธีวัด — เดินตาม<b>สายเงินจริง</b>จากระดับ ณ ปัจจุบัน</div>'
    +'<div class="note">ระดับ ณ ปัจจุบัน <b>+ ลูกหนี้ UC-OP นอก CUP − เจ้าหนี้ UC-OP นอก CUP</b> แล้วรวม<b>ภาระ MOE</b> ถึง '+lab
    +' — สายเลขคณิตเดียวกับคอลัมน์เงินในตารางนี้ (ฉากเดียวกับป็อปอัป 💧 ที่คลิกจากคอลัมน์ "เงินสดคงเหลือหลังภาระ MOE")</div>'
