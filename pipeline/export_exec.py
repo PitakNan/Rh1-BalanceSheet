@@ -321,6 +321,13 @@ def main():
     except Exception as e:                      # ⛔ ห้ามล้มไพป์ไลน์เพราะฟีเจอร์เสริม (CLAUDE.md ข้อ 3)
         print(f"  ⚠️ tj history ไม่สำเร็จ ({e}) — คอลัมน์จำลองจะว่าง ส่วนอื่นไม่กระทบ")
         tj_hist = {}
+    # ── 🚩 ความครบของงวด: หน่วยที่ส่งงวดก่อนแล้ว แต่งวดนี้ยังไม่ส่ง ──────────────────
+    # งวดสดที่ดึงก่อนกำหนดรอบ (เช่น 9 ก.ย. 69 ดึงงวด ส.ค.) จะมีหน่วยที่ยังไม่ส่งข้อมูล
+    # หน่วยพวกนี้จะหลุดออกจาก exec.json เงียบ ๆ ทำให้ยอดรวมทั้งเขตต่ำกว่าความจริงโดยไม่มีอะไรฟ้อง
+    # → ส่งรายชื่อ + NI งวดก่อนไปกับไฟล์ ให้หน้าเว็บขึ้นป้ายเตือนเองได้ (ว่างเมื่อครบ = ป้ายหาย)
+    _prev_t = max((int(t) for t in m["t"].unique() if int(t) < tmax), default=None)
+    _prev_orgs = set(m[m["t"] == _prev_t]["org5"]) if _prev_t else set()
+
     m = m[m["t"] == tmax].copy()
     m["root"] = m["acc"].map(acc_root)
 
@@ -537,8 +544,36 @@ def main():
     print(f"🏦 เงินเขตฝากไว้ {len(reg_dep)} แห่ง รวม {sum(reg_dep.values())/1e6:,.1f} ลบ. "
           + " · ".join(f"{next(x['name'] for x in hosp if x['hcode']==k)} {v/1e6:,.1f}"
                        for k, v in reg_dep.items()))
+    # ── 🚩 สรุปความครบของงวด (ดูเหตุผลที่ _prev_orgs ด้านบน) ───────────────────────
+    _cur_orgs = {x["hcode"] for x in hosp}
+    _miss_rows, _ni_prev_tot = [], 0.0
+    for _o in sorted(_prev_orgs):
+        _hp = os.path.join(H_DIR, f"{_o}.json")
+        if not os.path.exists(_hp): continue
+        with open(_hp, encoding="utf-8") as _f:
+            _h = json.load(_f)
+        _pt = next((r for r in (_h.get("trend") or []) if int(r.get("t", 0)) == _prev_t), None)
+        _ni = float(_pt["ni"]) if _pt and _pt.get("ni") is not None else 0.0
+        _ni_prev_tot += _ni
+        if _o in _cur_orgs: continue
+        _grp = _h.get("grp") or ""
+        _miss_rows.append({"hcode": _o, "name": _h.get("name"), "prov": _h.get("prov"),
+                           "type": "รพศ." if _grp.startswith("รพศ.") else
+                                   ("รพท." if _grp.startswith("รพท.") else "รพช."),
+                           "niPrev": round(_ni, 0)})
+    cover = {"n": len(hosp), "exp": len(_prev_orgs), "prevT": _prev_t,
+             "niPrevTot": round(_ni_prev_tot, 0), "miss": _miss_rows}
+    if _miss_rows:
+        print(f"🚩 งวด {tmax} ยังไม่ครบ: {len(hosp)}/{len(_prev_orgs)} แห่ง — ขาด "
+              + " · ".join(f"{r['name']}({r['type']})" for r in _miss_rows))
+        print(f"   NI สะสมงวด {_prev_t} ของหน่วยที่ขาด "
+              f"{sum(r['niPrev'] for r in _miss_rows)/1e6:,.1f} ลบ. "
+              f"จากทั้งเขต {_ni_prev_tot/1e6:,.1f} ลบ.")
+    else:
+        print(f"✅ งวด {tmax} ครบทุกหน่วยที่เคยส่งงวดก่อน ({len(hosp)} แห่ง)")
+
     out = {"period": tmax, "periodLabel": summ.get("periodLabel"), "monthsElapsed": tmax % 100,
-           "regionDep": reg_dep,
+           "regionDep": reg_dep, "cover": cover,
            "pn": PN, "revOrder": REV_ORDER, "expOrder": EXP_ORDER,
            "moeGroups": moe_meta, "moeVers": moe_vers, "cashDef": cash_def, "hosp": hosp}
     # ══ 🚨 GUARD: ปัจจัยฤดูกาลต้องมีจริงก่อนเขียนไฟล์ ══════════════════════════════════

@@ -371,6 +371,14 @@ table.gaptbl tr.pass-row td{opacity:.72}
 .excarry-u li{margin-bottom:3px}
 .excarry-b{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
 .excarry-b .tgt-apply{margin-left:0;font-size:12px;padding:5px 13px}
+/* 🚩 ป้ายเตือน "งวดนี้ข้อมูลยังไม่ครบ" — ขึ้นเองเมื่อ exec.json มี cover.miss (ว่าง = ป้ายหาย) */
+.excover{border:1px solid var(--red);border-left:4px solid var(--red);background:var(--bad-bg);color:var(--bad-ink);border-radius:9px;padding:11px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.65}
+.excover b{color:var(--bad-ink)}
+.excover-d{margin-top:5px;font-size:11.5px}
+.excover-l{margin:7px 0 0;padding-left:18px}
+.excover-l li{margin-bottom:2px}
+.excover-imp{margin:8px 0 0;padding-left:18px}
+.excover-imp li{margin-bottom:3px}
 .ovtgl:hover{background:var(--hover)}
 tr.ovbad td{background:rgba(220,60,60,.06)}
 tr.ovsub td{background:var(--hover);padding:10px 14px}
@@ -1780,6 +1788,49 @@ function exCarryHtml(){
       <button type="button" class="tgt-apply" onclick="exCarryApply()">📥 ยกแผนงวด ${tLab(c.period)} มาใช้ต่อ</button>
       <button type="button" class="ovbulkbtn" onclick="exCarrySkip()">เริ่มใหม่จากงวดนี้</button>
     </div></div>`;
+}
+// 🚩 ป้ายเตือนความครบของงวด — ข้อมูลมาจาก EX.cover ที่ export_exec.py คำนวณให้
+// เกณฑ์: หน่วยที่ "ส่งงวดก่อนแล้ว แต่งวดนี้ยังไม่ส่ง" (ไม่ใช่หน่วยที่ปิดไปจริง)
+// ทุกยอดรวมทั้งเขตในแท็บนี้คิดจากเฉพาะหน่วยที่ส่งแล้ว จึงต้องบอกให้ชัดว่าอ่านเลขยังไง
+// ป้ายสั้นต่อท้ายหัวรายงาน/PDF — ต้องติดไปกับฉบับพิมพ์ด้วย ไม่งั้นคนอ่าน PDF ไม่รู้ว่างวดไม่ครบ
+function exCoverTag(){
+  const c=EX&&EX.cover; if(!c||!Array.isArray(c.miss)||!c.miss.length) return '';
+  return ` · <b style="color:#b91c1c">ข้อมูลไม่ครบ ${c.n}/${c.exp} แห่ง</b>`;
+}
+function exCoverHtml(){
+  const c=EX&&EX.cover; if(!c||!Array.isArray(c.miss)||!c.miss.length) return '';
+  const ms=c.miss, pv=c.prevT?tLab(c.prevT):'งวดก่อน';
+  const niMiss=ms.reduce((a,x)=>a+(+x.niPrev||0),0), niTot=+c.niPrevTot||0;
+  const pct=niTot?Math.abs(niMiss/niTot*100):0;
+  const byProv={}; ms.forEach(x=>{(byProv[x.prov]=byProv[x.prov]||[]).push(x);});
+  const provTxt=Object.keys(byProv).sort().map(p=>`${p} ${byProv[p].length}`).join(' · ');
+  // จังหวัดที่แม่ข่าย (รพศ./รพท.) หายไปหมด — สายตามจ่าย/การเกลี่ยในจังหวัดพังทั้งจังหวัด ไม่ใช่แค่ยอดเพี้ยน
+  const hasHub={}; (EX.hosp||[]).forEach(h=>{ if(h.type==='รพศ.'||h.type==='รพท.') hasHub[h.prov]=1; });
+  const noHub=Object.keys(byProv).filter(p=>!hasHub[p]).sort();
+  return `<div class="excover">
+    <div><b>🚩 งวด ${EX.periodLabel} ข้อมูลยังไม่ครบ — มี ${c.n} แห่ง จาก ${c.exp} แห่ง (ขาด ${ms.length})</b></div>
+    <div class="excover-d">ทุกยอดรวม/ค่าเฉลี่ยทั้งเขตในหน้านี้คิดจาก <b>${c.n} แห่งที่ส่งแล้วเท่านั้น</b> —
+      หน่วยที่ยังไม่ส่งไม่ได้ถูกแทนด้วยยอดเดือนก่อน แต่<b>หายออกจากฐานทั้งแถว</b>
+      · ${provTxt}</div>
+    <ul class="excover-l">${ms.map(x=>`<li>${x.name} <span style="opacity:.75">(${x.type} · ${x.prov}) — ล่าสุด ${pv} NI สะสม ${fmtM(x.niPrev)}</span></li>`).join('')}</ul>
+    <div class="excover-d"><b>ผลกระทบต่อการอ่านตัวเลขหน้านี้</b></div>
+    <ul class="excover-imp">
+      <li><b>ยอดรวมทั้งเขตต่ำกว่าความจริง</b> — ${ms.length} แห่งนี้มี NI สะสม ${pv} รวม ${fmtM(niMiss)}
+        คิดเป็น ${pct.toFixed(1)}% ของ NI ทั้งเขต (${fmtM(niTot)}) ส่วนใหญ่เป็นบวก
+        → ภาพรวมงวดนี้จะดู<b>แย่กว่าความจริง</b></li>
+      <li><b>ห้ามเทียบกับงวดก่อนตรง ๆ</b> — ${pv} คิดจาก ${c.exp} แห่ง งวดนี้คิดจาก ${c.n} แห่ง
+        ส่วนต่างที่เห็นจึงปนทั้งผลการดำเนินงานจริงและจำนวนหน่วยที่เปลี่ยนไป</li>
+      <li><b>ตารางสรุปรายจังหวัดของจังหวัดที่ขาด อ่านไม่ได้</b> — เงินช่วยภายในจังหวัด ส่วนขาดสภาพคล่อง
+        และเพดานผู้ให้ ของจังหวัดเหล่านี้คิดจากหน่วยไม่ครบ</li>
+      ${noHub.length?`<li><b>⚠️ ${noHub.join(' · ')} ไม่เหลือแม่ข่าย (รพศ./รพท.) ในฐานข้อมูลงวดนี้เลย</b> —
+        หนี้ตามจ่ายในจังหวัดจับคู่ไม่ได้ (ลูกหนี้ฝั่งแม่ข่ายหาย เหลือแต่เจ้าหนี้ฝั่ง รพช.)
+        และไม่มีผู้ให้รายใหญ่ให้เกลี่ยภายในจังหวัด → ตัวเลขของจังหวัดนี้ใช้ตัดสินใจไม่ได้จนกว่าข้อมูลจะครบ</li>`:''}
+      <li><b>เงินสนับสนุน/Target Solver ต่ำกว่าที่ต้องใช้จริง</b> — หน่วยที่ยังไม่ส่งไม่ถูกนับความต้องการเงิน
+        ตัวเลข "เขตต้องใช้เงินสนับสนุนรวมเท่าไหร่" จึงเป็น<b>ขั้นต่ำ ไม่ใช่ยอดสุดท้าย</b></li>
+      <li><b>รายแห่งของ ${c.n} แห่งที่ส่งแล้วใช้ได้ตามปกติ</b> — ผลกระทบอยู่ที่ยอดรวมและการเทียบงวด ไม่ใช่ตัวเลขรายโรงพยาบาล</li>
+    </ul>
+    <div class="excover-d">หน่วยที่ขาดตามรอบส่งข้อมูลปกติจะเข้ามาภายในวันที่ 16 ของเดือน — ดึงข้อมูลรอบถัดไปแล้วป้ายนี้จะหายเอง</div>
+  </div>`;
 }
 function exCarrySkip(){
   if(!EX_CARRY) return;
@@ -3458,10 +3509,11 @@ async function renderExec(){
   const sepLab=exSepLab(), fyLab=tLab(exSepT());
   document.getElementById('right').innerHTML=`
   <div class="dwrap" style="max-width:1200px">
+    ${exCoverHtml()}
     ${exCarryHtml()}
     <div class="print-head">
       <div style="font-size:16px;font-weight:800">รายงานแนวทางสำหรับผู้บริหาร — ประเมินผล ณ ${exGoalLab()} (โมเดล MOE)</div>
-      <div style="font-size:11px;color:#555">เขตสุขภาพที่ 1 · งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel} · พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH')}</div>
+      <div style="font-size:11px;color:#555">เขตสุขภาพที่ 1 · งบทดลองสะสม ${EX.monthsElapsed} เดือน งวดล่าสุด ${EX.periodLabel}${exCoverTag()} · พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH')}</div>
     </div>
     <div class="panel">
       <h3 style="margin:0 0 6px">🧭 แนวทางสำหรับผู้บริหาร — ประเมินผล ณ <span id="exHorLab2">${exGoalLab()}</span> ด้วยโมเดล MOE</h3>
