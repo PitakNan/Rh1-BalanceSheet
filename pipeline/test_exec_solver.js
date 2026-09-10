@@ -1,8 +1,12 @@
 // ── ตรวจตรรกะ "ตารางผลจำลอง + เงินสนับสนุน" ทั้งตาราง ทุกโรงพยาบาล (เพิ่ม 10 ก.ย. 69) ──
-// ตรวจ 8 ชั้น: สายเลขคณิต · sepBreak↔scoreOf · ✓/✗↔คะแนน · anchor · อสมการงบดุล ·
-//              เอกโทนของ inj · Solver เป็นค่าต่ำสุดจริง · สูตรปิดของ CR/NWC
-// ⛔ ห้ามลอกสูตรมาไว้ในไฟล์นี้ — ทุกค่าดึงจาก risk_drill.html ตรง ๆ ยกเว้น "สูตรปิด" ในข้อ ⑧
+// ①-⑧ ตารางทั้งใบ: สายเลขคณิต · sepBreak↔scoreOf · ✓/✗↔คะแนน · anchor · อสมการงบดุล ·
+//                   เอกโทนของ inj · Solver เป็นค่าต่ำสุดจริง · สูตรปิดของ CR/NWC
+// ⑨-⑬ เจาะ "เงินที่ต้องใช้เติม" (เจ้าของงานสั่งตรวจให้ละเอียดที่สุด 10 ก.ย. 69):
+//      สูตรปิดครบ 6 เกณฑ์ · สูตรปิดของยอดรวม · need ลดตามเป้า ·
+//      need = max ของ 3 เงื่อนไข · เพดานผู้ให้ + กติกาจัดสรรอัตโนมัติ
+// ⛔ ห้ามลอกสูตรมาไว้ในไฟล์นี้ — ทุกค่าดึงจาก risk_drill.html ตรง ๆ ยกเว้น "สูตรปิด" ในข้อ ⑧-⑩
 //    ที่จงใจเขียนอิสระเพื่อพิสูจน์ข้ามวิธี (closed form เทียบ binary search)
+// 📌 ตัวเลขที่ยันไว้ในไฟล์นี้เป็น "คุณสมบัติ" ไม่ใช่ค่าคงที่รายงวด → รันได้ทุกงวดโดยไม่ต้องแก้
 const fs = require('fs');
 const SRC = process.env.RD_SRC || 'D:/Github/Rh1-BalanceSheet/docs/risk_drill.html';
 const EXECJ = process.env.EXEC_JSON || 'D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json';
@@ -19,7 +23,7 @@ global.location = { hash: '' }; global.navigator = { clipboard: null };
 global.getComputedStyle = () => ({ getPropertyValue: () => '#888' });
 global.Chart = function () { return { destroy() {} }; }; global.fetch = () => Promise.reject(0);
 
-const A = new Function(code + `;return {fmtM,scoreOf,exSimPath,exSolveFor,exSolveCrit,exNetAfterDebt,exMoeLeft,
+const A = new Function(code + `;return {fmtM,scoreOf,exSimPath,exSolveFor,exSolveCrit,exSolveDown,exNetAfterDebt,exMoeLeft,
   exTopUp,exHorMonths,exMoeMonths,exPayIn,exArIn,exXferNet,exRgDep,exRgIn,exMoeMo,exTjCalc,
   NEEDC:EX_NEEDC,CRIT:EX_CRIT,STEP:SV_STEP,setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v}};`)();
 
@@ -168,6 +172,165 @@ chk(e8b === 0, `need_NWC = max(0, CL − CA) ตรงทุกแห่ง — 
 //    จริงเฉพาะแห่งที่ NWC ยังติดลบ — ถ้า NWC เป็นบวกอยู่แล้ว need_NWC = 0 และส่วนต่างน้อยกว่านั้นมาก
 chk(!/CR\s*=\s*NWC\s*\+\s*0\.5|แพงกว่า NWC อยู่ครึ่งหนึ่งของหนี้สินหมุนเวียนเสมอ/.test(fs.readFileSync(SRC, 'utf8')),
   'หน้าเว็บไม่มีข้อความ "CR แพงกว่า NWC ครึ่งหนึ่งของ CL เสมอ" (ไม่จริงเมื่อ NWC เป็นบวกอยู่แล้ว)');
+
+// ══════════════════════════════════════════════════════════════════════
+// ชั้นที่ 9–13: ตรวจ "เงินที่ต้องใช้เติม" แบบเจาะจง (เพิ่ม 10 ก.ย. 69 · เจ้าของงานสั่งตรวจให้ละเอียดที่สุด)
+// ══════════════════════════════════════════════════════════════════════
+
+// bisect บนกริด SV_STEP ของฟังก์ชันเอกโทน — ใช้กับ "สูตรปิด" ที่ไม่เรียก exSimPath ระหว่างค้นหา
+function gridMin(hi, ok) {
+  if (ok(0)) return 0;
+  if (!ok(hi)) return null;
+  let lo = 0, h2 = hi;
+  while (h2 - lo > S) { const mid = Math.round((lo + h2) / 2 / S) * S; if (mid <= lo || mid >= h2) break; if (ok(mid)) h2 = mid; else lo = mid; }
+  return h2;
+}
+const suFormula = (nwc, ni, mo) => {
+  const m = mo > 0 ? mo : 12, np = nwc >= 0, ip = ni >= 0;
+  if (np && ip) return 0;
+  if (!np && !ip) return 2;
+  if (np && !ip) { const a = Math.abs(ni) / m; const s2 = a ? nwc / a : 1e9; return s2 < 3 ? 2 : s2 < 6 ? 1 : 0; }
+  const a = ni / m; const r = a ? (-nwc) / a : 1e9; return r < 3 ? 0 : r < 6 ? 1 : 2;
+};
+
+// ── ⑨ พิสูจน์ข้ามวิธีครบทั้ง 6 เกณฑ์ (เงินก้อน v ดัน CA/QN/CN/NI ขึ้น v เท่ากันหมด) ──
+console.log('━━ ⑨ สูตรปิดทางบัญชีครบทั้ง 6 เกณฑ์ เทียบ Solver');
+set({});
+{
+  const F = {
+    cash: b => Math.max(0, 0.8 * b.cl - b.cn), qr: b => Math.max(0, 1.0 * b.cl - b.qn),
+    cr: b => Math.max(0, 1.5 * b.cl - b.ca), nwc: b => Math.max(0, 1.0 * b.cl - b.ca),
+    ni: b => Math.max(0, -b.ni),
+  };
+  const tot = { su: 0 };
+  for (const k of Object.keys(F)) tot[k] = 0;
+  for (const h of H) {
+    const r0 = A.exSimPath(h, 0), b0 = r0.sepBreak; if (!b0) continue;
+    const tol = Math.max(2 * S, 0.006 * b0.cl);
+    for (const k of Object.keys(F)) {
+      const got = A.exSolveCrit(h, A.NEEDC.find(c => c.k === k), r0);
+      if (got != null && Math.abs(got - F[k](b0)) > tol) tot[k]++;
+    }
+    const gotSu = A.exSolveCrit(h, A.NEEDC.find(c => c.k === 'su'), r0);
+    if (gotSu != null) {
+      const wantSu = b0.su === 0 ? 0 : gridMin(Math.max(2 * h.bs.cl, 400e6), v => suFormula(b0.nwc + v, b0.ni + v, b0.mo) <= b0.su - 1);
+      if (wantSu == null || Math.abs(gotSu - wantSu) > tol) tot.su++;
+    }
+  }
+  for (const k of ['cash', 'qr', 'cr', 'nwc', 'ni', 'su'])
+    chk(tot[k] === 0, `เกณฑ์ ${k.toUpperCase().padEnd(4)} ตรงสูตรปิดทุกแห่ง — ต่าง ${tot[k]}`);
+}
+
+// ── ⑩ ยอด "รวม (Solver)" เทียบการคำนวณคะแนนจากสูตรปิดล้วน ──
+console.log('━━ ⑩ ยอดรวม (Solver) เทียบสูตรปิด — Solver สูงกว่าได้เฉพาะเมื่อติดเงื่อนไขที่สูตรปิดมองไม่เห็น');
+for (const tgt of [6, 3, 0]) {
+  set({ tgt });
+  let off = 0, n = 0;
+  for (const h of H) {
+    const r0 = A.exSimPath(h, 0), b0 = r0.sepBreak; if (!b0) continue;
+    const need = A.exSolveFor(h, tgt); if (need == null) continue;
+    const HI = Math.max(2 * h.bs.cl, 400e6);
+    // สูตรปิดใช้ได้เมื่อหนี้สินหมุนเวียนไม่ตอบสนองต่อเงิน (ไม่มีเจ้าหนี้ที่ก่อจากการจ่ายไม่ได้)
+    if (Math.abs(A.exSimPath(h, HI).sepBreak.cl - b0.cl) > 1) continue;
+    n++;
+    const base = A.scoreOf(h.bs.ca, h.bs.cl, h.bs.qn, h.bs.cn, h.bs.ni, h.bs.mo).risk;
+    const anc = v => Math.max(0, Math.min(7, (h.risk != null ? h.risk : 0) + (v - base)));
+    const want = gridMin(HI, v => anc(A.scoreOf(b0.ca + v, b0.cl, b0.qn + v, b0.cn + v, b0.ni + v, b0.mo).risk) <= tgt);
+    if (want == null) continue;
+    const tol = Math.max(2 * S, 0.006 * b0.cl);
+    if (need < want - tol) off++;                                   // ต่ำกว่าสูตรปิด = ผิดแน่นอน
+    else if (need > want + tol) {
+      const r = A.exSimPath(h, want);
+      if (r.cashOut == null && r.endRisk <= tgt) off++;              // สูงกว่าโดยไม่มีเหตุ = ผิด
+    }
+  }
+  chk(off === 0, `เป้า ≤${tgt}: ตรวจ ${n} แห่ง — ไม่ตรงสูตรปิดโดยอธิบายไม่ได้ ${off}`);
+}
+
+// ── ⑪ เป้าหลวมขึ้น เงินต้องไม่แพงขึ้น ──
+{
+  const by = {};
+  for (const L of [0, 1, 2, 3, 4, 5, 6, 7]) { set({ tgt: L }); by[L] = H.map(h => A.exSolveFor(h, L)); }
+  let e = 0;
+  for (let i = 0; i < H.length; i++) for (let L = 1; L <= 7; L++) {
+    const a = by[L - 1][i], b = by[L][i];
+    if (a != null && b != null && b > a + 1) e++;
+  }
+  chk(e === 0, `⑪ need(เป้า 0) ≥ need(1) ≥ … ≥ need(7) ทุกแห่ง — ละเมิด ${e}`);
+}
+
+// ── ⑫ pass() เป็น AND ของ 3 เงื่อนไข → need ต้อง = max ของ need แต่ละเงื่อนไขเดี่ยว ──
+for (const tgt of [6, 0]) {
+  set({ tgt });
+  let e = 0;
+  for (const h of H) {
+    const need = A.exSolveFor(h, tgt); if (need == null) continue;
+    const HI = Math.max(2 * h.bs.cl, 400e6);
+    const a = gridMin(HI, v => { const r = A.exSimPath(h, v); return r.sepRisk == null || r.sepRisk <= tgt; });
+    const b = gridMin(HI, v => A.exSimPath(h, v).endRisk <= tgt);
+    const c = gridMin(HI, v => A.exSimPath(h, v).cashOut == null);
+    if (Math.abs(need - Math.max(a ?? 0, b ?? 0, c ?? 0)) > 1) e++;
+  }
+  chk(e === 0, `⑫ เป้า ≤${tgt}: need = max(เดือนเป้า, สิ้นปีงบ, เงินสดไม่หมด) — ผิด ${e}`);
+}
+
+// ── ⑬ เพดานผู้ให้ + ⚡ จัดสรรอัตโนมัติ: เงินต้องไม่งอก และผู้ให้ต้องไม่พังเอง ──
+console.log('━━ ⑬ เพดานผู้ให้ + ⚡ จัดสรรอัตโนมัติ');
+{
+  const HARD = 5, PER = 10e6, EXTRA = 100e3;
+  set({ tgt: 6 });
+  const capOf = h => {
+    const sur = Math.max(0, A.exMoeLeft({ h, r0: A.exSimPath(h, 0) }));
+    const d = A.exSolveDown(h, HARD + 1);
+    return Math.max(0, Math.min(sur, (d == null) ? Infinity : Math.max(0, d - S)));
+  };
+  // ให้เงินออก a บาท = จำลองด้วย inj ติดลบ (กลไกเดียวกับ exXferNet ที่รวมเข้า inj)
+  const safe = (h, a) => {
+    const r = A.exSimPath(h, -a);
+    return (r.sepRisk == null || r.sepRisk <= HARD) &&
+      (A.exNetAfterDebt(h) - a - (r.moeMo || 0) * A.exHorMonths(h)) >= -1;
+  };
+  let e1 = 0, e2 = 0, nc = 0;
+  for (const h of H) { const c = capOf(h); if (!isFinite(c) || c <= 0) continue; nc++; if (!safe(h, c)) e1++; if (safe(h, c + S)) e2++; }
+  chk(e1 === 0, `ให้เท่าเพดานแล้วผู้ให้ยังปลอดภัย (${nc} แห่งที่มีเพดาน) — ผิด ${e1}`);
+  chk(e2 === 0, `ให้เกินเพดาน 1 step แล้วต้องไม่ปลอดภัย — หลุด ${e2}`);
+
+  // สร้างแผนด้วยตรรกะเดียวกับ exXferAuto (เรียกตรงไม่ได้เพราะมี confirm/exSave/exRender)
+  const need = [], cap = {};
+  for (const h of H) { const L = A.exMoeLeft({ h, r0: A.exSimPath(h, 0) }); if (L < 0) need.push({ h, want: -L }); else { const c = capOf(h); if (c > 0) cap[h.hcode] = c; } }
+  need.sort((a, b) => ((b.h.risk || 0) - (a.h.risk || 0)) || (b.want - a.want));
+  const capBase = Object.assign({}, cap), plan = [];
+  for (const n of need) {
+    let want = n.want + EXTRA;
+    for (const g of H.filter(g => g.prov === n.h.prov && g.hcode !== n.h.hcode && cap[g.hcode] > 0).sort((a, b) => cap[b.hcode] - cap[a.hcode])) {
+      if (want <= 0) break;
+      const give = Math.min(want, cap[g.hcode], PER); if (give <= 0) continue;
+      plan.push({ f: g.hcode, t: n.h.hcode, a: Math.round(give) }); cap[g.hcode] -= give; want -= give;
+    }
+  }
+  const prov = {}; H.forEach(h => prov[h.hcode] = h.prov);
+  chk(plan.every(p => prov[p.f] === prov[p.t]), 'จัดสรรอัตโนมัติ: โยกในจังหวัดเดียวกันทั้งหมด (กติกาข้อ ①)');
+  chk(plan.every(p => p.a <= PER + 1), 'จัดสรรอัตโนมัติ: ไม่เกิน 10 ลบ. ต่อรายการ (กติกาข้อ ②)');
+  const byD = {}; plan.forEach(p => byD[p.f] = (byD[p.f] || 0) + p.a);
+  chk(Object.entries(byD).every(([k, v]) => v <= (capBase[k] || 0) + 1), 'จัดสรรอัตโนมัติ: ผู้ให้แต่ละแห่งรวมทุกรายการไม่เกินเพดานตัวเอง');
+  set({ tgt: 6, xfer: plan });
+  let eD = 0;
+  for (const hc in byD) {
+    const h = H.find(x => x.hcode === hc), r = A.exSimPath(h, 0);
+    if ((r.sepRisk != null && r.sepRisk > HARD) || A.exMoeLeft({ h, r0: r }) < -1) eD++;
+  }
+  chk(eD === 0, `จัดสรรอัตโนมัติ: ผู้ให้ ${Object.keys(byD).length} แห่ง ไม่ตกเกินระดับ ${HARD} และสภาพคล่องตัวเองไม่ติดลบ — ผิด ${eD}`);
+  set({});
+}
+
+// ── ℹ️ บันทึกขอบเขตของสวิตช์ "% ลูกหนี้ที่คาดว่าเก็บได้" (รายงานเฉย ๆ ไม่ตัดสินผ่าน/ไม่ผ่าน)
+{
+  const sum = o => { set(Object.assign({ tgt: 6 }, o)); let t = 0, s = 0; for (const h of H) { const v = A.exSolveFor(h, 6); if (v) t += v; const r0 = A.exSimPath(h, 0); s += A.exTopUp({ h, r0 }); } return { t, s }; };
+  const a = sum({}), b = sum({ arPct: 0 });
+  console.log(`  ℹ️ สไลด์ "% ลูกหนี้เก็บได้" 100%→0%: ส่วนขาดสภาพคล่อง ${(a.s / 1e6).toFixed(2)}M→${(b.s / 1e6).toFixed(2)}M · เงินสนับสนุน ${(a.t / 1e6).toFixed(2)}M→${(b.t / 1e6).toFixed(2)}M`);
+  console.log('     (คะแนน Risk คิดจากมูลค่าตามบัญชี สไลด์นี้จึงไม่แตะเงินสนับสนุนเมื่อปิด Option ตามจ่าย — คู่มือ 7.35)');
+  set({});
+}
 
 console.log('\n' + '─'.repeat(56));
 if (fail.length) { console.log(`❌ ไม่ผ่าน ${fail.length} ข้อ:`); fail.forEach(x => console.log('   - ' + x)); process.exit(1); }
