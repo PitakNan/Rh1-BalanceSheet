@@ -235,13 +235,28 @@ console.log('━━ 12) %จ่ายหนี้การค้า: ยืน�
   const S=p=>({mmo:3,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',
     moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
     tj:{mode:'off',scope:'crisis'},inj:{},open:{},moeVer:'69p',payPct:p});
-  const mw=j.hosp.find(h=>h.name==='แม่วาง');
+  // ⚠️ ต้องเลือก รพ. ที่ **ไม่ติดกลไกเงินสดไม่พอ** (owedAdd=0) ไม่งั้นสมการนี้ไม่ตรงโดยธรรมชาติ:
+  //    เงินสดที่ยืดไว้ไปลดยอด "จ่ายไม่ไหว" ที่ถูกโยนเป็นเจ้าหนี้ → CL โตน้อยกว่าเงินสดที่เพิ่ม
+  //    เดิมฮาร์ดโค้ด "แม่วาง" ซึ่งพอแบบจำลองเคลียร์หนี้ตามจ่ายที่เดือน 0 แล้ว (11 ก.ย. 69 · คู่มือ 7.38)
+  //    เงินสดติดลบตั้งแต่ต้น (เจ้าหนี้ 10.37 > เงินสด 7.03) จึงเข้ากลไก drain และสมการเพี้ยน 0.46M
+  const pick=(()=>{
+    for(const h of [j.hosp.find(x=>x.name==='แม่วาง'),...j.hosp]){
+      if(!h) continue;
+      B.setEXST(S(100)); const a=B.exSimPath(h,0);
+      B.setEXST(S(0));   const b=B.exSimPath(h,0);
+      // ต้อง Cash ratio < 1 ด้วย ไม่งั้นการยืดหนี้ทำให้ Cash ratio **แย่ลง** (ตัวส่วนโตเร็วกว่าตัวเศษ)
+      // ซึ่งถูกต้องทางบัญชีแต่ทำให้ข้อ "ดีขึ้นเล็กน้อยจริง" ข้างล่างอ่านกลับทาง
+      if(a.owedAdd===0&&b.owedAdd===0&&(b.cnEnd-a.cnEnd)>1e6&&a.sepBreak&&a.sepBreak.cash<1) return h;
+    }
+    return j.hosp.find(x=>x.name==='แม่วาง');
+  })();
+  const mw=pick;
   B.setEXST(S(100)); const a=B.exSimPath(mw,0), na=B.exSolve(mw);
   B.setEXST(S(0));   const b=B.exSimPath(mw,0), nb=B.exSolve(mw);
   // กลไกต้องทำงานจริง: เงินสดกับเจ้าหนี้ต้องโตเท่ากันเป๊ะ
   const dCash=b.cnEnd-a.cnEnd, dCl=b.clEnd-a.clEnd;
   chk(dCash>1e6 && Math.abs(dCash-dCl)<1,
-    `ยืดหนี้ 100%→0%: เงินสดปลายงวด +${fmtM(dCash)} และเจ้าหนี้ +${fmtM(dCl)} โตเท่ากันเป๊ะ (ผลต่าง ${(dCash-dCl).toFixed(2)} บาท)`);
+    `ยืดหนี้ 100%→0% (${mw.name}): เงินสดปลายงวด +${fmtM(dCash)} และเจ้าหนี้ +${fmtM(dCl)} โตเท่ากันเป๊ะ (ผลต่าง ${(dCash-dCl).toFixed(2)} บาท)`);
   // NWC ต้องเท่าเดิมเป๊ะ = เหตุผลที่เงินสนับสนุนไม่ขยับ
   if(a.sepBreak&&b.sepBreak){
     // เทียบด้วย tolerance 1 บาท ไม่ใช่ === : ลำดับการบวกเลขทศนิยมต่างกันเล็กน้อยระหว่างสองโหมด
@@ -251,7 +266,7 @@ console.log('━━ 12) %จ่ายหนี้การค้า: ยืน�
     chk(a.sepBreak.ni===b.sepBreak.ni, `NI สะสม ณ ก.ย. เท่าเดิม (เกณฑ์คงค้าง) (${a.sepBreak.ni})`);
     chk(b.sepBreak.cash>a.sepBreak.cash, `Cash ratio ดีขึ้นเล็กน้อยจริง (${a.sepBreak.cash.toFixed(3)} → ${b.sepBreak.cash.toFixed(3)}) — กลไกไม่ได้ตายด้าน`);
   }
-  chk(na===nb, `เงินสนับสนุนของแม่วางเท่าเดิม ${fmtM(na)} ทั้งจ่าย 100% และ 0% — ผลที่ถูกต้อง (ติดเกณฑ์ NWC/NI)`);
+  chk(na===nb, `เงินสนับสนุนของ ${mw.name} เท่าเดิม ${fmtM(na)} ทั้งจ่าย 100% และ 0% — ผลที่ถูกต้อง (ติดเกณฑ์ NWC/NI)`);
   // หน้าจอต้องอธิบายเรื่องนี้ตอนเลือกโหมด 69p
   B.setEXST(S(50)); B.setEXOPEN({}); B.setEXBRK({}); B.setEXSORT({col:null,dir:-1}); B.exRender();
   const html=els.exResBox.innerHTML;

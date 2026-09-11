@@ -7,6 +7,9 @@
 //   ⑥ ป็อปอัป 💵 เจ้าหนี้ / 📥 ลูกหนี้ ต้อง "ไม่ขยับ" ตามโหมดนี้ (ตอบคนละคำถาม — กติกาเดิม 7.30)
 //   ⑦ ยอดดิบในคอลัมน์เจ้าหนี้/ลูกหนี้ยังต้องแสดงอยู่ + มีป้าย "ไม่นับในสายเงิน" + แถบเตือนบนหัวตาราง
 //   ⑧ ลายเซ็นแคชต้องรู้จักโหมดนี้ ไม่งั้นสลับแล้วได้ผลค้างจากรอบก่อน
+//   ⑨ 🔗 จุดเชื่อมสูตร (11 ก.ย. 69 · เจ้าของงานจับได้): เงินสดเดือน 0 ของแบบจำลอง (r0.cn0)
+//      ต้อง = exNetAfterDebt(h) เป๊ะ **ทั้งสองโหมด** → กดปุ่มแล้วคอลัมน์ระดับต้องขยับตามด้วย
+//   ⑩ เปิด Option ตามจ่าย/ยกหนี้ = แบบจำลองห้ามเคลียร์หนี้ซ้ำ (ผลต้องเท่ากันทั้งสองโหมด)
 const fs = require('fs'), path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SRC = process.env.RD_SRC || path.join(ROOT, 'docs', 'risk_drill.html');
@@ -124,7 +127,7 @@ const big = j.hosp.slice().sort((a, b) => A.exPayIn(b) - A.exPayIn(a))[0];
 chk(A.exPayIn(big) > 0 && htmlOn.includes(M(A.exPayIn(big)).replace(' ลบ.', '')),
   'ยอดดิบเจ้าหนี้ยังแสดงอยู่ (' + big.name + ' ' + M(A.exPayIn(big)) + ')');
 chk(/ไม่ใช่การตัดจำหน่ายลูกหนี้/.test(htmlOn), 'บอกชัดว่าไม่ใช่การตัดจำหน่ายลูกหนี้');
-chk(/ไม่กระทบ:<\/b> คอลัมน์ระดับ ณ/.test(htmlOn), 'บอกชัดว่าไม่กระทบคอลัมน์ระดับก่อน/หลังช่วย');
+chk(/กระทบทั้งตาราง/.test(htmlOn) && /ระดับ ณ .*ก่อน\/หลังช่วย/.test(htmlOn), 'บอกชัดว่ากระทบคอลัมน์ระดับก่อน/หลังช่วยด้วย');
 A.exMoePop(big.hcode);
 chk(/ไม่เคลียร์เจ้าหนี้ \/ ไม่ได้รับเงินจากลูกหนี้/.test(els['exMoeOverlay'].innerHTML), 'ป็อปอัป 💧 บอกว่าโหมดนี้เปิดอยู่');
 
@@ -137,6 +140,41 @@ A.setEXST(ST()); A.exRender();                                    // กลั�
 const back = rowsOf().reduce((s, x) => s + A.exTopUp(x), 0);
 chk(NEAR(back, totShortOff, 1e4), 'ปิดโหมดแล้วยอดกลับมาเท่าเดิม (' + M(back) + ' vs ' + M(totShortOff) + ')');
 chk(!NEAR(totShortOn, totShortOff, 1e4), 'เปิดโหมดแล้วยอดเปลี่ยนจริง (ไม่ค้างจากแคช)');
+
+
+// ══ ⑨ จุดเชื่อมสูตร: เงินสดเดือน 0 ของแบบจำลอง = เงินสดหลังจัดการหนี้สิน ═══════════
+console.log('\n━━ ⑨ สายเงิน ↔ แบบจำลอง เชื่อมกันที่เดือน 0 ━━');
+[['ปกติ', false], ['🧪', true]].forEach(([lab, nc]) => {
+  A.setEXST(ST({ noClr: nc })); A.exRender();
+  // ⚠️ เงินสดติดลบเป็นไปไม่ได้ทางบัญชี — ส่วนที่จ่ายไม่ไหวถูกย้ายกลับเป็นเจ้าหนี้ค้างจ่าย
+  //    (กติกาเดียวกับ exCashClamp ในสายเงิน) → ค่าที่ต้องตรงคือ max(0, exNetAfterDebt)
+  let bad = 0, miss = 0, clamp = 0;
+  j.hosp.forEach(h => {
+    const r = A.exSimPath(h, 0), n = A.exNetAfterDebt(h);
+    if (r.cn0 == null) { miss++; return; }
+    if (n < 0) { clamp++; if (!NEAR(r.cn0, 0, 2) || !(r.owedAdd >= -n - 2)) bad++; return; }
+    if (!NEAR(r.cn0, n, 2)) bad++;
+  });
+  chk(bad === 0 && miss === 0, lab + ': r0.cn0 = exNetAfterDebt ครบ ' + (j.hosp.length - bad - miss) + '/' + j.hosp.length +
+    ' แห่ง' + (clamp ? ' (เงินสดไม่พอ ' + clamp + ' แห่ง → ค้างเป็นเจ้าหนี้ ถูกต้องตามกติกา)' : ''));
+});
+// ระดับต้องขยับจริงอย่างน้อยบางแห่ง — ไม่งั้นแปลว่าปุ่มไม่ได้ต่อสายกับแบบจำลอง
+A.setEXST(ST()); A.exRender();
+const sepOff = {}; j.hosp.forEach(h => sepOff[h.hcode] = A.exSimPath(h, 0).sepRisk);
+A.setEXST(ST({ noClr: true })); A.exRender();
+const moved = j.hosp.filter(h => A.exSimPath(h, 0).sepRisk !== sepOff[h.hcode]);
+chk(moved.length > 0, 'ระดับ ณ เดือนเป้า ขยับตามปุ่มจริง ' + moved.length + ' แห่ง (' + moved.slice(0, 5).map(h => h.name).join(' · ') + ')');
+
+// ══ ⑩ เปิด Option ตามจ่าย = ห้ามเคลียร์หนี้ซ้ำ ═══════════════════════════════════
+console.log('\n━━ ⑩ กันนับซ้ำกับ Option ตามจ่าย ━━');
+['pay', 'forgive'].forEach(mode => {
+  const get = nc => {
+    A.setEXST(ST({ noClr: nc, tj: { mode, scope: 'all' } })); A.exRender();
+    return j.hosp.map(h => { const r = A.exSimPath(h, 0); return r.sepRisk + '|' + Math.round(r.cn0) + '|' + Math.round(r.clEnd); }).join(',');
+  };
+  chk(get(false) === get(true), 'Option "' + mode + '" เปิดอยู่ → แบบจำลองให้ผลเท่ากันทั้งสองโหมด (ไม่จ่ายหนี้ซ้ำ)');
+});
+A.setEXST(ST({ noClr: true })); A.exRender();
 
 console.log('\n📊 ผลทั้งเขต — ส่วนขาดสภาพคล่อง(MOE) ถึงเดือนเป้า');
 console.log('   โหมดปกติ      เปราะ ' + nShortOff + ' แห่ง · ขาดรวม ' + M(totShortOff));

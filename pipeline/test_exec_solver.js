@@ -156,8 +156,18 @@ chk(e7 === 0, `6 คอลัมน์เกณฑ์เป็นค่าต่
 console.log('━━ ⑧ พิสูจน์ข้ามวิธี: สูตรปิดทางบัญชี เทียบ Solver แบบ binary search');
 set({});
 let e8a = 0, e8b = 0;
+// ⚠️ สูตรปิดตั้งอยู่บนสมมติฐาน "เงินก้อน v ดัน CA/QN/CN/NI ขึ้น v เท่ากัน โดย CL นิ่ง"
+//    ใช้ไม่ได้กับแห่งที่ **หนี้สินหมุนเวียนตอบสนองต่อเงิน** — เกิดเมื่อเงินสดไม่พอจ่ายตั้งแต่เดือน 0
+//    (เคลียร์เจ้าหนี้ตามจ่ายแล้วเงินสดติดลบ → ส่วนที่จ่ายไม่ไหวค้างเป็นเจ้าหนี้) การเติมเงินจึงลด CL ด้วย
+//    → Solver ถูกกว่าสูตรปิด เป็นพฤติกรรมที่ถูกต้อง ไม่ใช่บั๊ก · ใช้ guard ตัวเดียวกับข้อ ⑩
+//    งวด 256911: เข้าเงื่อนไขนี้ 1 แห่ง (แม่วาง — เจ้าหนี้ 10.37 > เงินสด 7.03)
+const clMoves = h => { const HI = Math.max(2 * h.bs.cl, 400e6);
+  const a = A.exSimPath(h, 0).sepBreak, b = A.exSimPath(h, HI).sepBreak;
+  return !a || !b || Math.abs(b.cl - a.cl) > 1; };
+let nSkip8 = 0;
 for (const h of H) {
   const r0 = A.exSimPath(h, 0), b0 = r0.sepBreak; if (!b0) continue;
+  if (clMoves(h)) { nSkip8++; continue; }
   const tol = Math.max(2 * S, 0.006 * b0.cl);
   const a = A.exSolveCrit(h, A.NEEDC.find(c => c.k === 'cr'), r0);
   const b = A.exSolveCrit(h, A.NEEDC.find(c => c.k === 'nwc'), r0);
@@ -166,7 +176,7 @@ for (const h of H) {
   // CR≥1.50 กินความ NWC≥0 อยู่ในตัว → need_CR ต้องไม่ต่ำกว่า need_NWC เด็ดขาด
   if (a != null && b != null && a < b - 1) fail.push(`need_CR (${M(a)}) < need_NWC (${M(b)}) ที่ ${h.name} — เป็นไปไม่ได้ทางตรรกะ`);
 }
-chk(e8a === 0, `need_CR = max(0, 1.5×CL − CA) ตรงทุกแห่ง — ผิด ${e8a}`);
+chk(e8a === 0, `need_CR = max(0, 1.5×CL − CA) ตรงทุกแห่ง — ผิด ${e8a}${nSkip8?` (ข้าม ${nSkip8} แห่งที่ CL ตอบสนองต่อเงิน)`:''}`);
 chk(e8b === 0, `need_NWC = max(0, CL − CA) ตรงทุกแห่ง — ผิด ${e8b}`);
 // 🐞 ข้อความที่เคยผิดบนหน้าเว็บ (แก้ 10 ก.ย. 69): "CR แพงกว่า NWC ครึ่งหนึ่งของ CL เสมอ"
 //    จริงเฉพาะแห่งที่ NWC ยังติดลบ — ถ้า NWC เป็นบวกอยู่แล้ว need_NWC = 0 และส่วนต่างน้อยกว่านั้นมาก
@@ -206,6 +216,7 @@ set({});
   for (const k of Object.keys(F)) tot[k] = 0;
   for (const h of H) {
     const r0 = A.exSimPath(h, 0), b0 = r0.sepBreak; if (!b0) continue;
+    if (clMoves(h)) continue;              // เหตุผลเดียวกับข้อ ⑧ — CL ตอบสนองต่อเงิน สูตรปิดใช้ไม่ได้
     const tol = Math.max(2 * S, 0.006 * b0.cl);
     for (const k of Object.keys(F)) {
       const got = A.exSolveCrit(h, A.NEEDC.find(c => c.k === k), r0);
@@ -328,7 +339,10 @@ console.log('━━ ⑬ เพดานผู้ให้ + ⚡ จัดสร�
   const sum = o => { set(Object.assign({ tgt: 6 }, o)); let t = 0, s = 0; for (const h of H) { const v = A.exSolveFor(h, 6); if (v) t += v; const r0 = A.exSimPath(h, 0); s += A.exTopUp({ h, r0 }); } return { t, s }; };
   const a = sum({}), b = sum({ arPct: 0 });
   console.log(`  ℹ️ สไลด์ "% ลูกหนี้เก็บได้" 100%→0%: ส่วนขาดสภาพคล่อง ${(a.s / 1e6).toFixed(2)}M→${(b.s / 1e6).toFixed(2)}M · เงินสนับสนุน ${(a.t / 1e6).toFixed(2)}M→${(b.t / 1e6).toFixed(2)}M`);
-  console.log('     (คะแนน Risk คิดจากมูลค่าตามบัญชี สไลด์นี้จึงไม่แตะเงินสนับสนุนเมื่อปิด Option ตามจ่าย — คู่มือ 7.35)');
+  // ⚠️ เปลี่ยนพฤติกรรม 11 ก.ย. 69 (คู่มือ 7.38): แบบจำลองเคลียร์หนี้ตามจ่ายที่เดือน 0 แล้ว
+  //    สไลด์นี้จึงแตะ "เงินสนับสนุน" ด้วย (ลด % ที่เก็บได้ = ตัดจำหน่ายลูกหนี้ → CA/NI ลด = คะแนนแย่ลง)
+  //    ของเดิมขยับเฉพาะส่วนขาดสภาพคล่อง เพราะแบบจำลองไม่รู้จักลูกหนี้ก้อนนี้เลย
+  console.log('     (11 ก.ย. 69 เป็นต้นไป สไลด์นี้แตะทั้งสองตัว — แบบจำลองเคลียร์หนี้ที่เดือน 0 แล้ว · คู่มือ 7.35/7.38)');
   set({});
 }
 
