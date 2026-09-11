@@ -442,6 +442,8 @@ table.risktbl td:last-child{font-size:11.5px;white-space:normal}
 .nclrbtn.on{background:var(--gold);color:#fff;border-color:var(--gold)}
 .nclr-tag{display:block;font-size:9.5px;font-weight:700;color:var(--gold);margin-top:2px;white-space:nowrap}
 .nclr-in{font-weight:700;color:var(--gold)}
+.scen-bar{border:1px solid var(--blue);border-left:5px solid var(--blue);border-radius:8px;background:var(--row-strip);padding:7px 10px;margin:0 0 8px;font-size:12.5px;line-height:1.7}
+.scen-bar.scen-sim{border-color:var(--mut);border-left-color:var(--mut)}
 .nclr-bar{border:1px solid var(--gold);border-left:5px solid var(--gold);border-radius:8px;background:var(--row-strip);padding:7px 10px;margin:0 0 8px;font-size:12.5px;line-height:1.7}
 /* โหมดกว้าง: คอลัมน์ชื่อ รพ. แคบลง ตัดคำ + ซ่อนคอลัมน์จังหวัดไปเลย */
 table.wltbl.ex-sticky td.wide-name{max-width:120px;white-space:normal;line-height:1.25}
@@ -1602,6 +1604,18 @@ function exRgAuto(){
 // ⛔ ห้ามให้โหมดนี้ไปแตะยอดในคอลัมน์เจ้าหนี้/ลูกหนี้เอง (ยอดดิบตามงบทดลองยังต้องเห็นอยู่) และห้ามแตะ
 //    ป็อปอัป 💵/📥 ซึ่งตอบคนละคำถาม ("ถ้าทำจริงจะเป็นอย่างไร") — ดู RISK_EXEC_MODEL.md 7.30/7.37
 function exNoClr(){ return !!(EXST&&EXST.noClr); }
+// ── 🎬 ฐานตัดสินระดับวิกฤต (เจ้าของงานสั่ง 11 ก.ย. 69) ──────────────────────────────
+// เจ้าของงาน: *"ระดับ ณ ก.ย.69 ก่อนช่วย ควรเป็นสถานการณ์เดียวกับที่อยู่ในเงินสดคงเหลือหลังภาระ MOE
+//   ... ตอนนี้สถานการณ์ ก่อนช่วย ดีกว่าความเป็นจริง"*
+//   'chain' = ฉากเดียวกับคอลัมน์ 💧 — ไม่มีรายรับเข้าเลย จ่ายเฉพาะ MOE ทุกเดือน (MOE ลง NI ด้วย)
+//             หนี้สินหมุนเวียนไม่โต · ไม่มีฤดูกาล NI · ไม่มีการย้ายเงินเข้าลูกหนี้/สินค้าคงเหลือ
+//             → ยอด ณ เดือนเป้าต้องเท่ากับ exChainBS(h).bS เป๊ะ (ชุดตรวจล็อกไว้)
+//   'sim'   = พฤติกรรมเดิม: เดินแบบจำลองที่นับรายรับ/ฤดูกาล/หนี้สินโตตามจริง
+// ⛔ สวิตช์นี้เปลี่ยน "ฐานตัดสิน" ของทั้งตาราง (ระดับก่อน/หลังช่วย · Solver · เงินที่ต้องใช้ · การจัดสรร)
+//    ห้ามใช้ปนกันในเอกสารชุดเดียว — ตัวเลขคนละฐานบวกกันไม่ได้
+function exScen(){ const v=EXST&&EXST.scen; return v==='sim'?'sim':'chain'; }
+function exScenChain(){ return exScen()==='chain'; }
+function exScenLab(){ return exScenChain()?'สายเงินจริง (ไม่มีรายรับเข้าเลย)':'นับรายรับตามแบบจำลอง'; }
 function exPayUse(h){ return exNoClr()?0:exPayIn(h); }     // เจ้าหนี้ที่ "จ่ายออกจริง" ในสายเงิน
 function exArUse(h){ return exNoClr()?0:exArIn(h); }       // ลูกหนี้ที่ "เก็บเข้าจริง" ในสายเงิน
 function exArCutUse(h){ return exNoClr()?0:exArCut(h); }   // ไม่เคลียร์ = ไม่ตัดจำหน่ายด้วย (ลูกหนี้ค้างไว้เฉย ๆ)
@@ -1770,6 +1784,10 @@ function exDefaultState(){
           arPct:100, arOvr:{},
           // noClr: 🧪 โหมดจำลอง "ไม่เคลียร์เจ้าหนี้ + ไม่ได้รับเงินจากลูกหนี้" (11 ก.ย. 69) — ดู exNoClr()
           noClr:false,
+          // scen: 🎬 ฐานตัดสินระดับวิกฤต (เจ้าของงานสั่ง 11 ก.ย. 69) — ดู exScen()
+          //   'chain' = สายเงินจริง ไม่มีรายรับเข้าเลย (ค่าเริ่มต้น · ฉากเดียวกับคอลัมน์ 💧)
+          //   'sim'   = นับรายรับตามแบบจำลอง (พฤติกรรมเดิมก่อน 11 ก.ย. 69)
+          scen:'chain',
           // wide: โหมดกว้าง — ซ่อนคอลัมน์จังหวัด + ย่อคอลัมน์ชื่อ รพ. เพื่อให้เห็นคอลัมน์ขวาครบในหน้าเดียว
           wide:false,
           // clGrow: ให้หนี้สินหมุนเวียนเดินตาม run-rate จริงของแต่ละ รพ. (เปิดเป็นค่าเริ่มต้นหลัง backtest 6 ส.ค. 69)
@@ -2266,8 +2284,23 @@ function exSimPath(h, inj, sc){
   //    ของเงินก้อนได้ทีละบรรทัด — ถ้ามีแต่ค่า ratio จะกางสมการย้อนกลับไม่ได้
   const brk=(sc,niV,moV)=>({...sc,ni:niV,mo:moV,ca:st.cca,cl:st.ccl,qn:st.cqn,cn:st.ccn,owed:owedAdd});
   let sepBreak=(tgtMo<=0?brk(sc0,st.ni,st.mo):null);
+  // 🎬 ฉาก "สายเงินจริง" — ไม่มีรายรับเข้าเลย จ่ายเฉพาะ MOE ทุกเดือน (เจ้าของงานสั่ง 11 ก.ย. 69)
+  //   สมการต้องตรงกับ exChainBS (7.31) เป๊ะ: ca/qn/cn ลดเท่าที่จ่ายไหว · ส่วนที่จ่ายไม่ไหวค้างเป็นเจ้าหนี้
+  //   · NI ลดเต็มจำนวน MOE ไม่ว่าจ่ายไหวหรือไม่ (เกณฑ์คงค้าง) · CL ไม่โต · ไม่มีฤดูกาล/ลูกหนี้-สินค้าคงเหลือ
+  //   ⚠️ drain(M,true) ให้ผลเท่ากับ exCashClamp ทุกบาท (พิสูจน์แล้ว: จ่ายได้ = min(M, เงินสด) ·
+  //      ส่วนที่เหลือเข้า CL) และเดินทีละเดือน = ก้อนเดียวเสมอ เพราะฉากนี้ไม่มีเงินเข้าเลย
+  const chainScen=exScenChain();
   for(let k=1;k<=months;k++){
     if(st.mo>=12){st.mo=1; st.ni=0;} else st.mo++;
+    if(chainScen){
+      st.ni-=moeMoV; drain(moeMoV,true);
+      const scC=scoreOf(st.cca,Math.max(st.ccl,1),st.cqn,st.ccn,st.ni,st.mo);
+      r=anc(scC.risk);
+      if(k===tgtMo){ sepRisk=r; sepBreak=brk(scC,st.ni,st.mo); }
+      if(st.ccn<=0 && cashOut==null) cashOut=k;
+      if(k<=fyMo) endRisk=r;
+      continue;
+    }
     st.ni+=niM;
     // กระแสเงินสดของเดือน = NI + รายการไม่ใช่เงินสดฝั่งค่าใช้จ่าย − รายการไม่ใช่เงินสดฝั่งรายได้
     //   +depMo  ค่าเสื่อม/ตัดจำหน่าย/หนี้สูญ — หักใน NI แต่ไม่มีเงินออก จึงบวกกลับ
@@ -2778,10 +2811,15 @@ function exChainBS(h, r0){
   const b0=exBS(h);
   const D=exPayUse(h), A=exArUse(h), cut=exArCutUse(h), xf=exXferNet(h), dep=exRgDep(h), rin=exRgIn(h);
   const mm=exHorMonths(h), moeMo=r0.moeMo||0, M=moeMo*mm, sub=xf+rin;   // sub = เงินอุดหนุนที่ได้รับ/ยกให้ (เข้า NI)
-  const bS=exCashClamp({...b0,
+  // ⚠️ NI สะสมรีเซ็ตทุก 1 ต.ค. — ถ้าเดือนเป้าข้ามรอยต่อปีงบ ยอด NI ต้องนับใหม่จากปีงบใหม่เท่านั้น
+  //   (ต้องตรงกับ exSimPath ฉาก 'chain' เป๊ะ ไม่งั้นป็อปอัป 💧 กับคอลัมน์ระดับจะหลุดจากกัน)
+  //   nAfter = จำนวนเดือนที่อยู่ในปีงบใหม่ · moNew = เดือนงบ ณ เดือนเป้า (ใช้คิดคะแนน SU)
+  const nAfter=Math.max(0, mm-(12-b0.mo)), moNew=((b0.mo+mm-1)%12)+1;
+  const niEnd=nAfter>0 ? -moeMo*nAfter : b0.ni-cut+sub-M;
+  const bS=exCashClamp({...b0, mo:moNew,
     ca:b0.ca-D-cut+sub-dep-M, qn:b0.qn-D-cut+sub-dep-M,
-    cn:b0.cn-D+A+sub-dep-M,   cl:Math.max(0,b0.cl-D), ni:b0.ni-cut+sub-M});
-  return {b0, bS, D, A, cut, xf, dep, rin, sub, mm, moeMo, M,
+    cn:b0.cn-D+A+sub-dep-M,   cl:Math.max(0,b0.cl-D), ni:niEnd});
+  return {b0, bS, D, A, cut, xf, dep, rin, sub, mm, moeMo, M, nAfter,
           net:exNetAfterDebt(h), left:exMoeLeft({h,r0})};
 }
 function exMoePop(hc){
@@ -3222,6 +3260,8 @@ function exSetClGrow(v){ EXST.clGrow=!!v; exSave(); exRender(); }
 function exSetSeas(v){ EXST.seas=!!v; exSave(); exRender(); }
 // 🧪 สลับโหมด "ไม่เคลียร์เจ้าหนี้ + ไม่ได้รับเงินจากลูกหนี้" — ดูหมายเหตุยาวที่ exNoClr()
 function exSetNoClr(v){ EXST.noClr=!!v; exSave(); exRender(); }
+// 🎬 สลับฐานตัดสินระดับวิกฤต — ดูหมายเหตุยาวที่ exScen()
+function exSetScen(v){ EXST.scen=(v==='sim')?'sim':'chain'; exSave(); exRender(); }
 function exToggleNoClr(){ exSetNoClr(!exNoClr()); }
 // ── แผงโยกเงินช่วยรายแห่ง (กางจากปุ่ม 🔄 โยกช่วย ในคอลัมน์เงินสดคงเหลือหลังภาระ MOE) ──
 function exXfHtml(x, sepLab){
@@ -4947,6 +4987,11 @@ function exRender(){
         <input type="number" class="exnum" style="width:58px" step="5" min="0" max="100" value="${exArPct()}" onchange="exSetArPct(this.value)"> %</label>
       ${(()=>{ const nOvr=Object.keys(EXST.arOvr||{}).length, cutAll=EX.hosp.reduce((s,p)=>s+exArCut(p),0);
         return cutAll>0?`<span class="tgt-note">ตัดออกรวม ${fmtM(cutAll)}${nOvr?` · กำหนดเอง ${nOvr} แห่ง`:''} <a class="ovlink" onclick="exArClear()">คืนค่าเต็มทั้งหมด</a></span>`:''; })()}`:''}
+      <label title="ฐานที่ใช้ตัดสิน &quot;ระดับ ณ เดือนเป้า&quot; และเงินสนับสนุนที่ต้องใช้&#10;&#10;① สายเงินจริง (ค่าเริ่มต้น) = ฉากเดียวกับคอลัมน์ 💧 เงินสดคงเหลือหลังภาระ MOE&#10;   ไม่มีรายรับเข้าเลย · จ่ายเฉพาะ MOE ทุกเดือน (MOE ลง NI ด้วย) · หนี้สินหมุนเวียนไม่โต&#10;   ตัวเลขในคอลัมน์ระดับจึงตรงกับป็อปอัป 💧 เป๊ะทุกบาท&#10;&#10;② นับรายรับตามแบบจำลอง = พฤติกรรมเดิม เดินรายรับ/ฤดูกาล/หนี้สินโตตามค่าจริงย้อนหลัง&#10;   มองโลกดีกว่าฉาก ① เสมอ (เงินสดยังโตทุกเดือน)&#10;&#10;⛔ ตัวเลขสองฐานนี้บวกกันไม่ได้ ห้ามใช้ปนกันในเอกสารชุดเดียว">🎬 ฐานตัดสิน:
+        <select onchange="exSetScen(this.value)">
+          <option value="chain" ${exScenChain()?'selected':''}>สายเงินจริง — ไม่มีรายรับเข้าเลย</option>
+          <option value="sim" ${exScenChain()?'':'selected'}>นับรายรับตามแบบจำลอง</option>
+        </select></label>
       <button type="button" class="nclrbtn${exNoClr()?' on':''}" onclick="exToggleNoClr()"
         title="โหมดปกติ = สมมติว่าเคลียร์หนี้ค่ารักษาตามจ่ายแล้ว (จ่ายเจ้าหนี้ + เก็บลูกหนี้)&#10;กดปุ่มนี้ = สมมติว่าไม่ทำทั้งสองอย่าง หนี้ค้างอยู่เฉย ๆ&#10;&#10;กระทบทั้งตาราง เพราะสายเงินกับแบบจำลองใช้จุดตั้งต้นเดียวกัน:&#10;• เงินสดหลังจัดการหนี้สิน · เงินสดคงเหลือหลังภาระ MOE · ส่วนขาดสภาพคล่อง(MOE)&#10;• ระดับ ณ เดือนเป้า ก่อน/หลังช่วย · เงินสนับสนุนที่ต้องใช้ · ตารางสรุปรายจังหวัด&#10;&#10;⚠️ ไม่ใช่การตัดจำหน่ายลูกหนี้ — ลูกหนี้ยังอยู่ในสินทรัพย์ เจ้าหนี้ยังอยู่ในหนี้สินเท่าเดิม&#10;⚠️ ถ้าเปิด Option ตามจ่าย/ยกหนี้ไว้ แบบจำลองจะให้ Option เป็นตัวจัดการหนี้ก้อนนี้แทน (กันนับซ้ำ)&#10;กดซ้ำเพื่อกลับสู่โหมดปกติ">🧪 ${exNoClr()?'กำลังจำลอง: ไม่เคลียร์เจ้าหนี้/ลูกหนี้ — กดเพื่อปิด':'จำลอง: ไม่เคลียร์เจ้าหนี้ + ไม่ได้รับเงินลูกหนี้'}</button>
       <label>🔎 กรองจังหวัด:
@@ -4959,6 +5004,22 @@ function exRender(){
         <select id="exMmoBot" onchange="exSet('mmo',+this.value)">${exMmoOptions()}</select></label>
       <span class="tgt-note">ตัวเดียวกับในแถบควบคุมด้านบน · ⚓ คุมถึงสิ้นปีงบ ${exHorLab()} เป็นพื้นเสมอ</span>
     </div>
+    ${(()=>{
+      // 🎬 แถบบอกฐานตัดสิน — ต้องแสดง**เสมอ** เพราะค่าเริ่มต้นเปลี่ยนเป็นฉากเข้มตั้งแต่ 11 ก.ย. 69
+      //    ถ้าไม่บอก คนที่เคยเห็นตัวเลขชุดเก่าจะอ่านว่าข้อมูลเพี้ยน
+      const n67=items.filter(x=>x.r0.sepRisk>=6).length;
+      return exScenChain()
+        ? `<div class="scen-bar"><b>🎬 ฐานตัดสิน: สายเงินจริง — ไม่มีรายรับเข้าเลย</b> (ค่าเริ่มต้น)
+            <div>คอลัมน์ <b>ระดับ ณ ${sepLab}</b> และ <b>เงินสนับสนุนที่ต้องใช้</b> คิดจากฉาก<b>เดียวกับคอลัมน์ 💧</b>:
+              เงินสดหลังจัดการหนี้สิน − ภาระ MOE ถึงเดือนเป้า โดยไม่มีรายรับเข้าเลย และ MOE ลง NI ด้วย
+              → ตัวเลขตรงกับป็อปอัป 💧 เป๊ะทุกบาท · ตอนนี้ <b>วิกฤต 6-7 = ${n67} แห่ง</b> จาก ${items.length} แห่งที่เลือก
+              <br>⚠️ เป็น<b>ฉากขั้นรุนแรง ไม่ใช่พยากรณ์</b> — ใช้จัดลำดับความเปราะและตั้งวงเงินแบบระมัดระวัง
+              · อยากเห็นภาพที่นับรายรับตามจริง เปลี่ยนที่ <b>🎬 ฐานตัดสิน</b> เหนือตาราง
+              <br>⛔ <b>ตัวเลขสองฐานบวกกันไม่ได้</b> เอกสารชุดเดียวต้องใช้ฐานเดียว</div></div>`
+        : `<div class="scen-bar scen-sim"><b>🎬 ฐานตัดสิน: นับรายรับตามแบบจำลอง</b> (ฐานเดิมก่อน 11 ก.ย. 69)
+            <div>คอลัมน์ระดับ/เงินสนับสนุนเดินแบบจำลองที่นับรายรับ ฤดูกาล และหนี้สินที่โตตามจริง
+              — <b>มองโลกดีกว่าคอลัมน์ 💧 เสมอ</b> (ตัวเลขสองฝั่งจึงไม่ตรงกันโดยตั้งใจ)
+              · ตอนนี้ <b>วิกฤต 6-7 = ${n67} แห่ง</b> จาก ${items.length} แห่งที่เลือก</div></div>`; })()}
     ${exNoClr()?(()=>{
       // 🧪 แถบเตือนโหมดจำลอง — ต้องบอกให้ครบ 3 อย่าง: ฉากคืออะไร · กระทบอะไร · ไม่กระทบอะไร
       //    (ไม่งั้นคนอ่านตารางแล้วเข้าใจว่าตัวเลขทั้งหน้าเปลี่ยนหมด ซึ่งไม่จริง)

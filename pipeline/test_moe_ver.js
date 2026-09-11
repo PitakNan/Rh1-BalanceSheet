@@ -25,7 +25,9 @@ const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/ex
 const S=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/summary.json','utf8'));
 const ST=(moeVer,payPct)=>({crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext:0,tgt:6,mmo:3,
   moeVer,payPct,moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
-  tj:{mode:'off',scope:'crisis'},inj:{},open:{}});
+  // 🎬 ตรึง scen:'sim' — ชุดนี้ตรวจกลไกของแบบจำลองที่นับรายรับ (ฤดูกาล/หนี้สินโต/ยืดหนี้)
+  //    ฐาน 'chain' ที่เป็นค่าเริ่มต้นหน้าเว็บตั้งแต่ 11 ก.ย. 69 ปิดกลไกเหล่านี้ทั้งหมดโดยเจตนา (คู่มือ 7.39)
+  tj:{mode:'off',scope:'crisis'},inj:{},open:{},scen:'sim'});
 const M=v=>v==null?'—':(v/1e6).toFixed(2)+'M';
 let fail=[];
 const chk=(ok,msg,extra)=>{ console.log(`  ${ok?'✅':'❌'} ${msg}${extra?' — '+extra:''}`); if(!ok) fail.push(msg); };

@@ -22,7 +22,9 @@ const raw2=fs.readFileSync(SRC,'utf8');   // ซอร์สทั้งไฟ�
 const j=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 const ST=(ext,mmo)=>({mmo,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext,tgt:6,
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
-  tj:{mode:'off',scope:'crisis'},inj:{},open:{}});
+  // 🎬 ตรึง scen:'sim' — ชุดนี้ตรวจกลไกของแบบจำลองที่นับรายรับ (ฤดูกาล/หนี้สินโต/ยืดหนี้)
+  //    ฐาน 'chain' ที่เป็นค่าเริ่มต้นหน้าเว็บตั้งแต่ 11 ก.ย. 69 ปิดกลไกเหล่านี้ทั้งหมดโดยเจตนา (คู่มือ 7.39)
+  tj:{mode:'off',scope:'crisis'},inj:{},open:{},scen:'sim'});
 // ⚠️ ห้ามลอกสูตร fmtM มาไว้ที่นี่ — ดึงจากหน้าเว็บตรง ๆ ไม่งั้นพอเปลี่ยนจำนวนทศนิยม
 //    เทสต์จะเทียบกับสูตรเก่าของตัวเองแล้วฟ้องผิดทั้งที่หน้าเว็บถูก (เกิดจริง 9 ส.ค. 69)
 const fmtM=A.fmtM;

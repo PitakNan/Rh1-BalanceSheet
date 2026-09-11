@@ -234,7 +234,9 @@ console.log('━━ 12) %จ่ายหนี้การค้า: ยืน�
   B.setEX(j); B.setEXTJ({debtors:new Set(),shares:{},refund:{},total:0,uncovered:0});
   const S=p=>({mmo:3,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',
     moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
-    tj:{mode:'off',scope:'crisis'},inj:{},open:{},moeVer:'69p',payPct:p});
+  // 🎬 ตรึง scen:'sim' — ชุดนี้ตรวจกลไกของแบบจำลองที่นับรายรับ (ฤดูกาล/หนี้สินโต/ยืดหนี้)
+  //    ฐาน 'chain' ที่เป็นค่าเริ่มต้นหน้าเว็บตั้งแต่ 11 ก.ย. 69 ปิดกลไกเหล่านี้ทั้งหมดโดยเจตนา (คู่มือ 7.39)
+    tj:{mode:'off',scope:'crisis'},inj:{},open:{},moeVer:'69p',payPct:p,scen:'sim'});
   // ⚠️ ต้องเลือก รพ. ที่ **ไม่ติดกลไกเงินสดไม่พอ** (owedAdd=0) ไม่งั้นสมการนี้ไม่ตรงโดยธรรมชาติ:
   //    เงินสดที่ยืดไว้ไปลดยอด "จ่ายไม่ไหว" ที่ถูกโยนเป็นเจ้าหนี้ → CL โตน้อยกว่าเงินสดที่เพิ่ม
   //    เดิมฮาร์ดโค้ด "แม่วาง" ซึ่งพอแบบจำลองเคลียร์หนี้ตามจ่ายที่เดือน 0 แล้ว (11 ก.ย. 69 · คู่มือ 7.38)

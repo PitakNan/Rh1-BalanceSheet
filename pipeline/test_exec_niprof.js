@@ -19,7 +19,9 @@ const A=new Function(code+`;return {exSimPath,exNiMo,exMoeMonths,setEX:v=>{EX=v}
 const j=JSON.parse(fs.readFileSync(REPO+'/docs/data/risk/exec.json','utf8'));
 const ST=(o={})=>Object.assign({crisis:'67',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',ext:0,tgt:6,
   moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
-  tj:{mode:'off',scope:'crisis'},inj:{},open:{}},o);
+  // 🎬 ตรึง scen:'sim' — ชุดนี้ตรวจกลไกของแบบจำลองที่นับรายรับ (ฤดูกาล/หนี้สินโต/ยืดหนี้)
+  //    ฐาน 'chain' ที่เป็นค่าเริ่มต้นหน้าเว็บตั้งแต่ 11 ก.ย. 69 ปิดกลไกเหล่านี้ทั้งหมดโดยเจตนา (คู่มือ 7.39)
+  tj:{mode:'off',scope:'crisis'},inj:{},open:{},scen:'sim'},o);
 A.setEX(j); A.setEXST(ST()); A.setEXTJ({debtors:new Set(),shares:{},refund:{},total:0,uncovered:0});
 const TH=['ต.ค.','พ.ย.','ธ.ค.','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.'];
 const M=v=>(v/1e6).toFixed(2)+'M';

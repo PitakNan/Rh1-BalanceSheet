@@ -49,8 +49,11 @@ global.Chart=function(){return{destroy(){}}}; global.fetch=()=>Promise.reject(0)
 const A=new Function(code+';return {exSimPath,setEX:v=>{EX=v},setEXST:v=>{EXST=v},setEXTJ:v=>{EXTJ=v}};')();
 const ex=JSON.parse(fs.readFileSync('D:/Github/Rh1-BalanceSheet/docs/data/risk/exec.json','utf8'));
 A.setEX(ex); A.setEXTJ({debtors:new Set(),shares:{},refund:{},total:0,uncovered:0});
+// 🎬 ต้องตรึง scen:'sim' — ชุดนี้ตรวจ "ความแม่นของแบบจำลองที่นับรายรับ" เทียบประวัติจริง
+//    ฐาน 'chain' (ค่าเริ่มต้นหน้าเว็บตั้งแต่ 11 ก.ย. 69) เป็นฉากสมมติว่าไม่มีรายรับเลย
+//    เอามา backtest ไม่ได้ — มันจะทำนาย "แย่ลง" เกือบทุกแห่งเสมอ และสวิตช์ 📉/📊 ไม่มีผล
 const mkST=o=>Object.assign({mmo:3,ext:0,tgt:6,crisis:'all',types:{'รพศ.':true,'รพท.':true,'รพช.':true},prov:'all',
-  moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},
+  moePct:{},moePctAll:0,moeOff:{},moeOvr:{},xmoe:true,adj:{},adjAll:0,revOff:{},ovr:{},scen:'sim',
   tj:{mode:'off',scope:'crisis'},inj:{},open:{},xfer:[],arPct:100,arOvr:{},wide:false,clGrow:true,seas:true},o);
 let bad=[];
 const chk=(ok,m)=>{ console.log('  '+(ok?'✅':'❌')+' '+m); if(!ok) bad.push(m); };
